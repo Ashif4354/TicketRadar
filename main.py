@@ -10,7 +10,7 @@ import asyncio
 # Ensure the root project directory is in Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.config import settings, config_error
+from src.config import settings, config_error  # noqa: F401
 from src.core.job import MonitorJob
 from src.core.monitor import JobManager
 from src.ui.styles import inject_premium_styles
