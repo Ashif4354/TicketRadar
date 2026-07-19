@@ -45,6 +45,24 @@ Ensure `uv` is installed, then launch the Streamlit dashboard:
 uv run streamlit run main.py
 ```
 
+### 📦 Running as a Standalone Executable
+You can compile TicketRadar into a standalone executable (`TicketRadar.exe`) to distribute and run it without a local Python setup.
+
+#### How to Build
+To compile the executable:
+```bash
+make build
+```
+*(If `make` is not installed on your Windows machine, run: `uv run pyinstaller TicketRadar.spec --clean`)*
+
+The output binary will be created at `dist/TicketRadar.exe`.
+
+#### How to Use
+1. Copy your `.env` configuration file into the **same directory** as `TicketRadar.exe`.
+2. Double-click `TicketRadar.exe` to launch the application.
+3. The app will launch a terminal console window, read the `.env` settings, start the local server, and automatically open your default browser to the TicketRadar dashboard.
+4. **How to Stop**: Simply close the terminal console window, or press `Ctrl+C` inside the terminal window.
+
 ---
 
 ## 🖥️ Using the Dashboard

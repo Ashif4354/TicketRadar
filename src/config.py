@@ -16,15 +16,30 @@ if "__compiled__" in globals() or hasattr(sys, "frozen"):
 else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Check for .env in user data directory first, fallback to base directory
-ENV_FILE_PATH = os.path.join(USER_DATA_DIR, ".env")
-if not os.path.exists(ENV_FILE_PATH):
+# Check locations for .env file in order
+locations = [
+    os.path.join(USER_DATA_DIR, ".env"),
+    os.path.join(BASE_DIR, ".env"),
+    os.path.join(os.getcwd(), ".env"),
+]
+
+# If running compiled/frozen from 'dist' directory, look in the parent directory for .env
+if ("__compiled__" in globals() or hasattr(sys, "frozen")) and os.path.basename(BASE_DIR) == "dist":
+    locations.append(os.path.join(os.path.dirname(BASE_DIR), ".env"))
+
+ENV_FILE_PATH = None
+for loc in locations:
+    if os.path.exists(loc):
+        ENV_FILE_PATH = loc
+        break
+
+if not ENV_FILE_PATH:
     ENV_FILE_PATH = os.path.join(BASE_DIR, ".env")
 
 class Settings(BaseSettings):
     # SMTP Configuration
-    smtp_server: str
-    smtp_port: int
+    smtp_server: str = Field(default="smtp.gmail.com")
+    smtp_port: int = Field(default=587)
     smtp_email: str
     smtp_password: str
 
