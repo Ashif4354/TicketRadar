@@ -103,10 +103,23 @@ class BookMyShowBookingChecker(BookingChecker):
             movie_name = fallback_movie_name
 
             try:
-                # 1. Open the movie page
-                logger.info(f"Opening URL: {url}")
-                await page.goto(url, wait_until="domcontentloaded")
+                # Format URL to point directly to the target date from the form
+                # (Only if it's not a local file:// URL used for testing)
+                target_url = url
+                if not url.startswith("file://"):
+                    if re.search(r'/\d{8}$', url):
+                        target_url = re.sub(r'/\d{8}$', f'/{date_str}', url)
+                    else:
+                        target_url = f"{url.rstrip('/')}/{date_str}"
+
+                # 1. Open the target date URL
+                logger.info(f"Opening target URL: {target_url} (original: {url})")
+                await page.goto(target_url, wait_until="domcontentloaded")
                 
+                # Load page and log URL
+                current_url = page.url
+                logger.info(f"Loaded page URL: {current_url}")
+
                 # Attempt to extract movie name using the User's requested XPath format
                 try:
                     href = extract_movie_href(url)
@@ -147,17 +160,39 @@ class BookMyShowBookingChecker(BookingChecker):
                     return False, f"Date element '{date_str}' is present in DOM but not visible.", movie_name, [], theatres
 
                 # 3. Check if the date is clickable (i.e. booking is open)
+                # Since date buttons can be <div> tags, standard Playwright is_enabled() check is not enough.
+                # We check WAI-ARIA properties, custom disabled attributes, and class names (ancestors included).
                 is_enabled = await date_element.is_enabled()
-                classes = await date_element.get_attribute("class") or ""
                 
-                # Check for common disabled classes on booking websites
+                # Check WAI-ARIA and custom attributes
+                aria_disabled = await date_element.get_attribute("aria-disabled") or ""
+                custom_disabled = await date_element.get_attribute("disabled") or ""
+                is_disabled_attr = (
+                    aria_disabled.lower() == "true" or 
+                    custom_disabled.lower() in ["true", "disabled"]
+                )
+                
+                # Retrieve classes of date element and its parent elements (grandparent included)
+                classes_to_check = []
+                try:
+                    classes_to_check.append(await date_element.get_attribute("class") or "")
+                    classes_to_check.append(await date_element.evaluate("el => el.parentElement ? el.parentElement.className : ''"))
+                    classes_to_check.append(await date_element.evaluate("el => el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement.className : ''"))
+                except Exception:
+                    pass
+                
+                classes_str = " ".join(classes_to_check).lower()
                 is_disabled_by_class = any(
-                    term in classes.lower() 
+                    term in classes_str
                     for term in ["disabled", "inactive", "blocked", "unclickable"]
                 )
 
-                if not is_enabled or is_disabled_by_class:
-                    return False, f"Date '{date_str}' is found but disabled (enabled={is_enabled}, classes='{classes}').", movie_name, [], theatres
+                if not is_enabled or is_disabled_by_class or is_disabled_attr:
+                    logger.warning(
+                        f"Date '{date_str}' is found but disabled. "
+                        f"enabled={is_enabled}, classes='{classes_str}', aria-disabled='{aria_disabled}', custom-disabled='{custom_disabled}'"
+                    )
+                    return False, f"Date '{date_str}' is found but disabled.", movie_name, [], theatres
 
                 # 4. Click the date element to load showtimes/theatres
                 logger.info(f"Date '{date_str}' is clickable. Clicking to load theatres...")
@@ -167,6 +202,30 @@ class BookMyShowBookingChecker(BookingChecker):
                     await page.wait_for_timeout(2000)
                 except Exception as click_err:
                     return False, f"Failed to click date element: {str(click_err)}", movie_name, [], theatres
+
+                # 4.5 Post-Click Verification: Ensure we have navigated to the correct date
+                current_url = page.url
+                logger.info(f"Current page URL after click: {current_url}")
+                
+                # Check active/selected classes on date element and ancestors
+                post_classes = []
+                try:
+                    post_classes.append(await date_element.get_attribute("class") or "")
+                    post_classes.append(await date_element.evaluate("el => el.parentElement ? el.parentElement.className : ''"))
+                    post_classes.append(await date_element.evaluate("el => el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement.className : ''"))
+                except Exception:
+                    pass
+                
+                post_classes_str = " ".join(post_classes).lower()
+                is_active_class = any(
+                    term in post_classes_str 
+                    for term in ["active", "selected", "current", "_active", "-active", "show", "select"]
+                )
+                
+                # Check if the target date is active/selected in the DOM (regardless of URL)
+                if not is_active_class:
+                    logger.warning(f"Target date '{date_str}' is not active in the DOM. URL: {current_url}, Classes: {post_classes_str}")
+                    return False, f"Date '{date_str}' was clicked but did not become active (active state verification failed).", movie_name, [], theatres
 
                 # 5. Check if the specified theatre(s) are available
                 available_theatres = []
