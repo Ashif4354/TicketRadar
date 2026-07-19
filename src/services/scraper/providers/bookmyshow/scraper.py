@@ -76,12 +76,8 @@ class BookMyShowBookingChecker(BookingChecker):
                     channel=settings.playwright_channel
                 )
             except Exception as e:
-                error_msg = (
-                    f"Failed to launch Chrome browser: {str(e)}. "
-                    f"Verify Google Chrome is installed on the system."
-                )
-                logger.error(error_msg)
-                return False, error_msg, None, [], theatres
+                logger.error(f"Failed to launch Chrome browser: {str(e)}")
+                return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", None, [], theatres
 
             # Use generic user-agent to prevent bot detection
             context = await browser.new_context(
@@ -152,12 +148,14 @@ class BookMyShowBookingChecker(BookingChecker):
                 
                 count = await date_locator.count()
                 if count == 0:
-                    return False, f"Date element '{date_str}' not found on page.", movie_name, [], theatres
+                    logger.warning(f"Date element '{date_str}' not found on page.")
+                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
                 
                 date_element = date_locator.first
                 is_visible = await date_element.is_visible()
                 if not is_visible:
-                    return False, f"Date element '{date_str}' is present in DOM but not visible.", movie_name, [], theatres
+                    logger.warning(f"Date element '{date_str}' is present in DOM but not visible.")
+                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
                 # 3. Check if the date is clickable (i.e. booking is open)
                 # Since date buttons can be <div> tags, standard Playwright is_enabled() check is not enough.
@@ -192,7 +190,7 @@ class BookMyShowBookingChecker(BookingChecker):
                         f"Date '{date_str}' is found but disabled. "
                         f"enabled={is_enabled}, classes='{classes_str}', aria-disabled='{aria_disabled}', custom-disabled='{custom_disabled}'"
                     )
-                    return False, f"Date '{date_str}' is found but disabled.", movie_name, [], theatres
+                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
                 # 4. Click the date element to load showtimes/theatres
                 logger.info(f"Date '{date_str}' is clickable. Clicking to load theatres...")
@@ -201,7 +199,8 @@ class BookMyShowBookingChecker(BookingChecker):
                     # Let DOM update/load theatres
                     await page.wait_for_timeout(2000)
                 except Exception as click_err:
-                    return False, f"Failed to click date element: {str(click_err)}", movie_name, [], theatres
+                    logger.error(f"Failed to click date element: {str(click_err)}")
+                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
                 # 4.5 Post-Click Verification: Ensure we have navigated to the correct date
                 current_url = page.url
@@ -225,7 +224,7 @@ class BookMyShowBookingChecker(BookingChecker):
                 # Check if the target date is active/selected in the DOM (regardless of URL)
                 if not is_active_class:
                     logger.warning(f"Target date '{date_str}' is not active in the DOM. URL: {current_url}, Classes: {post_classes_str}")
-                    return False, f"Date '{date_str}' was clicked but did not become active (active state verification failed).", movie_name, [], theatres
+                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
                 # 5. Check if the specified theatre(s) are available
                 available_theatres = []
@@ -253,7 +252,8 @@ class BookMyShowBookingChecker(BookingChecker):
                         missing_theatres.append(theatre)
 
                 if not available_theatres:
-                    return False, f"Date '{date_str}' is clickable, but none of the specified theatres were found ({', '.join(theatres)}).", movie_name, [], theatres
+                    logger.warning(f"Date '{date_str}' is clickable, but none of the specified theatres were found ({', '.join(theatres)}).")
+                    return False, f"Booking is open for {date_str}, but showtimes at your selected theatres are not available yet.", movie_name, [], theatres
 
                 # Success!
                 success_details = f"Booking is OPEN for date {date_str}! Found theatres: {', '.join(available_theatres)}."
@@ -265,6 +265,6 @@ class BookMyShowBookingChecker(BookingChecker):
 
             except Exception as e:
                 logger.exception(f"Scraper error while reading {url}")
-                return False, f"Scraper error: {str(e)}", movie_name, [], theatres
+                return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", movie_name, [], theatres
             finally:
                 await browser.close()
