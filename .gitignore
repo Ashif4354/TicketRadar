@@ -11,3 +11,5 @@ wheels/
 .env
 
 logs/
+run.build
+run.dist

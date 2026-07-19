@@ -1,10 +1,35 @@
 # main.py
 
+import os
+import sys
+
+# Self-bootstrapping logic for Streamlit
+if __name__ == "__main__":
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        is_in_streamlit = get_script_run_ctx() is not None
+    except ImportError:
+        is_in_streamlit = False
+
+    if not is_in_streamlit:
+        import streamlit.web.cli as stcli
+        if hasattr(sys, "_MEIPASS"):
+            base_dir = sys._MEIPASS
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+        main_py_path = os.path.join(base_dir, "main.py")
+        sys.argv = [
+            "streamlit",
+            "run",
+            main_py_path,
+            "--global.developmentMode=false",
+            "--server.headless=false"
+        ]
+        sys.exit(stcli.main())
+
 import streamlit as st
 import datetime
 import time
-import os
-import sys
 import asyncio
 
 # Ensure the root project directory is in Python path

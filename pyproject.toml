@@ -12,3 +12,8 @@ dependencies = [
     "streamlit>=1.59.2",
     "platformdirs>=4.3.0"
 ]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.21.0",
+]
