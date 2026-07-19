@@ -16,6 +16,7 @@ from src.core.monitor import JobManager
 from src.ui.styles import inject_premium_styles
 from src.ui.components import render_job_card
 from src.services.notification.factory import NotificationStrategyFactory
+from src.services.scraper.factory import ScraperFactory
 
 # Configure the Streamlit Page metadata and layout
 st.set_page_config(
@@ -204,7 +205,7 @@ with col_form:
                     key=form_key
                 )
         
-        submit_btn = st.form_submit_button("Register & Start Daemon 🚀")
+        submit_btn = st.form_submit_button("Start Radar")
         
         if submit_btn:
             # Explicitly load the absolute latest values from the session state keys dynamically

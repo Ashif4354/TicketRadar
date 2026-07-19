@@ -56,7 +56,7 @@ uv run streamlit run main.py
    - Enter your target theatre names in the text area (**one theatre per line**). Substring matching is supported but it is strictly case-sensitive.
    - Choose the alert channel.
    - Check or uncheck **Run browser in background** to show or hide Chrome during checks.
-   - Click **Register & Start Daemon 🚀**.
+   - Click **Start Radar**.
 3. **Control Monitors**: You can Pause, Restart, or Delete monitors at any time. Click **View logs** on any card to see real-time output.
 
 ---
