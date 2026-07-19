@@ -10,4 +10,5 @@ dependencies = [
     "playwright>=1.61.0",
     "pydantic-settings>=2.14.2",
     "streamlit>=1.59.2",
+    "platformdirs>=4.3.0"
 ]

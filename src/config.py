@@ -1,12 +1,25 @@
 # src/config.py
 
 import os
+import sys
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
+import platformdirs
+
+# Get user data directory
+USER_DATA_DIR = platformdirs.user_data_dir(appname="TicketRadar", appauthor="DarkGlance")
+os.makedirs(USER_DATA_DIR, exist_ok=True)
 
 # Get absolute path to project root
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ENV_FILE_PATH = os.path.join(BASE_DIR, ".env")
+if "__compiled__" in globals() or hasattr(sys, "frozen"):
+    BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Check for .env in user data directory first, fallback to base directory
+ENV_FILE_PATH = os.path.join(USER_DATA_DIR, ".env")
+if not os.path.exists(ENV_FILE_PATH):
+    ENV_FILE_PATH = os.path.join(BASE_DIR, ".env")
 
 class Settings(BaseSettings):
     # SMTP Configuration
@@ -40,7 +53,7 @@ except Exception as e:
 
 # Application Constants
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_DIR = os.path.join(BASE_DIR, "logs")
+LOG_DIR = USER_DATA_DIR
 
 # Ensure logs directory exists
 os.makedirs(LOG_DIR, exist_ok=True)
