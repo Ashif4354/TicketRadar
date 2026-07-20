@@ -32,7 +32,7 @@ a = Analysis(
         'pydantic_settings',
         'aiosmtplib',
         'httpx',
-        'playwright',
+        'bs4',
         'asyncio',
         'watchdog',
     ],

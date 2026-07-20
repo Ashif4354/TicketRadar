@@ -2,90 +2,94 @@
 
 import logging
 import re
+import asyncio
 from urllib.parse import urlparse
 from typing import List, Tuple, Optional, Dict, Any
-from playwright.async_api import async_playwright
+
+import httpx
+from bs4 import BeautifulSoup
+
 from src.services.scraper.providers.base import BookingChecker
-from src.config import settings
 
 logger = logging.getLogger(__name__)
 
-def extract_movie_href(url: str) -> str:
+# Browser-like headers to bypass bot detection
+_HEADERS = {
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;"
+        "q=0.9,image/avif,image/webp,image/apng,*/*;"
+        "q=0.8,application/signed-exchange;v=b3;q=0.7"
+    ),
+    "Service-Worker-Navigation-Preload": "true",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+    ),
+    "sec-ch-ua": '"Not;A=Brand";v="8", "Chromium";v="150", "Microsoft Edge";v="150"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+}
+
+# CSS classes that indicate a date element is disabled/inactive
+_DISABLED_CLASS_TERMS = {"disabled", "inactive", "blocked", "unclickable"}
+
+
+def _build_date_url(url: str, date_str: str) -> str:
     """
-    Extracts the movie details href path from the buy tickets URL.
-    E.g. https://in.bookmyshow.com/movies/chennai/the-odyssey/buytickets/ET00452034/20260719
-    -> /movies/chennai/the-odyssey/ET00452034
+    Rewrites the date segment at the end of a BMS buy-tickets URL.
+    E.g. .../buytickets/ET00480917/20260720  ->  .../buytickets/ET00480917/20260721
+    If the URL already ends with the correct date (or has no date segment), returns it as-is.
     """
+    # Match: .../buytickets/<code>/<date>  (date is 8 digits)
+    match = re.search(r'(/buytickets/[^/]+/)(\d{8})', url)
+    if match:
+        return url[:match.start(2)] + date_str + url[match.end(2):]
+    # If no date in URL, just append
+    return url.rstrip("/") + "/" + date_str
+
+
+def _extract_movie_name(soup: BeautifulSoup, url: str) -> str:
+    """
+    Attempts to extract the movie name from the parsed HTML.
+    Falls back to a humanised slug from the URL if not found.
+    """
+    # BMS renders the movie name as an <a> linking to /movies/<city>/<slug>/<code>
+    parsed = urlparse(url)
+    slug_match = re.search(r'/movies/[^/]+/([^/]+)', parsed.path)
+    fallback = slug_match.group(1).replace("-", " ").title() if slug_match else "Movie"
+
     try:
-        parsed = urlparse(url)
-        path = parsed.path
-        # Match pattern: /movies/{city}/{slug}/buytickets/{code}
-        match = re.search(r'(/movies/[^/]+/[^/]+)/buytickets/([^/]+)', path)
-        if match:
-            return f"{match.group(1)}/{match.group(2)}"
+        # The anchor that links back to the movie detail page
+        code_match = re.search(r'/buytickets/([^/]+)', parsed.path)
+        if code_match:
+            event_code = code_match.group(1)
+            link = soup.find("a", href=re.compile(re.escape(event_code)))
+            if link:
+                name = link.get_text(strip=True)
+                if name:
+                    return name
     except Exception:
         pass
-    return ""
 
-def escape_xpath_string(s: str) -> str:
+    return fallback
+
+
+def _is_date_disabled(date_el) -> bool:
     """
-    Safely formats a string literal for XPath 1.0, handling single and double quotes.
+    Inspects the date element's CSS classes to decide if it is non-clickable.
+    BMS marks unavailable dates with class names containing disability keywords.
     """
-    if "'" not in s:
-        return f"'{s}'"
-    if '"' not in s:
-        return f'"{s}"'
-    # If both single and double quotes are present, use concat()
-    parts = s.split("'")
-    return "concat(" + ", \"'\", ".join(f"'{p}'" for p in parts) + ")"
+    classes = " ".join(date_el.get("class", [])).lower()
+    return any(term in classes for term in _DISABLED_CLASS_TERMS)
+
 
 class BookMyShowBookingChecker(BookingChecker):
     """
-    Concrete scraper implementing the BookingChecker interface for BookMyShow using Playwright.
+    Concrete scraper implementing the BookingChecker interface for BookMyShow
+    using httpx (HTTP) + BeautifulSoup (HTML parsing). No browser required.
     """
-
-    def __init__(self):
-        super().__init__()
-        self._playwright = None
-        self._browser = None
-        self._context = None
-        self._page = None
-
-    async def close(self) -> None:
-        """
-        Cleans up and closes any active Playwright browser/page objects.
-        """
-        try:
-            if self._page:
-                await self._page.close()
-        except Exception:
-            pass
-        finally:
-            self._page = None
-
-        try:
-            if self._context:
-                await self._context.close()
-        except Exception:
-            pass
-        finally:
-            self._context = None
-
-        try:
-            if self._browser:
-                await self._browser.close()
-        except Exception:
-            pass
-        finally:
-            self._browser = None
-
-        try:
-            if self._playwright:
-                await self._playwright.stop()
-        except Exception:
-            pass
-        finally:
-            self._playwright = None
 
     @classmethod
     def get_required_fields(cls) -> Dict[str, Dict[str, Any]]:
@@ -97,207 +101,150 @@ class BookMyShowBookingChecker(BookingChecker):
                 "type": "text",
                 "label": "Movie Page URL 🔗",
                 "placeholder": "https://in.bookmyshow.com/buytickets/movie-name/...",
-                "help": "Copy the exact URL of the movie booking page containing the date selectors."
+                "help": "Copy the exact URL of the movie booking page containing the date selectors.",
             },
             "date_str": {
                 "type": "date",
                 "label": "Target Date 📅",
-                "help": "Select the date you want to monitor."
+                "help": "Select the date you want to monitor.",
             },
             "theatres": {
                 "type": "text_area",
                 "label": "Target Theatre Name(s) 🏢",
                 "placeholder": "PVR: ECX Chanakyapuri\nINOX: Insignia Epicuria",
-                "help": "Enter one theatre name per line. Substring match is supported, but it is strictly case-sensitive!"
-            }
+                "help": (
+                    "Enter one theatre name per line. "
+                    "Substring match is supported, but it is strictly case-sensitive!"
+                ),
+            },
         }
 
     async def check_booking(
-        self, 
-        params: Dict[str, Any], 
-        headless: bool = True,
-        keep_browser_open: bool = True,
-        **kwargs
+        self,
+        params: Dict[str, Any],
+        headless: bool = True,       # kept for API compatibility, unused
+        keep_browser_open: bool = True,  # kept for API compatibility, unused
+        **kwargs,
     ) -> Tuple[bool, str, Optional[str], List[str], List[str]]:
         url = params.get("url", "")
         date_str = params.get("date_str", "")
         theatres = params.get("theatres", [])
-        
+
         log = kwargs.get("logger", logger)
 
-        log.info(f"Starting BookMyShow booking check for URL: {url}, Date: {date_str}, Theatres: {theatres}, Headless: {headless}, KeepBrowserOpen: {keep_browser_open}")
-        
-        if self._browser and not self._browser.is_connected():
-            log.warning("Browser was closed/disconnected. Performing cleanup before reopening...")
-            await self.close()
+        # Build the URL that already points at the requested date
+        target_url = _build_date_url(url, date_str)
+        log.info(
+            f"Starting BookMyShow booking check | URL: {target_url} | "
+            f"Date: {date_str} | Theatres: {theatres}"
+        )
 
-        # Initialize Playwright and Browser objects lazily
+        # --- 1. Fetch the page ---
         try:
-            if not self._playwright:
-                self._playwright = await async_playwright().start()
-            
-            if not self._browser:
-                log.info("Launching Chrome browser...")
-                self._browser = await self._playwright.chromium.launch(
-                    headless=headless,
-                    channel=settings.playwright_channel
-                )
-                self._context = await self._browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                )
-                self._page = await self._context.new_page()
-                self._page.set_default_timeout(settings.default_playwright_timeout)
-        except Exception as e:
-            log.error(f"Failed to launch Chrome browser: {str(e)}")
-            await self.close()
-            return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", None, [], theatres
-
-        page = self._page
-
-        # Establish fallback movie name based on slug in case DOM parsing fails
-        fallback_movie_name = "Movie"
-        try:
-            parsed_url = urlparse(url)
-            match_slug = re.search(r'/movies/[^/]+/([^/]+)', parsed_url.path)
-            if match_slug:
-                fallback_movie_name = match_slug.group(1).replace("-", " ").title()
-        except Exception:
-            pass
-
-        movie_name = fallback_movie_name
-
-        try:
-            # 1. Open the movie URL exactly as-is
-            log.info(f"Opening target URL: {url}")
-            await page.goto(url, wait_until="domcontentloaded")
-            
-            # Load page and log URL
-            current_url = page.url
-            log.info(f"Loaded page URL: {current_url}")
-
-            # Attempt to extract movie name using the User's requested XPath format
-            try:
-                href = extract_movie_href(url)
-                if href:
-                    movie_xpath = f"//a[@href='{href}']"
-                    log.info(f"Searching for movie name with XPath: {movie_xpath}")
-                    movie_locator = page.locator(movie_xpath)
-                    count = await movie_locator.count()
-                    if count > 0:
-                        extracted_name = (await movie_locator.first.inner_text()).strip()
-                        if extracted_name:
-                            movie_name = extracted_name
-                            log.info(f"Extracted movie name from DOM: {movie_name}")
-                    else:
-                        # Try matching contains just in case
-                        movie_xpath_contains = f"//a[contains(@href, '{href}')]"
-                        movie_locator_contains = page.locator(movie_xpath_contains)
-                        if await movie_locator_contains.count() > 0:
-                            extracted_name = (await movie_locator_contains.first.inner_text()).strip()
-                            if extracted_name:
-                                movie_name = extracted_name
-                                log.info(f"Extracted movie name (contains) from DOM: {movie_name}")
-            except Exception as ex:
-                log.warning(f"Could not extract movie name from page DOM: {ex}. Using fallback: {movie_name}")
-
-            # 2. Check if requested date is locatable
-            date_xpath = f'//*[@id="{date_str}"]'
-            log.info(f"Locating date element with XPath: {date_xpath}")
-            date_locator = page.locator(date_xpath)
-            
-            count = await date_locator.count()
-            if count == 0:
-                log.warning(f"Date element '{date_str}' not found on page.")
-                return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
-            
-            date_element = date_locator.first
-            is_visible = await date_element.is_visible()
-            if not is_visible:
-                log.warning(f"Date element '{date_str}' is present in DOM but not visible.")
-                return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
-
-            # 3. Check if the date is clickable (i.e. booking is open)
-            is_enabled = await date_element.is_enabled()
-            
-            # Check WAI-ARIA and custom attributes
-            aria_disabled = await date_element.get_attribute("aria-disabled") or ""
-            custom_disabled = await date_element.get_attribute("disabled") or ""
-            is_disabled_attr = (
-                aria_disabled.lower() == "true" or 
-                custom_disabled.lower() in ["true", "disabled"]
-            )
-            
-            # Retrieve classes of date element and its parent elements (grandparent included)
-            classes_to_check = []
-            try:
-                classes_to_check.append(await date_element.get_attribute("class") or "")
-                classes_to_check.append(await date_element.evaluate("el => el.parentElement ? el.parentElement.className : ''"))
-                classes_to_check.append(await date_element.evaluate("el => el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement.className : ''"))
-            except Exception:
-                pass
-            
-            classes_str = " ".join(classes_to_check).lower()
-            is_disabled_by_class = any(
-                term in classes_str
-                for term in ["disabled", "inactive", "blocked", "unclickable"]
+            html = await asyncio.to_thread(self._fetch, target_url, log)
+        except Exception as exc:
+            log.error(f"HTTP request failed: {exc}")
+            return (
+                False,
+                "A temporary error occurred while checking ticket availability. We will try again shortly.",
+                None,
+                [],
+                theatres,
             )
 
-            if not is_enabled or is_disabled_by_class or is_disabled_attr:
-                log.warning(
-                    f"Date '{date_str}' is found but disabled. "
-                    f"enabled={is_enabled}, classes='{classes_str}', aria-disabled='{aria_disabled}', custom-disabled='{custom_disabled}'"
-                )
-                return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
+        # --- 2. Parse HTML ---
+        soup = BeautifulSoup(html, "html.parser")
+        movie_name = _extract_movie_name(soup, url)
+        log.info(f"Movie name resolved to: {movie_name!r}")
 
-            # 4. Click the date element to load showtimes/theatres
-            log.info(f"Date '{date_str}' is clickable. Clicking to load theatres...")
-            try:
-                await date_element.click(timeout=5000)
-                # Let DOM update/load theatres
-                await page.wait_for_timeout(2000)
-            except Exception as click_err:
-                log.error(f"Failed to click date element: {str(click_err)}")
-                return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
+        # --- 3. Check the date element ---
+        date_el = soup.find(id=date_str)
+        if date_el is None:
+            log.warning(f"Date element '{date_str}' not found in page.")
+            return (
+                False,
+                f"Booking has not opened for {date_str} yet.",
+                movie_name,
+                [],
+                theatres,
+            )
 
-            # 5. Check if the specified theatre(s) are available using standard XPath spans
-            available_theatres = []
-            missing_theatres = []
+        if _is_date_disabled(date_el):
+            classes = " ".join(date_el.get("class", []))
+            log.warning(
+                f"Date '{date_str}' found but appears disabled. Classes: {classes!r}"
+            )
+            return (
+                False,
+                f"Booking has not opened for {date_str} yet.",
+                movie_name,
+                [],
+                theatres,
+            )
 
-            for theatre in theatres:
-                theatre_xpath = f"//span[contains(text(), {escape_xpath_string(theatre)})]"
-                log.info(f"Checking for theatre '{theatre}' using XPath: {theatre_xpath}")
-                theatre_locator = page.locator(theatre_xpath)
+        log.info(f"Date '{date_str}' is present and not disabled.")
 
-                # Look for a visible instance of the theatre span
-                count = await theatre_locator.count()
-                is_visible = False
-                for idx in range(count):
-                    is_nth_visible = await theatre_locator.nth(idx).is_visible()
-                    if is_nth_visible:
-                        is_visible = True
-                        break
+        # --- 4. Check theatre availability ---
+        # Theatre names are rendered inside <span> elements on the showtimes page.
+        # We collect the text of every <span> and do a substring search.
+        span_texts = [span.get_text(strip=True) for span in soup.find_all("span")]
 
-                if is_visible:
-                    available_theatres.append(theatre)
-                else:
-                    missing_theatres.append(theatre)
+        available_theatres: List[str] = []
+        missing_theatres: List[str] = []
 
-            if not available_theatres:
-                log.warning(f"Date '{date_str}' is clickable, but none of the specified theatres were found ({', '.join(theatres)}).")
-                return False, f"Booking is open for {date_str}, but showtimes at your selected theatres are not available yet.", movie_name, [], theatres
+        for theatre in theatres:
+            found = any(theatre in text for text in span_texts)
+            if found:
+                available_theatres.append(theatre)
+                log.info(f"Theatre found in span: {theatre!r}")
+            else:
+                missing_theatres.append(theatre)
+                log.warning(f"Theatre NOT found in any span: {theatre!r}")
 
-            # Success!
-            success_details = f"Booking is OPEN for date {date_str}! Found theatres: {', '.join(available_theatres)}."
-            if missing_theatres:
-                success_details += f" (Unavailable: {', '.join(missing_theatres)})"
-            
-            log.info(success_details)
-            return True, success_details, movie_name, available_theatres, missing_theatres
+        if not available_theatres:
+            log.warning(
+                f"Date '{date_str}' is clickable, but none of the specified theatres "
+                f"were found ({', '.join(theatres)})."
+            )
+            return (
+                False,
+                f"Booking is open for {date_str}, but showtimes at your selected theatres are not available yet.",
+                movie_name,
+                [],
+                theatres,
+            )
 
-        except Exception as e:
-            log.exception(f"Scraper error while reading {url}")
-            return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", movie_name, [], theatres
-        finally:
-            if not keep_browser_open:
-                log.info("Closing browser per keep_browser_open=False configuration.")
-                await self.close()
+        # --- 5. Success ---
+        success_details = (
+            f"Booking is OPEN for date {date_str}! "
+            f"Found theatres: {', '.join(available_theatres)}."
+        )
+        if missing_theatres:
+            success_details += f" (Unavailable: {', '.join(missing_theatres)})"
+
+        log.info(success_details)
+        return True, success_details, movie_name, available_theatres, missing_theatres
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _fetch(self, url: str, log) -> str:
+        """
+        Synchronous HTTP GET with browser-like headers.
+        Runs in a thread via asyncio.to_thread so it doesn't block the event loop.
+        """
+        log.info(f"Fetching URL: {url}")
+        with httpx.Client(
+            headers=_HEADERS,
+            follow_redirects=True,
+            timeout=30.0,
+        ) as client:
+            response = client.get(url)
+            response.raise_for_status()
+            log.info(f"Response: HTTP {response.status_code} ({len(response.text)} chars)")
+            return response.text
+
+    async def close(self) -> None:
+        """No persistent resources to release."""
+        pass
