@@ -20,6 +20,7 @@ class MonitorJob:
         service_provider: str = "bookmyshow",
         check_interval: Optional[int] = None,
         headless: bool = True,
+        keep_browser_open: bool = True,
         job_id: Optional[str] = None
     ):
         self.id = job_id or str(uuid.uuid4())[:8]  # Short, readable ID
@@ -29,6 +30,7 @@ class MonitorJob:
         self.service_provider = service_provider.strip().lower()
         self.check_interval = check_interval or 30
         self.headless = headless
+        self.keep_browser_open = keep_browser_open
         self.movie_name = "Fetching..."
         
         self.created_at = datetime.now()
@@ -81,6 +83,7 @@ class MonitorJob:
                 "notification_config": self.notification_config,
                 "check_interval": self.check_interval,
                 "headless": self.headless,
+                "keep_browser_open": self.keep_browser_open,
                 "created_at": self.created_at,
                 "status": self.status,
                 "last_checked_at": self.last_checked_at,

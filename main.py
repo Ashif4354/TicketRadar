@@ -187,6 +187,13 @@ with col_form:
         key="form_headless"
     )
     
+    keep_browser_open = st.checkbox(
+        "Keep browser open between checks", 
+        value=True,
+        help="Check this to reuse the same browser window across periodic checks instead of launching a new one each time. Recommended to reduce overhead and prevent window blinking.",
+        key="form_keep_browser_open"
+    )
+    
     st.markdown("---")
     
     st.markdown("### ➕ Create New Monitor Task")
@@ -257,15 +264,16 @@ with col_form:
                     params_latest["theatres"] = [t.strip() for t in val.split("\n") if t.strip()]
                 else:
                     params_latest[field_id] = val if not isinstance(val, str) else val.strip()
-
+ 
             medium_latest = st.session_state.get("form_medium", "Email")
             service_latest = st.session_state.get("form_service", "BookMyShow")
             interval_latest = st.session_state.get("form_interval", 30)
             headless_latest = st.session_state.get("form_headless", True)
+            keep_browser_open_latest = st.session_state.get("form_keep_browser_open", True)
             
             email_latest = st.session_state.get("form_email", "").strip()
             webhook_latest = st.session_state.get("form_webhook", "").strip()
-
+ 
             if medium_latest == "Email" and not email_latest:
                 errors.append("Enter a recipient email address.")
             if medium_latest == "Discord Webhook" and not webhook_latest:
@@ -288,7 +296,8 @@ with col_form:
                     notification_config=notif_config,
                     service_provider=service_latest,
                     check_interval=interval_latest,
-                    headless=headless_latest
+                    headless=headless_latest,
+                    keep_browser_open=keep_browser_open_latest
                 )
                 
                 # Start job background thread

@@ -44,6 +44,49 @@ class BookMyShowBookingChecker(BookingChecker):
     Concrete scraper implementing the BookingChecker interface for BookMyShow using Playwright.
     """
 
+    def __init__(self):
+        super().__init__()
+        self._playwright = None
+        self._browser = None
+        self._context = None
+        self._page = None
+
+    async def close(self) -> None:
+        """
+        Cleans up and closes any active Playwright browser/page objects.
+        """
+        try:
+            if self._page:
+                await self._page.close()
+        except Exception:
+            pass
+        finally:
+            self._page = None
+
+        try:
+            if self._context:
+                await self._context.close()
+        except Exception:
+            pass
+        finally:
+            self._context = None
+
+        try:
+            if self._browser:
+                await self._browser.close()
+        except Exception:
+            pass
+        finally:
+            self._browser = None
+
+        try:
+            if self._playwright:
+                await self._playwright.stop()
+        except Exception:
+            pass
+        finally:
+            self._playwright = None
+
     @classmethod
     def get_required_fields(cls) -> Dict[str, Dict[str, Any]]:
         """
@@ -73,6 +116,7 @@ class BookMyShowBookingChecker(BookingChecker):
         self, 
         params: Dict[str, Any], 
         headless: bool = True,
+        keep_browser_open: bool = True,
         **kwargs
     ) -> Tuple[bool, str, Optional[str], List[str], List[str]]:
         url = params.get("url", "")
@@ -81,168 +125,179 @@ class BookMyShowBookingChecker(BookingChecker):
         
         log = kwargs.get("logger", logger)
 
-        log.info(f"Starting BookMyShow booking check for URL: {url}, Date: {date_str}, Theatres: {theatres}, Headless: {headless}")
+        log.info(f"Starting BookMyShow booking check for URL: {url}, Date: {date_str}, Theatres: {theatres}, Headless: {headless}, KeepBrowserOpen: {keep_browser_open}")
         
-        async with async_playwright() as p:
-            # Launch Chrome using system-installed application
-            try:
-                browser = await p.chromium.launch(
+        if self._browser and not self._browser.is_connected():
+            log.warning("Browser was closed/disconnected. Performing cleanup before reopening...")
+            await self.close()
+
+        # Initialize Playwright and Browser objects lazily
+        try:
+            if not self._playwright:
+                self._playwright = await async_playwright().start()
+            
+            if not self._browser:
+                log.info("Launching Chrome browser...")
+                self._browser = await self._playwright.chromium.launch(
                     headless=headless,
                     channel=settings.playwright_channel
                 )
-            except Exception as e:
-                log.error(f"Failed to launch Chrome browser: {str(e)}")
-                return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", None, [], theatres
+                self._context = await self._browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+                self._page = await self._context.new_page()
+                self._page.set_default_timeout(settings.default_playwright_timeout)
+        except Exception as e:
+            log.error(f"Failed to launch Chrome browser: {str(e)}")
+            await self.close()
+            return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", None, [], theatres
 
-            # Use generic user-agent to prevent bot detection
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            page = await context.new_page()
-            page.set_default_timeout(settings.default_playwright_timeout)
+        page = self._page
 
-            # Establish fallback movie name based on slug in case DOM parsing fails
-            fallback_movie_name = "Movie"
+        # Establish fallback movie name based on slug in case DOM parsing fails
+        fallback_movie_name = "Movie"
+        try:
+            parsed_url = urlparse(url)
+            match_slug = re.search(r'/movies/[^/]+/([^/]+)', parsed_url.path)
+            if match_slug:
+                fallback_movie_name = match_slug.group(1).replace("-", " ").title()
+        except Exception:
+            pass
+
+        movie_name = fallback_movie_name
+
+        try:
+            # 1. Open the movie URL exactly as-is
+            log.info(f"Opening target URL: {url}")
+            await page.goto(url, wait_until="domcontentloaded")
+            
+            # Load page and log URL
+            current_url = page.url
+            log.info(f"Loaded page URL: {current_url}")
+
+            # Attempt to extract movie name using the User's requested XPath format
             try:
-                parsed_url = urlparse(url)
-                match_slug = re.search(r'/movies/[^/]+/([^/]+)', parsed_url.path)
-                if match_slug:
-                    fallback_movie_name = match_slug.group(1).replace("-", " ").title()
-            except Exception:
-                pass
-
-            movie_name = fallback_movie_name
-
-            try:
-                # 1. Open the movie URL exactly as-is
-                log.info(f"Opening target URL: {url}")
-                await page.goto(url, wait_until="domcontentloaded")
-                
-                # Load page and log URL
-                current_url = page.url
-                log.info(f"Loaded page URL: {current_url}")
-
-                # Attempt to extract movie name using the User's requested XPath format
-                try:
-                    href = extract_movie_href(url)
-                    if href:
-                        movie_xpath = f"//a[@href='{href}']"
-                        log.info(f"Searching for movie name with XPath: {movie_xpath}")
-                        movie_locator = page.locator(movie_xpath)
-                        count = await movie_locator.count()
-                        if count > 0:
-                            extracted_name = (await movie_locator.first.inner_text()).strip()
+                href = extract_movie_href(url)
+                if href:
+                    movie_xpath = f"//a[@href='{href}']"
+                    log.info(f"Searching for movie name with XPath: {movie_xpath}")
+                    movie_locator = page.locator(movie_xpath)
+                    count = await movie_locator.count()
+                    if count > 0:
+                        extracted_name = (await movie_locator.first.inner_text()).strip()
+                        if extracted_name:
+                            movie_name = extracted_name
+                            log.info(f"Extracted movie name from DOM: {movie_name}")
+                    else:
+                        # Try matching contains just in case
+                        movie_xpath_contains = f"//a[contains(@href, '{href}')]"
+                        movie_locator_contains = page.locator(movie_xpath_contains)
+                        if await movie_locator_contains.count() > 0:
+                            extracted_name = (await movie_locator_contains.first.inner_text()).strip()
                             if extracted_name:
                                 movie_name = extracted_name
-                                log.info(f"Extracted movie name from DOM: {movie_name}")
-                        else:
-                            # Try matching contains just in case
-                            movie_xpath_contains = f"//a[contains(@href, '{href}')]"
-                            movie_locator_contains = page.locator(movie_xpath_contains)
-                            if await movie_locator_contains.count() > 0:
-                                extracted_name = (await movie_locator_contains.first.inner_text()).strip()
-                                if extracted_name:
-                                    movie_name = extracted_name
-                                    log.info(f"Extracted movie name (contains) from DOM: {movie_name}")
-                except Exception as ex:
-                    log.warning(f"Could not extract movie name from page DOM: {ex}. Using fallback: {movie_name}")
+                                log.info(f"Extracted movie name (contains) from DOM: {movie_name}")
+            except Exception as ex:
+                log.warning(f"Could not extract movie name from page DOM: {ex}. Using fallback: {movie_name}")
 
-                # 2. Check if requested date is locatable
-                date_xpath = f'//*[@id="{date_str}"]'
-                log.info(f"Locating date element with XPath: {date_xpath}")
-                date_locator = page.locator(date_xpath)
-                
-                count = await date_locator.count()
-                if count == 0:
-                    log.warning(f"Date element '{date_str}' not found on page.")
-                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
-                
-                date_element = date_locator.first
-                is_visible = await date_element.is_visible()
-                if not is_visible:
-                    log.warning(f"Date element '{date_str}' is present in DOM but not visible.")
-                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
+            # 2. Check if requested date is locatable
+            date_xpath = f'//*[@id="{date_str}"]'
+            log.info(f"Locating date element with XPath: {date_xpath}")
+            date_locator = page.locator(date_xpath)
+            
+            count = await date_locator.count()
+            if count == 0:
+                log.warning(f"Date element '{date_str}' not found on page.")
+                return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
+            
+            date_element = date_locator.first
+            is_visible = await date_element.is_visible()
+            if not is_visible:
+                log.warning(f"Date element '{date_str}' is present in DOM but not visible.")
+                return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
-                # 3. Check if the date is clickable (i.e. booking is open)
-                is_enabled = await date_element.is_enabled()
-                
-                # Check WAI-ARIA and custom attributes
-                aria_disabled = await date_element.get_attribute("aria-disabled") or ""
-                custom_disabled = await date_element.get_attribute("disabled") or ""
-                is_disabled_attr = (
-                    aria_disabled.lower() == "true" or 
-                    custom_disabled.lower() in ["true", "disabled"]
+            # 3. Check if the date is clickable (i.e. booking is open)
+            is_enabled = await date_element.is_enabled()
+            
+            # Check WAI-ARIA and custom attributes
+            aria_disabled = await date_element.get_attribute("aria-disabled") or ""
+            custom_disabled = await date_element.get_attribute("disabled") or ""
+            is_disabled_attr = (
+                aria_disabled.lower() == "true" or 
+                custom_disabled.lower() in ["true", "disabled"]
+            )
+            
+            # Retrieve classes of date element and its parent elements (grandparent included)
+            classes_to_check = []
+            try:
+                classes_to_check.append(await date_element.get_attribute("class") or "")
+                classes_to_check.append(await date_element.evaluate("el => el.parentElement ? el.parentElement.className : ''"))
+                classes_to_check.append(await date_element.evaluate("el => el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement.className : ''"))
+            except Exception:
+                pass
+            
+            classes_str = " ".join(classes_to_check).lower()
+            is_disabled_by_class = any(
+                term in classes_str
+                for term in ["disabled", "inactive", "blocked", "unclickable"]
+            )
+
+            if not is_enabled or is_disabled_by_class or is_disabled_attr:
+                log.warning(
+                    f"Date '{date_str}' is found but disabled. "
+                    f"enabled={is_enabled}, classes='{classes_str}', aria-disabled='{aria_disabled}', custom-disabled='{custom_disabled}'"
                 )
-                
-                # Retrieve classes of date element and its parent elements (grandparent included)
-                classes_to_check = []
-                try:
-                    classes_to_check.append(await date_element.get_attribute("class") or "")
-                    classes_to_check.append(await date_element.evaluate("el => el.parentElement ? el.parentElement.className : ''"))
-                    classes_to_check.append(await date_element.evaluate("el => el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement.className : ''"))
-                except Exception:
-                    pass
-                
-                classes_str = " ".join(classes_to_check).lower()
-                is_disabled_by_class = any(
-                    term in classes_str
-                    for term in ["disabled", "inactive", "blocked", "unclickable"]
-                )
+                return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
-                if not is_enabled or is_disabled_by_class or is_disabled_attr:
-                    log.warning(
-                        f"Date '{date_str}' is found but disabled. "
-                        f"enabled={is_enabled}, classes='{classes_str}', aria-disabled='{aria_disabled}', custom-disabled='{custom_disabled}'"
-                    )
-                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
+            # 4. Click the date element to load showtimes/theatres
+            log.info(f"Date '{date_str}' is clickable. Clicking to load theatres...")
+            try:
+                await date_element.click(timeout=5000)
+                # Let DOM update/load theatres
+                await page.wait_for_timeout(2000)
+            except Exception as click_err:
+                log.error(f"Failed to click date element: {str(click_err)}")
+                return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
-                # 4. Click the date element to load showtimes/theatres
-                log.info(f"Date '{date_str}' is clickable. Clicking to load theatres...")
-                try:
-                    await date_element.click(timeout=5000)
-                    # Let DOM update/load theatres
-                    await page.wait_for_timeout(2000)
-                except Exception as click_err:
-                    log.error(f"Failed to click date element: {str(click_err)}")
-                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
+            # 5. Check if the specified theatre(s) are available using standard XPath spans
+            available_theatres = []
+            missing_theatres = []
 
-                # 5. Check if the specified theatre(s) are available using standard XPath spans
-                available_theatres = []
-                missing_theatres = []
+            for theatre in theatres:
+                theatre_xpath = f"//span[contains(text(), {escape_xpath_string(theatre)})]"
+                log.info(f"Checking for theatre '{theatre}' using XPath: {theatre_xpath}")
+                theatre_locator = page.locator(theatre_xpath)
 
-                for theatre in theatres:
-                    theatre_xpath = f"//span[contains(text(), {escape_xpath_string(theatre)})]"
-                    log.info(f"Checking for theatre '{theatre}' using XPath: {theatre_xpath}")
-                    theatre_locator = page.locator(theatre_xpath)
+                # Look for a visible instance of the theatre span
+                count = await theatre_locator.count()
+                is_visible = False
+                for idx in range(count):
+                    is_nth_visible = await theatre_locator.nth(idx).is_visible()
+                    if is_nth_visible:
+                        is_visible = True
+                        break
 
-                    # Look for a visible instance of the theatre span
-                    count = await theatre_locator.count()
-                    is_visible = False
-                    for idx in range(count):
-                        is_nth_visible = await theatre_locator.nth(idx).is_visible()
-                        if is_nth_visible:
-                            is_visible = True
-                            break
+                if is_visible:
+                    available_theatres.append(theatre)
+                else:
+                    missing_theatres.append(theatre)
 
-                    if is_visible:
-                        available_theatres.append(theatre)
-                    else:
-                        missing_theatres.append(theatre)
+            if not available_theatres:
+                log.warning(f"Date '{date_str}' is clickable, but none of the specified theatres were found ({', '.join(theatres)}).")
+                return False, f"Booking is open for {date_str}, but showtimes at your selected theatres are not available yet.", movie_name, [], theatres
 
-                if not available_theatres:
-                    log.warning(f"Date '{date_str}' is clickable, but none of the specified theatres were found ({', '.join(theatres)}).")
-                    return False, f"Booking is open for {date_str}, but showtimes at your selected theatres are not available yet.", movie_name, [], theatres
+            # Success!
+            success_details = f"Booking is OPEN for date {date_str}! Found theatres: {', '.join(available_theatres)}."
+            if missing_theatres:
+                success_details += f" (Unavailable: {', '.join(missing_theatres)})"
+            
+            log.info(success_details)
+            return True, success_details, movie_name, available_theatres, missing_theatres
 
-                # Success!
-                success_details = f"Booking is OPEN for date {date_str}! Found theatres: {', '.join(available_theatres)}."
-                if missing_theatres:
-                    success_details += f" (Unavailable: {', '.join(missing_theatres)})"
-                
-                log.info(success_details)
-                return True, success_details, movie_name, available_theatres, missing_theatres
-
-            except Exception as e:
-                log.exception(f"Scraper error while reading {url}")
-                return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", movie_name, [], theatres
-            finally:
-                await browser.close()
+        except Exception as e:
+            log.exception(f"Scraper error while reading {url}")
+            return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", movie_name, [], theatres
+        finally:
+            if not keep_browser_open:
+                log.info("Closing browser per keep_browser_open=False configuration.")
+                await self.close()

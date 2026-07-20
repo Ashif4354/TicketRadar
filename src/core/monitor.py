@@ -134,7 +134,7 @@ class JobManager:
     async def _run_job_loop(self, job: MonitorJob, stop_event: asyncio.Event) -> None:
         """
         The main async coroutine executing the check loop.
-        Uses Playwright async checker and alerts asynchronously.
+        Uses Playwright async scraper and alerts asynchronously.
         """
         job_logger = get_job_logger(job.id)
         job_logger.info(
@@ -144,70 +144,79 @@ class JobManager:
         
         scraper = ScraperFactory.create_scraper(job.service_provider)
         
-        while not stop_event.is_set():
-            job_logger.info("Executing periodic ticket check...")
-            
-            # Perform scraping check asynchronously
-            try:
-                success, details, movie_name, available, unavailable = await scraper.check_booking(
-                    job.params, headless=job.headless, logger=job_logger
-                )
-                if movie_name:
-                    job.movie_name = movie_name
-            except Exception as e:
-                success = False
-                details = f"Scraper execution error: {str(e)}"
-                available, unavailable = [], job.theatres
-                job_logger.exception("Scraper raised an unhandled exception")
-
-            if stop_event.is_set():
-                break
-
-            if success:
-                job_logger.info(f"Tickets AVAILABLE! Details: {details}")
-                job_logger.info(f"Triggering {job.notification_medium} notification...")
+        try:
+            while not stop_event.is_set():
+                job_logger.info("Executing periodic ticket check...")
                 
-                # Attempt to send notification asynchronously
+                # Perform scraping check asynchronously
                 try:
-                    notifier = NotificationStrategyFactory.create_strategy(
-                        job.notification_medium, 
-                        job.notification_config
+                    success, details, movie_name, available, unavailable = await scraper.check_booking(
+                        job.params,
+                        headless=job.headless,
+                        keep_browser_open=job.keep_browser_open,
+                        logger=job_logger
                     )
-                    
-                    subject = f"TicketRadar: Booking Open for {job.date_str}!"
-                    
-                    # Await notification sending with structured parameters
-                    notif_success, notif_msg = await notifier.send_notification(
-                        subject=subject,
-                        movie_name=job.movie_name,
-                        date_str=job.date_str,
-                        available_theatres=available,
-                        unavailable_theatres=unavailable,
-                        url=job.url
-                    )
-                    
-                    if notif_success:
-                        job_logger.info("Notification sent successfully.")
-                        job.update_state("Success", f"{details} Notification delivered.", movie_name=movie_name)
-                    else:
-                        job_logger.error(f"Notification failed: {notif_msg}")
-                        job.update_state("Error", f"{details} But notification failed: {notif_msg}", movie_name=movie_name)
-                
-                except Exception as notif_err:
-                    job_logger.exception("Notification raised an exception")
-                    job.update_state("Error", f"{details} But notification exception: {str(notif_err)}", movie_name=movie_name)
-                
-                # Stop monitoring once booking is successfully found
-                break
-                
-            else:
-                job_logger.info(f"Check result: {details}. Retrying in {job.check_interval} seconds.")
-                job.update_state("Running", details)
-            
-            # Responsive sleep logic using asyncio.sleep
-            for _ in range(job.check_interval):
+                    if movie_name:
+                        job.movie_name = movie_name
+                except Exception as e:
+                    success = False
+                    details = f"Scraper execution error: {str(e)}"
+                    available, unavailable = [], job.theatres
+                    job_logger.exception("Scraper raised an unhandled exception")
+
                 if stop_event.is_set():
                     break
-                await asyncio.sleep(1)
 
-        job_logger.info("Monitor loop finished.")
+                if success:
+                    job_logger.info(f"Tickets AVAILABLE! Details: {details}")
+                    job_logger.info(f"Triggering {job.notification_medium} notification...")
+                    
+                    # Attempt to send notification asynchronously
+                    try:
+                        notifier = NotificationStrategyFactory.create_strategy(
+                            job.notification_medium, 
+                            job.notification_config
+                        )
+                        
+                        subject = f"TicketRadar: Booking Open for {job.date_str}!"
+                        
+                        # Await notification sending with structured parameters
+                        notif_success, notif_msg = await notifier.send_notification(
+                            subject=subject,
+                            movie_name=job.movie_name,
+                            date_str=job.date_str,
+                            available_theatres=available,
+                            unavailable_theatres=unavailable,
+                            url=job.url
+                        )
+                        
+                        if notif_success:
+                            job_logger.info("Notification sent successfully.")
+                            job.update_state("Success", f"{details} Notification delivered.", movie_name=movie_name)
+                        else:
+                            job_logger.error(f"Notification failed: {notif_msg}")
+                            job.update_state("Error", f"{details} But notification failed: {notif_msg}", movie_name=movie_name)
+                    
+                    except Exception as notif_err:
+                        job_logger.exception("Notification raised an exception")
+                        job.update_state("Error", f"{details} But notification exception: {str(notif_err)}", movie_name=movie_name)
+                    
+                    # Stop monitoring once booking is successfully found
+                    break
+                    
+                else:
+                    job_logger.info(f"Check result: {details}. Retrying in {job.check_interval} seconds.")
+                    job.update_state("Running", details)
+                
+                # Responsive sleep logic using asyncio.sleep
+                for _ in range(job.check_interval):
+                    if stop_event.is_set():
+                        break
+                    await asyncio.sleep(1)
+        finally:
+            job_logger.info("Cleaning up scraper resources...")
+            try:
+                await scraper.close()
+            except Exception as close_err:
+                job_logger.error(f"Failed to close scraper cleanly: {close_err}")
+            job_logger.info("Monitor loop finished.")

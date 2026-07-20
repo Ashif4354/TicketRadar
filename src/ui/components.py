@@ -33,7 +33,9 @@ def render_job_card(job: MonitorJob, manager) -> None:
     badge_class = badge_style_map.get(status.lower(), "badge badge-idle")
     
     headless = state.get("headless", True)
-    run_mode = "Background (Headless)" if headless else "Foreground (Window)"
+    keep_browser_open = state.get("keep_browser_open", True)
+    keep_open_str = "Keep Open" if keep_browser_open else "Open/Close"
+    run_mode = f"Background ({keep_open_str})" if headless else f"Foreground ({keep_open_str})"
     
     movie_name = state.get("movie_name", "Fetching...")
     
