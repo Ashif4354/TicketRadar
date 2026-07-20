@@ -151,8 +151,6 @@ class JobManager:
                 try:
                     success, details, movie_name, available, unavailable = await scraper.check_booking(
                         job.params,
-                        headless=job.headless,
-                        keep_browser_open=job.keep_browser_open,
                         logger=job_logger
                     )
                     if movie_name:

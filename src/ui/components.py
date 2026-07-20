@@ -32,11 +32,6 @@ def render_job_card(job: MonitorJob, manager) -> None:
     }
     badge_class = badge_style_map.get(status.lower(), "badge badge-idle")
     
-    headless = state.get("headless", True)
-    keep_browser_open = state.get("keep_browser_open", True)
-    keep_open_str = "Keep Open" if keep_browser_open else "Open/Close"
-    run_mode = f"Background ({keep_open_str})" if headless else f"Foreground ({keep_open_str})"
-    
     movie_name = state.get("movie_name", "Fetching...")
     
     # HTML representation for custom dashboard styling
@@ -58,10 +53,6 @@ def render_job_card(job: MonitorJob, manager) -> None:
             <div class="info-item">
                 <div class="info-label">Alert Channel</div>
                 <div class="info-value">📢 {medium.upper()}</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Run Mode</div>
-                <div class="info-value">🖥️ {run_mode}</div>
             </div>
             <div class="info-item">
                 <div class="info-label">Last Checked</div>

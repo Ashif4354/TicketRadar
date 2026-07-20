@@ -179,21 +179,7 @@ with col_form:
         help="Time to wait before refreshing the page. Minimum 10 seconds.",
         key="form_interval"
     )
-    
-    headless = st.checkbox(
-        "Run browser in background (Headless)", 
-        value=True,
-        help="Uncheck this if you want to visibly see Google Chrome running during monitor checks.",
-        key="form_headless"
-    )
-    
-    keep_browser_open = st.checkbox(
-        "Keep browser open between checks", 
-        value=True,
-        help="Check this to reuse the same browser window across periodic checks instead of launching a new one each time. Recommended to reduce overhead and prevent window blinking.",
-        key="form_keep_browser_open"
-    )
-    
+
     st.markdown("---")
     
     st.markdown("### ➕ Create New Monitor Task")
@@ -271,8 +257,6 @@ with col_form:
             medium_latest = st.session_state.get("form_medium", "Email")
             service_latest = st.session_state.get("form_service", "BookMyShow")
             interval_latest = st.session_state.get("form_interval", 30)
-            headless_latest = st.session_state.get("form_headless", True)
-            keep_browser_open_latest = st.session_state.get("form_keep_browser_open", True)
             
             email_latest = st.session_state.get("form_email", "").strip()
             webhook_latest = st.session_state.get("form_webhook", "").strip()
@@ -299,8 +283,6 @@ with col_form:
                     notification_config=notif_config,
                     service_provider=service_latest,
                     check_interval=interval_latest,
-                    headless=headless_latest,
-                    keep_browser_open=keep_browser_open_latest
                 )
                 
                 # Start job background thread

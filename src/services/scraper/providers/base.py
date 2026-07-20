@@ -30,20 +30,16 @@ class BookingChecker(ABC):
 
     @abstractmethod
     async def check_booking(
-        self, 
-        params: Dict[str, Any], 
-        headless: bool = True,
-        keep_browser_open: bool = True,
+        self,
+        params: Dict[str, Any],
         **kwargs
     ) -> Tuple[bool, str, Optional[str], List[str], List[str]]:
         """
         Checks the specified service for date clickability and theatre availability.
-        
+
         Args:
             params (Dict[str, Any]): Dictionary containing service-specific inputs.
-            headless (bool): Option to run Playwright in background (headless) or foreground.
-            keep_browser_open (bool): Option to keep the browser open between checks.
-            
+
         Returns:
             Tuple[bool, str, Optional[str], List[str], List[str]]: A tuple of:
                               - bool: True if the booking target is open and available, False otherwise.

@@ -146,8 +146,6 @@ class BookMyShowBookingChecker(BookingChecker):
     async def check_booking(
         self,
         params: Dict[str, Any],
-        headless: bool = True,       # kept for API compatibility, unused
-        keep_browser_open: bool = True,  # kept for API compatibility, unused
         **kwargs,
     ) -> Tuple[bool, str, Optional[str], List[str], List[str]]:
         url = params.get("url", "")

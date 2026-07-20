@@ -45,9 +45,6 @@ class Settings(BaseSettings):
 
     # Scraper Settings
     default_check_interval: int = Field(default=30)
-    default_playwright_timeout: int = Field(default=20000)  # ms
-    playwright_headless: bool = Field(default=True)
-    playwright_channel: str = Field(default="chrome")
 
     # Use pydantic configuration to load from .env
     model_config = SettingsConfigDict(
