@@ -208,45 +208,48 @@ with col_form:
         
     with st.form("new_monitor_form", clear_on_submit=False):
         # Dynamically render form fields based on provider metadata
+        # Store widget return values directly — do NOT re-read from session_state on submit,
+        # as session_state can hold stale values from a previous job submission.
+        form_values: dict = {}
         for field_id, field_meta in fields.items():
             field_type = field_meta.get("type", "text")
             label = field_meta.get("label", field_id.title())
             placeholder = field_meta.get("placeholder", "")
             help_text = field_meta.get("help", "")
             form_key = f"form_{service_provider.lower()}_{field_id}"
-            
+
             if field_type == "text":
-                st.text_input(
+                form_values[field_id] = st.text_input(
                     label,
                     placeholder=placeholder,
                     help=help_text,
                     key=form_key
                 )
             elif field_type == "date":
-                st.date_input(
+                form_values[field_id] = st.date_input(
                     label,
                     min_value=datetime.date.today(),
                     help=help_text,
                     key=form_key
                 )
             elif field_type == "text_area":
-                st.text_area(
+                form_values[field_id] = st.text_area(
                     label,
                     placeholder=placeholder,
                     help=help_text,
                     key=form_key
                 )
-        
+
         submit_btn = st.form_submit_button("Start Radar")
-        
+
         if submit_btn:
-            # Explicitly load the absolute latest values from the session state keys dynamically
+            # Use the widget return values captured above — these always reflect
+            # what the user has entered at the time of this specific submission.
             params_latest = {}
             errors = []
-            
+
             for field_id, field_meta in fields.items():
-                form_key = f"form_{service_provider.lower()}_{field_id}"
-                val = st.session_state.get(form_key)
+                val = form_values.get(field_id)
                 
                 # Validation
                 if val is None or (isinstance(val, str) and not val.strip()):
