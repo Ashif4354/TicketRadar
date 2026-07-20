@@ -1,6 +1,7 @@
 # src/logger.py
 
 import logging
+import re
 import os
 from src.config import LOG_FORMAT, LOG_DIR
 
@@ -59,7 +60,7 @@ def get_job_logger(job_id: str) -> logging.Logger:
     return logger
 
 def get_job_logs(job_id: str, tail_lines: int = 100) -> str:
-    """Reads the last tail_lines from the log file for a specific job."""
+    """Reads the last tail_lines from the log file for a specific job (raw, for developers)."""
     job_log_file = os.path.join(LOG_DIR, f"job_{job_id}.log")
     if not os.path.exists(job_log_file):
         return "No log output recorded yet."
@@ -67,6 +68,43 @@ def get_job_logs(job_id: str, tail_lines: int = 100) -> str:
         with open(job_log_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
             return "".join(lines[-tail_lines:])
+    except Exception as e:
+        return f"Error reading log file: {str(e)}"
+
+
+# Matches: "2026-07-20 10:05:00,123 [LEVEL] logger.name: message"
+_LOG_LINE_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+ \[(?P<level>\w+)\] [^:]+: (?P<msg>.+)$"
+)
+# Levels shown to the user — DEBUG is for developers only
+_USER_LEVELS = {"INFO", "WARNING", "ERROR", "CRITICAL"}
+
+
+def get_job_logs_user(job_id: str, tail_lines: int = 60) -> str:
+    """
+    Returns the last tail_lines of user-facing log lines for a job.
+    Strips the technical prefix (timestamp, logger name) and excludes DEBUG lines,
+    so only clean, readable messages are shown in the UI.
+    """
+    job_log_file = os.path.join(LOG_DIR, f"job_{job_id}.log")
+    if not os.path.exists(job_log_file):
+        return "No activity recorded yet."
+    try:
+        with open(job_log_file, "r", encoding="utf-8") as f:
+            raw_lines = f.readlines()
+
+        user_lines = []
+        for line in raw_lines:
+            line = line.rstrip()
+            m = _LOG_LINE_RE.match(line)
+            if m and m.group("level") in _USER_LEVELS:
+                user_lines.append(m.group("msg"))
+            # Lines that don't match the pattern (e.g. multi-line tracebacks) are skipped
+
+        if not user_lines:
+            return "No activity recorded yet."
+
+        return "\n".join(user_lines[-tail_lines:])
     except Exception as e:
         return f"Error reading log file: {str(e)}"
 

@@ -33,19 +33,15 @@ _HEADERS = {
 }
 
 
-
-
 def _build_date_url(url: str, date_str: str) -> str:
     """
     Rewrites the date segment at the end of a BMS buy-tickets URL.
     E.g. .../buytickets/ET00480917/20260720  ->  .../buytickets/ET00480917/20260721
     If the URL already ends with the correct date (or has no date segment), returns it as-is.
     """
-    # Match: .../buytickets/<code>/<date>  (date is 8 digits)
     match = re.search(r'(/buytickets/[^/]+/)(\d{8})', url)
     if match:
         return url[:match.start(2)] + date_str + url[match.end(2):]
-    # If no date in URL, just append
     return url.rstrip("/") + "/" + date_str
 
 
@@ -54,13 +50,11 @@ def _extract_movie_name(soup: BeautifulSoup, url: str) -> str:
     Attempts to extract the movie name from the parsed HTML.
     Falls back to a humanised slug from the URL if not found.
     """
-    # BMS renders the movie name as an <a> linking to /movies/<city>/<slug>/<code>
     parsed = urlparse(url)
     slug_match = re.search(r'/movies/[^/]+/([^/]+)', parsed.path)
     fallback = slug_match.group(1).replace("-", " ").title() if slug_match else "Movie"
 
     try:
-        # The anchor that links back to the movie detail page
         code_match = re.search(r'/buytickets/([^/]+)', parsed.path)
         if code_match:
             event_code = code_match.group(1)
@@ -82,8 +76,6 @@ def _get_not_allowed_classes(soup: BeautifulSoup) -> set:
     Returns a set of bare class names (without the leading dot).
     """
     not_allowed: set = set()
-    # Regex: grab one or more .className selectors immediately before a { block
-    # that contains cursor:not-allowed somewhere inside it.
     rule_re = re.compile(
         r'([.][\w-]+(?:[,\s]*[.][\w-]+)*)\s*\{[^}]*cursor\s*:\s*not-allowed[^}]*\}',
         re.IGNORECASE,
@@ -93,7 +85,6 @@ def _get_not_allowed_classes(soup: BeautifulSoup) -> set:
     for style_tag in soup.find_all("style"):
         css = style_tag.get_text()
         for rule_match in rule_re.finditer(css):
-            # A selector block may contain multiple comma-separated classes
             for sel in selector_re.finditer(rule_match.group(1)):
                 not_allowed.add(sel.group(0)[1:])  # strip leading dot
 
@@ -107,6 +98,15 @@ def _is_date_disabled(date_el, not_allowed_classes: set) -> bool:
     """
     element_classes = set(date_el.get("class", []))
     return bool(element_classes & not_allowed_classes)
+
+
+def _fmt_date(date_str: str) -> str:
+    """Formats YYYYMMDD as a readable date string, e.g. '21 Jul 2026'."""
+    try:
+        from datetime import datetime
+        return datetime.strptime(date_str, "%Y%m%d").strftime("%d %b %Y")
+    except Exception:
+        return date_str
 
 
 class BookMyShowBookingChecker(BookingChecker):
@@ -155,22 +155,22 @@ class BookMyShowBookingChecker(BookingChecker):
         theatres = params.get("theatres", [])
 
         log = kwargs.get("logger", logger)
+        date_display = _fmt_date(date_str)
 
-        # Build the URL that already points at the requested date
         target_url = _build_date_url(url, date_str)
-        log.info(
-            f"Starting BookMyShow booking check | URL: {target_url} | "
-            f"Date: {date_str} | Theatres: {theatres}"
-        )
+        log.debug(f"Fetching: {target_url}")
 
         # --- 1. Fetch the page ---
         try:
             html = await asyncio.to_thread(self._fetch, target_url, log)
         except Exception as exc:
-            log.error(f"HTTP request failed: {exc}")
+            log.error(
+                f"⚠️  Could not reach BookMyShow. "
+                f"Please check your internet connection and try again. ({exc})"
+            )
             return (
                 False,
-                "A temporary error occurred while checking ticket availability. We will try again shortly.",
+                "Could not reach BookMyShow. Will retry shortly.",
                 None,
                 [],
                 theatres,
@@ -179,42 +179,40 @@ class BookMyShowBookingChecker(BookingChecker):
         # --- 2. Parse HTML ---
         soup = BeautifulSoup(html, "html.parser")
         movie_name = _extract_movie_name(soup, url)
-        log.info(f"Movie name resolved to: {movie_name!r}")
-
-        # Collect classes that have cursor:not-allowed in the page CSS
         not_allowed_classes = _get_not_allowed_classes(soup)
-        log.info(f"cursor:not-allowed classes found: {not_allowed_classes}")
+        log.debug(f"cursor:not-allowed classes: {not_allowed_classes}")
 
-        # --- 3. Check the date element ---
+        # --- 3. Check the date ---
         date_el = soup.find(id=date_str)
         if date_el is None:
-            log.warning(f"Date element '{date_str}' not found in page.")
+            log.info(
+                f"📅  {date_display} — Booking has not opened yet. "
+                f"Tickets for \"{movie_name}\" are not available on this date. Will keep checking..."
+            )
             return (
                 False,
-                f"Booking has not opened for {date_str} yet.",
+                f"Booking has not opened for {date_display} yet.",
                 movie_name,
                 [],
                 theatres,
             )
 
         if _is_date_disabled(date_el, not_allowed_classes):
-            classes = " ".join(date_el.get("class", []))
-            log.warning(
-                f"Date '{date_str}' found but has cursor:not-allowed. Classes: {classes!r}"
+            log.info(
+                f"📅  {date_display} — This date is not yet bookable. "
+                f"Tickets for \"{movie_name}\" are greyed out. Will keep checking..."
             )
             return (
                 False,
-                f"Booking has not opened for {date_str} yet.",
+                f"Booking has not opened for {date_display} yet.",
                 movie_name,
                 [],
                 theatres,
             )
 
-        log.info(f"Date '{date_str}' is present and clickable (no cursor:not-allowed).")
+        log.info(f"✅  {date_display} — Booking is open for \"{movie_name}\"! Now checking your theatres...")
 
         # --- 4. Check theatre availability ---
-        # Theatre names are rendered inside <span> elements on the showtimes page.
-        # We collect the text of every <span> and do a substring search.
         span_texts = [span.get_text(strip=True) for span in soup.find_all("span")]
 
         available_theatres: List[str] = []
@@ -224,33 +222,41 @@ class BookMyShowBookingChecker(BookingChecker):
             found = any(theatre in text for text in span_texts)
             if found:
                 available_theatres.append(theatre)
-                log.info(f"Theatre found in span: {theatre!r}")
+                log.info(f"🎬  Found: \"{theatre}\" is showing on {date_display}.")
             else:
                 missing_theatres.append(theatre)
-                log.warning(f"Theatre NOT found in any span: {theatre!r}")
+                log.info(f"🔍  Not yet listed: \"{theatre}\" has no shows on {date_display} yet.")
 
         if not available_theatres:
-            log.warning(
-                f"Date '{date_str}' is clickable, but none of the specified theatres "
-                f"were found ({', '.join(theatres)})."
+            log.info(
+                f"⏳  {date_display} — Booking is open but none of your selected theatres "
+                f"have shows yet. Will keep checking..."
             )
             return (
                 False,
-                f"Booking is open for {date_str}, but showtimes at your selected theatres are not available yet.",
+                f"Booking is open for {date_display}, but your selected theatres are not showing yet.",
                 movie_name,
                 [],
                 theatres,
             )
 
         # --- 5. Success ---
+        found_list = ", ".join(available_theatres)
+        missing_list = ", ".join(missing_theatres)
+
+        log.info(
+            f"🎉  Tickets available! \"{movie_name}\" on {date_display} "
+            f"is now showing at: {found_list}."
+            + (f" (Not yet listed: {missing_list})" if missing_theatres else "")
+        )
+
         success_details = (
-            f"Booking is OPEN for date {date_str}! "
-            f"Found theatres: {', '.join(available_theatres)}."
+            f"Booking is OPEN for {date_display}! "
+            f"Found theatres: {found_list}."
         )
         if missing_theatres:
-            success_details += f" (Unavailable: {', '.join(missing_theatres)})"
+            success_details += f" (Unavailable: {missing_list})"
 
-        log.info(success_details)
         return True, success_details, movie_name, available_theatres, missing_theatres
 
     # ------------------------------------------------------------------
@@ -262,7 +268,7 @@ class BookMyShowBookingChecker(BookingChecker):
         Synchronous HTTP GET with browser-like headers.
         Runs in a thread via asyncio.to_thread so it doesn't block the event loop.
         """
-        log.info(f"Fetching URL: {url}")
+        log.debug(f"GET {url}")
         with httpx.Client(
             headers=_HEADERS,
             follow_redirects=True,
@@ -270,7 +276,7 @@ class BookMyShowBookingChecker(BookingChecker):
         ) as client:
             response = client.get(url)
             response.raise_for_status()
-            log.info(f"Response: HTTP {response.status_code} ({len(response.text)} chars)")
+            log.debug(f"HTTP {response.status_code} — {len(response.text):,} bytes received")
             return response.text
 
     async def close(self) -> None:

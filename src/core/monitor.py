@@ -134,20 +134,19 @@ class JobManager:
     async def _run_job_loop(self, job: MonitorJob, stop_event: asyncio.Event) -> None:
         """
         The main async coroutine executing the check loop.
-        Uses Playwright async scraper and alerts asynchronously.
         """
         job_logger = get_job_logger(job.id)
         job_logger.info(
-            f"Job {job.id} started asynchronously. Target date: {job.date_str}. "
-            f"Target theatres: {job.theatres}. Interval: {job.check_interval}s"
+            f"🚀  Monitor started — watching \"{job.movie_name}\" "
+            f"for {job.date_str} every {job.check_interval}s."
         )
-        
+
         scraper = ScraperFactory.create_scraper(job.service_provider)
-        
+
         try:
             while not stop_event.is_set():
-                job_logger.info("Executing periodic ticket check...")
-                
+                job_logger.info("🔄  Checking availability on BookMyShow...")
+
                 # Perform scraping check asynchronously
                 try:
                     success, details, movie_name, available, unavailable = await scraper.check_booking(
@@ -160,27 +159,23 @@ class JobManager:
                         job.movie_name = movie_name
                 except Exception as e:
                     success = False
-                    details = f"Scraper execution error: {str(e)}"
+                    details = "An unexpected error occurred during the check."
                     available, unavailable = [], job.theatres
-                    job_logger.exception("Scraper raised an unhandled exception")
+                    job_logger.error(f"⚠️  Something went wrong during the check. Will retry. ({e})")
 
                 if stop_event.is_set():
                     break
 
                 if success:
-                    job_logger.info(f"Tickets AVAILABLE! Details: {details}")
-                    job_logger.info(f"Triggering {job.notification_medium} notification...")
-                    
                     # Attempt to send notification asynchronously
                     try:
                         notifier = NotificationStrategyFactory.create_strategy(
-                            job.notification_medium, 
+                            job.notification_medium,
                             job.notification_config
                         )
-                        
+
                         subject = f"TicketRadar: Booking Open for {job.date_str}!"
-                        
-                        # Await notification sending with structured parameters
+
                         notif_success, notif_msg = await notifier.send_notification(
                             subject=subject,
                             movie_name=job.movie_name,
@@ -189,34 +184,42 @@ class JobManager:
                             unavailable_theatres=unavailable,
                             url=job.url
                         )
-                        
+
                         if notif_success:
-                            job_logger.info("Notification sent successfully.")
-                            job.update_state("Success", f"{details} Notification delivered.", movie_name=movie_name)
+                            job_logger.info(
+                                f"📣  Alert sent via {job.notification_medium.upper()}! "
+                                f"Check your inbox / Discord."
+                            )
+                            job.update_state("Success", f"{details} Alert delivered.", movie_name=movie_name)
                         else:
-                            job_logger.error(f"Notification failed: {notif_msg}")
-                            job.update_state("Error", f"{details} But notification failed: {notif_msg}", movie_name=movie_name)
-                    
+                            job_logger.error(
+                                f"⚠️  Tickets found but the alert could not be delivered. "
+                                f"Reason: {notif_msg}"
+                            )
+                            job.update_state("Error", f"{details} Alert failed: {notif_msg}", movie_name=movie_name)
+
                     except Exception as notif_err:
-                        job_logger.exception("Notification raised an exception")
-                        job.update_state("Error", f"{details} But notification exception: {str(notif_err)}", movie_name=movie_name)
-                    
+                        job_logger.error(
+                            f"⚠️  Tickets found but an error occurred while sending the alert. ({notif_err})"
+                        )
+                        job.update_state("Error", f"{details} Alert error: {str(notif_err)}", movie_name=movie_name)
+
                     # Stop monitoring once booking is successfully found
                     break
-                    
+
                 else:
-                    job_logger.info(f"Check result: {details}. Retrying in {job.check_interval} seconds.")
+                    job_logger.info(f"⏳  Next check in {job.check_interval} seconds...")
                     job.update_state("Running", details)
-                
-                # Responsive sleep logic using asyncio.sleep
+
+                # Responsive sleep: wake up immediately if stop is requested
                 for _ in range(job.check_interval):
                     if stop_event.is_set():
                         break
                     await asyncio.sleep(1)
         finally:
-            job_logger.info("Cleaning up scraper resources...")
             try:
                 await scraper.close()
-            except Exception as close_err:
-                job_logger.error(f"Failed to close scraper cleanly: {close_err}")
-            job_logger.info("Monitor loop finished.")
+            except Exception:
+                pass
+            job_logger.info("🛑  Monitor stopped.")
+

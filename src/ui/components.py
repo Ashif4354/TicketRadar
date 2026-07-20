@@ -2,7 +2,7 @@
 
 import streamlit as st
 from src.core.job import MonitorJob
-from src.logger import get_job_logs
+from src.logger import get_job_logs_user
 
 def render_job_card(job: MonitorJob, manager) -> None:
     """
@@ -85,8 +85,8 @@ def render_job_card(job: MonitorJob, manager) -> None:
     with col_details:
         st.markdown(card_html, unsafe_allow_html=True)
         # Show real-time console log logs
-        with st.expander("📄 Real-time Console Log Stream", expanded=False):
-            logs = get_job_logs(job_id, tail_lines=60)
+        with st.expander("📄 Activity Log", expanded=False):
+            logs = get_job_logs_user(job_id, tail_lines=60)
             st.markdown(f'<div class="logs-console">{logs}</div>', unsafe_allow_html=True)
             
     with col_controls:
