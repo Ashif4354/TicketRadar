@@ -150,7 +150,7 @@ class JobManager:
             # Perform scraping check asynchronously
             try:
                 success, details, movie_name, available, unavailable = await scraper.check_booking(
-                    job.params, headless=job.headless
+                    job.params, headless=job.headless, logger=job_logger
                 )
                 if movie_name:
                     job.movie_name = movie_name

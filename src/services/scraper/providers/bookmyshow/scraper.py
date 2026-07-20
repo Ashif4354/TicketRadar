@@ -27,6 +27,18 @@ def extract_movie_href(url: str) -> str:
         pass
     return ""
 
+def escape_xpath_string(s: str) -> str:
+    """
+    Safely formats a string literal for XPath 1.0, handling single and double quotes.
+    """
+    if "'" not in s:
+        return f"'{s}'"
+    if '"' not in s:
+        return f'"{s}"'
+    # If both single and double quotes are present, use concat()
+    parts = s.split("'")
+    return "concat(" + ", \"'\", ".join(f"'{p}'" for p in parts) + ")"
+
 class BookMyShowBookingChecker(BookingChecker):
     """
     Concrete scraper implementing the BookingChecker interface for BookMyShow using Playwright.
@@ -60,13 +72,16 @@ class BookMyShowBookingChecker(BookingChecker):
     async def check_booking(
         self, 
         params: Dict[str, Any], 
-        headless: bool = True
+        headless: bool = True,
+        **kwargs
     ) -> Tuple[bool, str, Optional[str], List[str], List[str]]:
         url = params.get("url", "")
         date_str = params.get("date_str", "")
         theatres = params.get("theatres", [])
+        
+        log = kwargs.get("logger", logger)
 
-        logger.info(f"Starting BookMyShow booking check for URL: {url}, Date: {date_str}, Theatres: {theatres}, Headless: {headless}")
+        log.info(f"Starting BookMyShow booking check for URL: {url}, Date: {date_str}, Theatres: {theatres}, Headless: {headless}")
         
         async with async_playwright() as p:
             # Launch Chrome using system-installed application
@@ -76,7 +91,7 @@ class BookMyShowBookingChecker(BookingChecker):
                     channel=settings.playwright_channel
                 )
             except Exception as e:
-                logger.error(f"Failed to launch Chrome browser: {str(e)}")
+                log.error(f"Failed to launch Chrome browser: {str(e)}")
                 return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", None, [], theatres
 
             # Use generic user-agent to prevent bot detection
@@ -99,36 +114,27 @@ class BookMyShowBookingChecker(BookingChecker):
             movie_name = fallback_movie_name
 
             try:
-                # Format URL to point directly to the target date from the form
-                # (Only if it's not a local file:// URL used for testing)
-                target_url = url
-                if not url.startswith("file://"):
-                    if re.search(r'/\d{8}$', url):
-                        target_url = re.sub(r'/\d{8}$', f'/{date_str}', url)
-                    else:
-                        target_url = f"{url.rstrip('/')}/{date_str}"
-
-                # 1. Open the target date URL
-                logger.info(f"Opening target URL: {target_url} (original: {url})")
-                await page.goto(target_url, wait_until="domcontentloaded")
+                # 1. Open the movie URL exactly as-is
+                log.info(f"Opening target URL: {url}")
+                await page.goto(url, wait_until="domcontentloaded")
                 
                 # Load page and log URL
                 current_url = page.url
-                logger.info(f"Loaded page URL: {current_url}")
+                log.info(f"Loaded page URL: {current_url}")
 
                 # Attempt to extract movie name using the User's requested XPath format
                 try:
                     href = extract_movie_href(url)
                     if href:
                         movie_xpath = f"//a[@href='{href}']"
-                        logger.info(f"Searching for movie name with XPath: {movie_xpath}")
+                        log.info(f"Searching for movie name with XPath: {movie_xpath}")
                         movie_locator = page.locator(movie_xpath)
                         count = await movie_locator.count()
                         if count > 0:
                             extracted_name = (await movie_locator.first.inner_text()).strip()
                             if extracted_name:
                                 movie_name = extracted_name
-                                logger.info(f"Extracted movie name from DOM: {movie_name}")
+                                log.info(f"Extracted movie name from DOM: {movie_name}")
                         else:
                             # Try matching contains just in case
                             movie_xpath_contains = f"//a[contains(@href, '{href}')]"
@@ -137,29 +143,27 @@ class BookMyShowBookingChecker(BookingChecker):
                                 extracted_name = (await movie_locator_contains.first.inner_text()).strip()
                                 if extracted_name:
                                     movie_name = extracted_name
-                                    logger.info(f"Extracted movie name (contains) from DOM: {movie_name}")
+                                    log.info(f"Extracted movie name (contains) from DOM: {movie_name}")
                 except Exception as ex:
-                    logger.warning(f"Could not extract movie name from page DOM: {ex}. Using fallback: {movie_name}")
+                    log.warning(f"Could not extract movie name from page DOM: {ex}. Using fallback: {movie_name}")
 
                 # 2. Check if requested date is locatable
                 date_xpath = f'//*[@id="{date_str}"]'
-                logger.info(f"Locating date element with XPath: {date_xpath}")
+                log.info(f"Locating date element with XPath: {date_xpath}")
                 date_locator = page.locator(date_xpath)
                 
                 count = await date_locator.count()
                 if count == 0:
-                    logger.warning(f"Date element '{date_str}' not found on page.")
+                    log.warning(f"Date element '{date_str}' not found on page.")
                     return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
                 
                 date_element = date_locator.first
                 is_visible = await date_element.is_visible()
                 if not is_visible:
-                    logger.warning(f"Date element '{date_str}' is present in DOM but not visible.")
+                    log.warning(f"Date element '{date_str}' is present in DOM but not visible.")
                     return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
                 # 3. Check if the date is clickable (i.e. booking is open)
-                # Since date buttons can be <div> tags, standard Playwright is_enabled() check is not enough.
-                # We check WAI-ARIA properties, custom disabled attributes, and class names (ancestors included).
                 is_enabled = await date_element.is_enabled()
                 
                 # Check WAI-ARIA and custom attributes
@@ -186,55 +190,29 @@ class BookMyShowBookingChecker(BookingChecker):
                 )
 
                 if not is_enabled or is_disabled_by_class or is_disabled_attr:
-                    logger.warning(
+                    log.warning(
                         f"Date '{date_str}' is found but disabled. "
                         f"enabled={is_enabled}, classes='{classes_str}', aria-disabled='{aria_disabled}', custom-disabled='{custom_disabled}'"
                     )
                     return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
                 # 4. Click the date element to load showtimes/theatres
-                logger.info(f"Date '{date_str}' is clickable. Clicking to load theatres...")
+                log.info(f"Date '{date_str}' is clickable. Clicking to load theatres...")
                 try:
                     await date_element.click(timeout=5000)
                     # Let DOM update/load theatres
                     await page.wait_for_timeout(2000)
                 except Exception as click_err:
-                    logger.error(f"Failed to click date element: {str(click_err)}")
+                    log.error(f"Failed to click date element: {str(click_err)}")
                     return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
 
-                # 4.5 Post-Click Verification: Ensure we have navigated to the correct date
-                current_url = page.url
-                logger.info(f"Current page URL after click: {current_url}")
-                
-                # Check active/selected classes on date element and ancestors
-                post_classes = []
-                try:
-                    post_classes.append(await date_element.get_attribute("class") or "")
-                    post_classes.append(await date_element.evaluate("el => el.parentElement ? el.parentElement.className : ''"))
-                    post_classes.append(await date_element.evaluate("el => el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement.className : ''"))
-                except Exception:
-                    pass
-                
-                post_classes_str = " ".join(post_classes).lower()
-                is_active_class = any(
-                    term in post_classes_str 
-                    for term in ["active", "selected", "current", "_active", "-active", "show", "select"]
-                )
-                
-                # Check if the target date is active/selected in the DOM (regardless of URL)
-                if not is_active_class:
-                    logger.warning(f"Target date '{date_str}' is not active in the DOM. URL: {current_url}, Classes: {post_classes_str}")
-                    return False, f"Booking has not opened for {date_str} yet.", movie_name, [], theatres
-
-                # 5. Check if the specified theatre(s) are available
+                # 5. Check if the specified theatre(s) are available using standard XPath spans
                 available_theatres = []
                 missing_theatres = []
 
                 for theatre in theatres:
-                    # Escape single quotes in theatre names for XPath safety
-                    theatre_escaped = theatre.replace("'", "\\'")
-                    theatre_xpath = f"//span[contains(text(), '{theatre_escaped}')]"
-                    logger.info(f"Checking for theatre '{theatre}' using XPath: {theatre_xpath}")
+                    theatre_xpath = f"//span[contains(text(), {escape_xpath_string(theatre)})]"
+                    log.info(f"Checking for theatre '{theatre}' using XPath: {theatre_xpath}")
                     theatre_locator = page.locator(theatre_xpath)
 
                     # Look for a visible instance of the theatre span
@@ -252,7 +230,7 @@ class BookMyShowBookingChecker(BookingChecker):
                         missing_theatres.append(theatre)
 
                 if not available_theatres:
-                    logger.warning(f"Date '{date_str}' is clickable, but none of the specified theatres were found ({', '.join(theatres)}).")
+                    log.warning(f"Date '{date_str}' is clickable, but none of the specified theatres were found ({', '.join(theatres)}).")
                     return False, f"Booking is open for {date_str}, but showtimes at your selected theatres are not available yet.", movie_name, [], theatres
 
                 # Success!
@@ -260,11 +238,11 @@ class BookMyShowBookingChecker(BookingChecker):
                 if missing_theatres:
                     success_details += f" (Unavailable: {', '.join(missing_theatres)})"
                 
-                logger.info(success_details)
+                log.info(success_details)
                 return True, success_details, movie_name, available_theatres, missing_theatres
 
             except Exception as e:
-                logger.exception(f"Scraper error while reading {url}")
+                log.exception(f"Scraper error while reading {url}")
                 return False, "A temporary error occurred while checking ticket availability. We will try again shortly.", movie_name, [], theatres
             finally:
                 await browser.close()
