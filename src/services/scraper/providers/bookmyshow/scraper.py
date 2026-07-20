@@ -32,8 +32,7 @@ _HEADERS = {
     "sec-ch-ua-platform": '"Windows"',
 }
 
-# CSS classes that indicate a date element is disabled/inactive
-_DISABLED_CLASS_TERMS = {"disabled", "inactive", "blocked", "unclickable"}
+
 
 
 def _build_date_url(url: str, date_str: str) -> str:
@@ -76,13 +75,38 @@ def _extract_movie_name(soup: BeautifulSoup, url: str) -> str:
     return fallback
 
 
-def _is_date_disabled(date_el) -> bool:
+def _get_not_allowed_classes(soup: BeautifulSoup) -> set:
     """
-    Inspects the date element's CSS classes to decide if it is non-clickable.
-    BMS marks unavailable dates with class names containing disability keywords.
+    Parses every <style> block in the page and collects CSS class names
+    whose rules contain 'cursor:not-allowed' (BMS uses this for unavailable dates).
+    Returns a set of bare class names (without the leading dot).
     """
-    classes = " ".join(date_el.get("class", [])).lower()
-    return any(term in classes for term in _DISABLED_CLASS_TERMS)
+    not_allowed: set = set()
+    # Regex: grab one or more .className selectors immediately before a { block
+    # that contains cursor:not-allowed somewhere inside it.
+    rule_re = re.compile(
+        r'([.][\w-]+(?:[,\s]*[.][\w-]+)*)\s*\{[^}]*cursor\s*:\s*not-allowed[^}]*\}',
+        re.IGNORECASE,
+    )
+    selector_re = re.compile(r'[.][\w-]+')
+
+    for style_tag in soup.find_all("style"):
+        css = style_tag.get_text()
+        for rule_match in rule_re.finditer(css):
+            # A selector block may contain multiple comma-separated classes
+            for sel in selector_re.finditer(rule_match.group(1)):
+                not_allowed.add(sel.group(0)[1:])  # strip leading dot
+
+    return not_allowed
+
+
+def _is_date_disabled(date_el, not_allowed_classes: set) -> bool:
+    """
+    Returns True if the date element carries any CSS class that is
+    associated with cursor:not-allowed in the page's stylesheets.
+    """
+    element_classes = set(date_el.get("class", []))
+    return bool(element_classes & not_allowed_classes)
 
 
 class BookMyShowBookingChecker(BookingChecker):
@@ -157,6 +181,10 @@ class BookMyShowBookingChecker(BookingChecker):
         movie_name = _extract_movie_name(soup, url)
         log.info(f"Movie name resolved to: {movie_name!r}")
 
+        # Collect classes that have cursor:not-allowed in the page CSS
+        not_allowed_classes = _get_not_allowed_classes(soup)
+        log.info(f"cursor:not-allowed classes found: {not_allowed_classes}")
+
         # --- 3. Check the date element ---
         date_el = soup.find(id=date_str)
         if date_el is None:
@@ -169,10 +197,10 @@ class BookMyShowBookingChecker(BookingChecker):
                 theatres,
             )
 
-        if _is_date_disabled(date_el):
+        if _is_date_disabled(date_el, not_allowed_classes):
             classes = " ".join(date_el.get("class", []))
             log.warning(
-                f"Date '{date_str}' found but appears disabled. Classes: {classes!r}"
+                f"Date '{date_str}' found but has cursor:not-allowed. Classes: {classes!r}"
             )
             return (
                 False,
@@ -182,7 +210,7 @@ class BookMyShowBookingChecker(BookingChecker):
                 theatres,
             )
 
-        log.info(f"Date '{date_str}' is present and not disabled.")
+        log.info(f"Date '{date_str}' is present and clickable (no cursor:not-allowed).")
 
         # --- 4. Check theatre availability ---
         # Theatre names are rendered inside <span> elements on the showtimes page.
