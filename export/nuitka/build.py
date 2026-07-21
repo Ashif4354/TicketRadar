@@ -7,7 +7,7 @@ Why --standalone over --onefile?
   exe boots directly from disk — dramatically faster on low-end hardware.
 
 Usage (from project root):
-    uv run python export/nuitka/build.py
+    cd src/Backend && uv run python ../../export/nuitka/build.py
 
 Output:
     dist/nuitka/TicketRadar.dist/TicketRadar.exe  (the runnable executable)
@@ -17,7 +17,6 @@ import os
 import sys
 import shutil
 import subprocess
-import streamlit
 
 # ---------------------------------------------------------------------------
 # Resolve paths
@@ -25,8 +24,6 @@ import streamlit
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR   = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..'))
 DIST_DIR   = os.path.join(ROOT_DIR, 'dist', 'nuitka')
-
-streamlit_dir = os.path.dirname(streamlit.__file__)
 
 # ---------------------------------------------------------------------------
 # Build command
@@ -41,41 +38,37 @@ cmd = [
     '--follow-imports',
 
     # --- Packages with heavy dynamic / plugin-style imports ---
-    '--include-package=streamlit',
+    '--include-package=fastapi',
+    '--include-package=uvicorn',
     '--include-package=pydantic',
     '--include-package=pydantic_settings',
     '--include-package=aiosmtplib',
     '--include-package=httpx',
     '--include-package=bs4',
-    '--include-package=watchdog',
     '--include-package=platformdirs',
     '--include-package=attr',
     '--include-package=attrs',
     '--include-package=click',
-    '--include-package=altair',
     '--include-package=packaging',
 
     # --- Package data (non-Python files shipped inside these packages) ---
-    '--include-package-data=streamlit',  # static/, runtime/, pages/, etc.
-    '--include-package-data=altair',     # Vega schemas
     '--include-package-data=pydantic',
 
-
     # --- Project source & bootstrap ---
+    # Includes the entire src directory (meaning src/Backend/ and src/UI/dist)
     f'--include-data-dir={os.path.join(ROOT_DIR, "src")}=src',
 
-    # --- importlib.metadata (required by streamlit, pydantic at runtime) ---
+    # --- importlib.metadata (required at runtime) ---
     # Distribution names must match exactly (use hyphens where applicable)
-    '--include-distribution-metadata=streamlit',
+    '--include-distribution-metadata=fastapi',
+    '--include-distribution-metadata=uvicorn',
     '--include-distribution-metadata=pydantic',
     '--include-distribution-metadata=pydantic-settings',
     '--include-distribution-metadata=pydantic_core',
     '--include-distribution-metadata=aiosmtplib',
     '--include-distribution-metadata=httpx',
     '--include-distribution-metadata=beautifulsoup4',
-    '--include-distribution-metadata=watchdog',
     '--include-distribution-metadata=platformdirs',
-    '--include-distribution-metadata=altair',
     '--include-distribution-metadata=click',
 
     # --- Windows console (force open console so users see logs/errors and closing console kills the app) ---
@@ -120,7 +113,7 @@ except subprocess.CalledProcessError as e:
 # NOT after --output-filename (that only renames the .exe inside the folder).
 DIST_FOLDER = os.path.join(DIST_DIR, 'main.dist')
 
-env_example_src = os.path.join(ROOT_DIR, '.env.example')
+env_example_src = os.path.join(ROOT_DIR, 'src', 'Backend', '.env.example')
 env_example_dst = os.path.join(DIST_FOLDER, '.env.example')
 if os.path.exists(env_example_src):
     shutil.copy2(env_example_src, env_example_dst)

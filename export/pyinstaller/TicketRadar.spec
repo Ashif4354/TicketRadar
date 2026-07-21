@@ -1,30 +1,26 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec for TicketRadar
-# Run from project root: uv run pyinstaller export/pyinstaller/TicketRadar.spec --clean
+# Run from project root: cd src/Backend && uv run pyinstaller ../../export/pyinstaller/TicketRadar.spec --clean
 
 import os
 import sys
-import streamlit
 from PyInstaller.utils.hooks import copy_metadata
 
 # SPECPATH is auto-defined by PyInstaller as the directory containing this spec file.
 # Project root is two levels up from export/pyinstaller/.
 ROOT_DIR = os.path.abspath(os.path.join(SPECPATH, '..', '..'))
 
-# Get the path to the installed streamlit package
-streamlit_dir = os.path.dirname(streamlit.__file__)
-
 # Datas to copy into the executable
 datas = [
-    # Bootstrap script that Streamlit re-executes as the app
+    # Include backend entrypoint
     (os.path.join(ROOT_DIR, "src", "Backend", "main.py"), "."),
-    # Streamlit web assets
-    (os.path.join(streamlit_dir, "static"), "streamlit/static"),
-    (os.path.join(streamlit_dir, "runtime"), "streamlit/runtime"),
+    # Include the entire src folder which contains src/Backend and built frontend src/UI/dist
+    (os.path.join(ROOT_DIR, "src"), "src"),
 ]
 
 # Package metadata required by importlib.metadata at runtime
-datas += copy_metadata('streamlit')
+datas += copy_metadata('fastapi')
+datas += copy_metadata('uvicorn')
 datas += copy_metadata('pydantic')
 datas += copy_metadata('pydantic_settings')
 
@@ -36,18 +32,19 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=[
-        'streamlit',
+        'fastapi',
+        'uvicorn',
         'pydantic_settings',
         'aiosmtplib',
         'httpx',
         'bs4',
         'asyncio',
-        'watchdog',
+        'platformdirs',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['streamlit', 'altair'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

@@ -1,36 +1,12 @@
-# main.py
+# src/Backend/main.py
 
 import os
 import sys
-
-# Self-bootstrapping logic for Streamlit
-if __name__ == "__main__":
-    try:
-        from streamlit.runtime.scriptrunner import get_script_run_ctx
-        is_in_streamlit = get_script_run_ctx() is not None
-    except ImportError:
-        is_in_streamlit = False
-
-    if not is_in_streamlit:
-        import streamlit.web.cli as stcli
-        if hasattr(sys, "_MEIPASS"):
-            base_dir = sys._MEIPASS
-        else:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-        main_py_path = os.path.join(base_dir, "main.py")
-        sys.argv = [
-            "streamlit",
-            "run",
-            main_py_path,
-            "--global.developmentMode=false",
-            "--server.headless=false"
-        ]
-        sys.exit(stcli.main())
-
-import streamlit as st
-import datetime
-import time
 import asyncio
+import webbrowser
+import logging
+from contextlib import asynccontextmanager
+from typing import Dict, Any, List
 
 # Ensure the project root directory is in Python path to support src.Backend imports
 backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -40,278 +16,252 @@ if root_dir not in sys.path:
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from src.Backend.config import settings, config_error  # noqa: F401
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # noqa: E402, F401
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
+
+from src.Backend.config import settings, config_error
 from src.Backend.core.job import MonitorJob
 from src.Backend.core.monitor import JobManager
-from src.Backend.ui.styles import inject_premium_styles
-from src.Backend.ui.components import render_job_card
 from src.Backend.services.notification.factory import NotificationStrategyFactory
 from src.Backend.services.scraper.factory import ScraperFactory
+from src.Backend.logger import get_job_logs_user
 
-# Configure the Streamlit Page metadata and layout
-st.set_page_config(
-    page_title="TicketRadar",
-    layout="wide",
-    page_icon="🍿",
-    initial_sidebar_state="expanded"
-)
+# Initialize logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("ticketradar.api")
 
-# Inject visual styles
-inject_premium_styles()
-
-# Render Gradient Header and Title
-st.markdown('<div class="gradient-text">🍿 TicketRadar</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="subtitle-text">Continuously watch movie ticket booking availability for a specific date and theatre list, and receive notifications via Email or Discord Webhook.</div>', 
-    unsafe_allow_html=True
-)
-
-# Catch configuration errors (e.g. missing variables in .env)
-if config_error:
-    st.error("⚠️ Configuration Validation Error")
-    st.markdown(f"**Error Details:**\n```\n{config_error}\n```")
-    st.info("Verify that your `.env` file exists and contains all required variables: `SMTP_SERVER`, `SMTP_PORT`, `SMTP_EMAIL`, `SMTP_PASSWORD`.")
-    st.stop()
-
-# Get Singleton manager instance
+# Get JobManager instance (singleton)
 manager = JobManager()
 
-# Sidebar Setup
-st.sidebar.markdown("### ⚙️ System Controls")
-auto_refresh = st.sidebar.checkbox("Auto Refresh Dashboard (10s) 🔄", value=True)
+# Pydantic models for request/response validation
+class TestAlertRequest(BaseModel):
+    medium: str = Field(..., description="Alert medium: 'email' or 'discord'")
+    target: str = Field(..., description="Target email address or webhook URL")
 
-# Add a manual refresh button
-if st.sidebar.button("Force Refresh Now 🔄", use_container_width=True):
-    st.rerun()
+class JobParams(BaseModel):
+    url: str
+    date_str: str
+    theatres: List[str]
 
-# Test notification utility panel
-with st.sidebar.expander("📬 Test Alerts Connection", expanded=False):
-    test_medium = st.selectbox("Alert Type", ["Email", "Discord Webhook"], key="test_medium")
-    
-    if test_medium == "Email":
-        test_email = st.text_input("Test Recipient Email", placeholder="user@gmail.com")
-        if st.button("Send Test Email 📨", use_container_width=True):
-            if test_email:
-                with st.spinner("Sending..."):
-                    try:
-                        notifier = NotificationStrategyFactory.create_strategy("email", {"recipient_email": test_email})
-                        success, msg = asyncio.run(
-                            notifier.send_notification(
-                                subject="Test Alert",
-                                movie_name="Test Movie",
-                                date_str="20260719",
-                                available_theatres=["Sample Theatre A", "Sample Theatre B"],
-                                unavailable_theatres=["Sample Theatre C"],
-                                url="https://in.bookmyshow.com"
-                            )
-                        )
-                        if success:
-                            st.success("Test email sent!")
-                        else:
-                            st.error(msg)
-                    except Exception as err:
-                        st.error(f"Error: {err}")
-            else:
-                st.warning("Provide a recipient email.")
-    else:
-        test_webhook = st.text_input("Test Webhook URL", placeholder="https://discord.com/api/webhooks/...")
-        if st.button("Send Test Webhook 💬", use_container_width=True):
-            if test_webhook:
-                with st.spinner("Sending..."):
-                    try:
-                        notifier = NotificationStrategyFactory.create_strategy("discord", {"webhook_url": test_webhook})
-                        success, msg = asyncio.run(
-                            notifier.send_notification(
-                                subject="Test Alert",
-                                movie_name="Test Movie",
-                                date_str="20260719",
-                                available_theatres=["Sample Theatre A", "Sample Theatre B"],
-                                unavailable_theatres=["Sample Theatre C"],
-                                url="https://in.bookmyshow.com"
-                            )
-                        )
-                        if success:
-                            st.success("Test webhook sent!")
-                        else:
-                            st.error(msg)
-                    except Exception as err:
-                        st.error(f"Error: {err}")
-            else:
-                st.warning("Provide a webhook URL.")
+class CreateJobRequest(BaseModel):
+    service_provider: str = "BookMyShow"
+    notification_medium: str
+    notification_config: Dict[str, Any]
+    check_interval: int = 30
+    params: JobParams
 
-# Split interface layout
-col_form, col_monitors = st.columns([1, 2], gap="large")
-
-with col_form:
-    st.markdown("### ⚙️ Global Configuration")
-    
-    service_provider = st.selectbox(
-        "Service Provider 🍿",
-        ["BookMyShow"],
-        key="form_service"
-    )
-    
-    medium = st.selectbox(
-        "Notification Medium 📢",
-        ["Email", "Discord Webhook"],
-        key="form_medium"
-    )
-    
-    # Dynamic inputs based on selected medium
-    recipient_email = ""
-    webhook_url = ""
-    if medium == "Email":
-        recipient_email = st.text_input(
-            "Your Email Address 📧",
-            placeholder="yourname@gmail.com",
-            help="You will receive alerts on this email.",
-            key="form_email"
-        )
-    else:
-        webhook_url = st.text_input(
-            "Discord Webhook URL 🔗",
-            placeholder="https://discord.com/api/webhooks/...",
-            help="Enter your Discord channel webhook URL.",
-            key="form_webhook"
-        )
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Auto-open browser on startup after a small delay
+    async def open_browser():
+        await asyncio.sleep(1.5)
+        logger.info("Opening dashboard in browser...")
+        webbrowser.open("http://127.0.0.1:8000")
         
-    check_interval = st.number_input(
-        "Check Interval (Seconds) ⏱️",
-        min_value=10,
-        max_value=3600,
-        value=30,
-        step=5,
-        help="Time to wait before refreshing the page. Minimum 10 seconds.",
-        key="form_interval"
-    )
+    # Open the browser if not running in reload mode or explicitly disabled
+    if os.environ.get("TICKETRADAR_NO_BROWSER") != "1" and os.environ.get("UVICORN_RELOAD") != "true":
+        asyncio.create_task(open_browser())
+        
+    yield
+    
+    # Shutdown: Stop all running jobs on exit
+    logger.info("Shutting down backend app...")
+    for job in manager.get_all_jobs():
+        manager.stop_job(job.id)
 
-    st.markdown("---")
+app = FastAPI(
+    title="TicketRadar API",
+    description="Backend API for TicketRadar movie ticket monitoring",
+    version="0.1.0",
+    lifespan=lifespan
+)
+
+# Enable CORS for development (allowing localhost proxy)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/api/config")
+async def get_config():
+    """Retrieve application configuration and validation error status."""
+    return {
+        "config_error": config_error,
+        "smtp_server": settings.smtp_server if settings else None,
+        "smtp_email": settings.smtp_email if settings else None,
+        "default_check_interval": settings.default_check_interval if settings else 30
+    }
+
+@app.post("/api/test-notification")
+async def test_notification(payload: TestAlertRequest):
+    """Sends a test alert to verify connection details."""
+    medium = payload.medium.lower()
+    target = payload.target.strip()
     
-    st.markdown("### ➕ Create New Monitor Task")
-    
-    # Retrieve scraper class dynamically
+    if not target:
+        raise HTTPException(status_code=400, detail="Target recipient/URL is required.")
+        
+    if "email" in medium:
+        config = {"recipient_email": target}
+        notif_type = "email"
+    elif "discord" in medium:
+        config = {"webhook_url": target}
+        notif_type = "discord"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported notification medium: {payload.medium}")
+        
+    try:
+        notifier = NotificationStrategyFactory.create_strategy(notif_type, config)
+        success, msg = await notifier.send_notification(
+            subject="Test Alert",
+            movie_name="Test Movie",
+            date_str="20260719",
+            available_theatres=["Sample Theatre A", "Sample Theatre B"],
+            unavailable_theatres=["Sample Theatre C"],
+            url="https://in.bookmyshow.com"
+        )
+        if success:
+            return {"success": True, "message": "Test notification sent successfully!"}
+        else:
+            return {"success": False, "message": msg}
+    except Exception as err:
+        return {"success": False, "message": str(err)}
+
+@app.get("/api/jobs")
+async def get_jobs():
+    """Returns a list of all current jobs and their states."""
+    return [job.get_state() for job in manager.get_all_jobs()]
+
+@app.post("/api/jobs")
+async def create_job(payload: CreateJobRequest):
+    """Create and start a new monitor job."""
+    if config_error:
+        raise HTTPException(status_code=400, detail=f"Configuration Error: {config_error}")
+        
+    # Validate provider
+    service_provider = payload.service_provider
     try:
         scraper_cls = ScraperFactory.get_scraper_class(service_provider)
         fields = scraper_cls.get_required_fields()
     except Exception as e:
-        st.error(f"Failed to load service provider: {e}")
-        st.stop()
+        raise HTTPException(status_code=400, detail=f"Unsupported service provider: {service_provider}")
         
-    with st.form("new_monitor_form", clear_on_submit=False):
-        # Dynamically render form fields based on provider metadata
-        # Store widget return values directly — do NOT re-read from session_state on submit,
-        # as session_state can hold stale values from a previous job submission.
-        form_values: dict = {}
-        for field_id, field_meta in fields.items():
-            field_type = field_meta.get("type", "text")
-            label = field_meta.get("label", field_id.title())
-            placeholder = field_meta.get("placeholder", "")
-            help_text = field_meta.get("help", "")
-            form_key = f"form_{service_provider.lower()}_{field_id}"
-
-            if field_type == "text":
-                form_values[field_id] = st.text_input(
-                    label,
-                    placeholder=placeholder,
-                    help=help_text,
-                    key=form_key
-                )
-            elif field_type == "date":
-                form_values[field_id] = st.date_input(
-                    label,
-                    min_value=datetime.date.today(),
-                    help=help_text,
-                    key=form_key
-                )
-            elif field_type == "text_area":
-                form_values[field_id] = st.text_area(
-                    label,
-                    placeholder=placeholder,
-                    help=help_text,
-                    key=form_key
-                )
-
-        submit_btn = st.form_submit_button("Start Radar")
-
-        if submit_btn:
-            # Use the widget return values captured above — these always reflect
-            # what the user has entered at the time of this specific submission.
-            params_latest = {}
-            errors = []
-
-            for field_id, field_meta in fields.items():
-                val = form_values.get(field_id)
-                
-                # Validation
-                if val is None or (isinstance(val, str) and not val.strip()):
-                    errors.append(f"Field '{field_meta.get('label')}' is required.")
-                
-                # Check for BookMyShow URL format
-                if field_meta.get("type") == "text" and field_id == "url":
-                    if isinstance(val, str) and not val.strip().startswith("http"):
-                        errors.append("Enter a valid HTTP/HTTPS URL.")
-                
-                # Type conversions / formats
-                if field_meta.get("type") == "date":
-                    params_latest["date_str"] = val.strftime("%Y%m%d")
-                elif field_id == "theatres":
-                    params_latest["theatres"] = [t.strip() for t in val.split("\n") if t.strip()]
-                else:
-                    params_latest[field_id] = val if not isinstance(val, str) else val.strip()
- 
-            medium_latest = st.session_state.get("form_medium", "Email")
-            service_latest = st.session_state.get("form_service", "BookMyShow")
-            interval_latest = st.session_state.get("form_interval", 30)
-            
-            email_latest = st.session_state.get("form_email", "").strip()
-            webhook_latest = st.session_state.get("form_webhook", "").strip()
- 
-            if medium_latest == "Email" and not email_latest:
-                errors.append("Enter a recipient email address.")
-            if medium_latest == "Discord Webhook" and not webhook_latest:
-                errors.append("Enter a Discord Webhook URL.")
-                
-            if errors:
-                for err in errors:
-                    st.error(err)
-            else:
-                notif_config = {}
-                if medium_latest == "Email":
-                    notif_config = {"recipient_email": email_latest}
-                else:
-                    notif_config = {"webhook_url": webhook_latest}
-                    
-                # Instantiate new Monitor Job
-                new_job = MonitorJob(
-                    params=params_latest,
-                    notification_medium=medium_latest,
-                    notification_config=notif_config,
-                    service_provider=service_latest,
-                    check_interval=interval_latest,
-                )
-                
-                # Start job background thread
-                success = manager.start_job(new_job)
-                if success:
-                    st.success(f"Successfully registered monitor #{new_job.id}! Daemon thread is now active.")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("Failed to start monitoring job. An active thread might already be running.")
-
-with col_monitors:
-    st.markdown("### 🖥️ Active Monitor Daemons")
+    # Validate parameters
+    url = payload.params.url.strip()
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Enter a valid HTTP/HTTPS URL.")
+        
+    params = {
+        "url": url,
+        "date_str": payload.params.date_str.strip(),
+        "theatres": payload.params.theatres
+    }
     
-    active_jobs = manager.get_all_jobs()
-    if not active_jobs:
-        st.info("No active monitors registered yet. Use the panel on the left to add a new monitoring agent!")
+    medium = payload.notification_medium.strip().lower()
+    notif_config = {}
+    if "email" in medium:
+        recipient = payload.notification_config.get("recipient_email", "").strip()
+        if not recipient:
+            raise HTTPException(status_code=400, detail="Recipient email is required for Email notification.")
+        notif_config = {"recipient_email": recipient}
+        medium_name = "Email"
     else:
-        # Loop and render card for each active job
-        for job in active_jobs:
-            render_job_card(job, manager)
-            st.markdown("<hr style='border-top: 1px solid rgba(255,255,255,0.05); margin-top: 1.5rem; margin-bottom: 1.5rem;'>", unsafe_allow_html=True)
+        webhook = payload.notification_config.get("webhook_url", "").strip()
+        if not webhook:
+            raise HTTPException(status_code=400, detail="Discord Webhook URL is required for Webhook notification.")
+        notif_config = {"webhook_url": webhook}
+        medium_name = "Discord Webhook"
+        
+    # Create Monitor Job
+    new_job = MonitorJob(
+        params=params,
+        notification_medium=medium_name,
+        notification_config=notif_config,
+        service_provider=service_provider,
+        check_interval=payload.check_interval
+    )
+    
+    success = manager.start_job(new_job)
+    if success:
+        return new_job.get_state()
+    else:
+        raise HTTPException(status_code=500, detail="Failed to start monitoring job. An active thread might already be running.")
 
-# Auto-refresh loop: if toggled and there's a background monitoring thread running
-if auto_refresh and any(j.status == "Running" for j in manager.get_all_jobs()):
-    time.sleep(10)
-    st.rerun()
+@app.post("/api/jobs/{job_id}/start")
+async def start_job(job_id: str):
+    """Starts or restarts an existing job."""
+    job = manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
+        
+    if job.status == "Running":
+        return {"success": True, "message": f"Job #{job_id} is already running.", "state": job.get_state()}
+        
+    job.update_state("Idle", "Manual restart requested.")
+    success = manager.start_job(job)
+    if success:
+        return {"success": True, "state": job.get_state()}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to start job.")
+
+@app.post("/api/jobs/{job_id}/stop")
+async def stop_job(job_id: str):
+    """Stops a running job."""
+    success = manager.stop_job(job_id)
+    if success:
+        return {"success": True, "message": f"Job #{job_id} stopped."}
+    else:
+        raise HTTPException(status_code=404, detail=f"Job #{job_id} not found or could not be stopped.")
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str):
+    """Deletes a job."""
+    success = manager.delete_job(job_id)
+    if success:
+        return {"success": True, "message": f"Job #{job_id} deleted."}
+    else:
+        raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
+
+@app.get("/api/jobs/{job_id}/logs")
+async def get_logs(job_id: str, tail: int = 60):
+    """Retrieves user-facing logs for a specific job."""
+    logs = get_job_logs_user(job_id, tail_lines=tail)
+    return {"job_id": job_id, "logs": logs}
+
+
+# Serve React Frontend Static Files
+# Resolve the UI/dist folder path
+if hasattr(sys, "_MEIPASS"):
+    # PyInstaller single-exe temp directory
+    ui_dist_dir = os.path.join(sys._MEIPASS, "src", "UI", "dist")
+else:
+    # Dev/Standard run: relative to this file (src/Backend/main.py)
+    ui_dist_dir = os.path.abspath(os.path.join(backend_dir, "..", "UI", "dist"))
+
+# Check if front-end files exist, if so mount them
+if os.path.exists(ui_dist_dir):
+    app.mount("/", StaticFiles(directory=ui_dist_dir, html=True), name="frontend")
+    logger.info(f"Mounted frontend static files from: {ui_dist_dir}")
+else:
+    logger.warning(f"Frontend static files directory not found at: {ui_dist_dir}. Serving API only.")
+
+# Fallback root route if static directory is missing
+@app.get("/")
+async def root_fallback():
+    return JSONResponse(
+        status_code=200,
+        content={"message": "TicketRadar API is active. Frontend static files are not built yet."}
+    )
+
+if __name__ == "__main__":
+    import uvicorn
+    # If run as standalone, launch via uvicorn
+    # Use reload only when not compiled
+    is_frozen = getattr(sys, "frozen", False) or "__compiled__" in globals()
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=not is_frozen)

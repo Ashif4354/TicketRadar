@@ -40,9 +40,19 @@ SMTP_PASSWORD=your-app-password
 ```
 
 ### 3. Run the Dashboard
-Ensure `uv` is installed, then launch the Streamlit dashboard:
+Ensure `uv` and `node` are installed, then run the installation and startup commands:
 ```bash
-cd src/Backend && uv run streamlit run main.py
+make install
+make run
+```
+If `make` is not installed on your system:
+```bash
+# Terminal 1: Run the React frontend
+cd src/UI && npm install && npm run dev
+
+# Terminal 2: Run the FastAPI backend
+cd src/Backend && uv sync
+cd src/Backend && uv run python main.py
 ```
 
 ### 📦 Running as a Standalone Executable
@@ -53,7 +63,7 @@ To compile the executable:
 ```bash
 make build
 ```
-*(If `make` is not installed on your Windows machine, run: `uv --project src/Backend run pyinstaller export/pyinstaller/TicketRadar.spec --clean`)*
+*(If `make` is not installed on your Windows machine, run: `cd src/Backend && uv run pyinstaller ../../export/pyinstaller/TicketRadar.spec --clean`)*
 
 The output binary will be created at `dist/TicketRadar.exe`.
 
