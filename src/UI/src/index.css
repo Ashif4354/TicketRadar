@@ -95,14 +95,15 @@
 
 /* Style Chrome/Safari/Edge date picker indicator */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(0.9);
   cursor: pointer;
   border-radius: 6px;
   padding: 4px;
   transition: background-color 0.2s;
+  filter: invert(0) !important;
 }
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: rgba(255, 255, 255, 0.15);
+  filter: invert(0) !important;
 }
 
 /* Custom styled select options for dropdown dark theme consistency */

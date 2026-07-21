@@ -16,8 +16,11 @@ if root_dir not in sys.path:
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
+import json
+import hashlib
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks  # noqa: E402, F401
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -166,10 +169,57 @@ async def test_notification(payload: TestAlertRequest):
     except Exception as err:
         return {"success": False, "message": str(err)}
 
+def get_jobs_state_hash(jobs: List[MonitorJob]) -> str:
+    """Computes a deterministic hash of the current states of all jobs."""
+    sorted_jobs = sorted(jobs, key=lambda j: j.id)
+    state_data = []
+    for job in sorted_jobs:
+        state_data.append({
+            "id": job.id,
+            "status": job.status,
+            "last_checked_at": str(job.last_checked_at) if job.last_checked_at else "",
+            "last_result": job.last_result,
+            "movie_name": job.movie_name
+        })
+    serialized = json.dumps(state_data, sort_keys=True)
+    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+
 @app.get("/api/jobs")
-async def get_jobs():
-    """Returns a list of all current jobs and their states."""
-    return [job.get_state() for job in manager.get_all_jobs()]
+async def get_jobs(version: str = None, timeout: int = 10):
+    """Returns a list of all current jobs and their states.
+    Supports long polling if 'version' parameter is provided.
+    """
+    start_time = asyncio.get_event_loop().time()
+    
+    while True:
+        current_jobs = manager.get_all_jobs()
+        current_hash = get_jobs_state_hash(current_jobs)
+        
+        # If version is not provided or it doesn't match the current hash, return immediately
+        if not version or current_hash != version:
+            headers = {
+                "X-State-Version": current_hash,
+                "Cache-Control": "no-cache, no-store, must-revalidate"
+            }
+            return JSONResponse(
+                content=jsonable_encoder([job.get_state() for job in current_jobs]),
+                headers=headers
+            )
+            
+        # Check if timeout is reached
+        elapsed = asyncio.get_event_loop().time() - start_time
+        if elapsed >= timeout:
+            headers = {
+                "X-State-Version": current_hash,
+                "Cache-Control": "no-cache, no-store, must-revalidate"
+            }
+            return JSONResponse(
+                content=jsonable_encoder([job.get_state() for job in current_jobs]),
+                headers=headers
+            )
+            
+        # Wait a short duration before checking again
+        await asyncio.sleep(0.5)
 
 @app.post("/api/jobs")
 async def create_job(payload: CreateJobRequest):

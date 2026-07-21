@@ -159,14 +159,58 @@ export default function App() {
     setTargetDate(`${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`);
   }, [fetchConfig, fetchJobs]);
 
-  // Polling for auto-refresh dashboard
+  // Long polling for auto-refresh dashboard
   useEffect(() => {
     if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      fetchJobs();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, fetchJobs]);
+
+    const abortController = new AbortController();
+    let isMounted = true;
+    let currentVersion: string | null = null;
+
+    const poll = async () => {
+      while (isMounted && autoRefresh && !abortController.signal.aborted) {
+        try {
+          const url = currentVersion 
+            ? `/api/jobs?version=${encodeURIComponent(currentVersion)}&timeout=10` 
+            : '/api/jobs';
+          
+          setRefreshing(true);
+          const res = await fetch(url, { signal: abortController.signal });
+          if (!res.ok) {
+            // Wait 3 seconds on error before retrying to avoid spamming the backend
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            continue;
+          }
+          
+          const nextVersion = res.headers.get('X-State-Version');
+          currentVersion = nextVersion;
+          
+          const data = await res.json();
+          if (isMounted) {
+            setJobs(data);
+          }
+        } catch (err: any) {
+          if (err.name === 'AbortError') {
+            break;
+          }
+          console.error("Failed to fetch jobs during long polling:", err);
+          // Wait 3 seconds on network error before retrying
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } finally {
+          if (isMounted) {
+            setRefreshing(false);
+          }
+        }
+      }
+    };
+
+    poll();
+
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
+  }, [autoRefresh]);
 
   // Polling logs for expanded cards
   useEffect(() => {
