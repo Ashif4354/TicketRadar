@@ -5,47 +5,60 @@ TicketRadar is a fully asynchronous movie ticket booking monitor and alert syste
 > [!NOTE]
 > TicketRadar only supports BookMyShow for now. Support for additional ticket booking services and platforms will be implemented in the future.
 
-It features a modern dark-mode web dashboard built with **Streamlit**, uses **Playwright (Async)** for non-blocking browser scraping, and supports notifications via **Gmail SMTP** or **Discord Webhooks**.
+It features a modern dark-mode web dashboard built with **React** and **FastAPI**, uses **HTTPX** and **BeautifulSoup4** for lightweight, non-blocking browserless HTML scraping, and supports notifications via **Gmail SMTP** or **Discord Webhooks**. The application is secured with **Firebase Authentication**, **App Check**, and Google **reCAPTCHA v2**.
 
 ---
 
 ## 🌟 Key Features
 
 1. **Fully Asynchronous Execution**: All monitoring checkers run concurrently as non-blocking coroutines on a dedicated background event loop running in a daemon thread.
-2. **Movie Name Auto-Extraction**: Automatically extracts the movie name from the page DOM using the link xpath matching the URL scheme. It falls back to URL slug parsing if DOM elements are not found.
-3. **Table-Formatted Alerts**:
+2. **Fast & Lightweight Scraper**: Uses HTTPX and BeautifulSoup4 for efficient HTML scraping, removing the overhead of heavy headful/headless browser environments.
+3. **Real-time Live Dashboard**: React frontend communicates with the FastAPI backend via long-polling, ensuring status updates and real-time logs are shown instantly without spamming the backend or requiring full page refreshes.
+4. **Secure User Authentication**: Integrated with Firebase Authentication (supports login/signup) and an access-request approval workflow, secured with Google reCAPTCHA v2 and Firebase App Check.
+5. **Movie Name Auto-Extraction**: Automatically extracts the movie name from the page DOM using XPath/CSS class matching, falling back to URL slug parsing if DOM elements are not found.
+6. **Table-Formatted Alerts**:
    - **SMTP Email**: Renders a styled HTML table showing the available and unavailable theatres side-by-side.
    - **Discord Webhook**: Compiles a clean, monospace ASCII-art grid table showing theatre availability.
-4. **Custom Browser Visibility Options**: Option to run the Playwright browser instance in the background (headless) or in the foreground (visible Chrome window) to observe operations in real time.
-5. **Polite Log Output**: Strictly adheres to a "no-please" policy in all user interfaces, alerts, logs, and messages.
+7. **Polite Log Output**: Strictly adheres to a "no-please" policy in all user interfaces, alerts, logs, and messages.
 
-
+---
 
 ## ⚙️ Setup and Installation
 
-### 1. Prerequisite: Google Chrome
-TicketRadar launches Google Chrome directly from your system paths using Playwright's `"chrome"` channel. Ensure Google Chrome is installed on your host system.
-
-### 2. Configure Environment Variables
+### 1. Configure Environment Variables
 Copy `src/Backend/.env.example` to `src/Backend/.env`:
 ```bash
 cp src/Backend/.env.example src/Backend/.env
 ```
-Open `.env` and fill in your Gmail SMTP configurations (App Password required for 2-step verification accounts):
+Open `.env` and fill in your Gmail SMTP configurations, Google reCAPTCHA keys, and Firebase Admin SDK credentials:
 ```ini
+# SMTP Configuration (Required for Email notifications)
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_EMAIL=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
+SMTP_PASSWORD=your_gmail_app_password
+
+# reCAPTCHA Configuration
+RECAPTCHA_SITE=your_recaptcha_site_key
+RECAPTCHA_SECRET=your_recaptcha_secret_key
+
+# Firebase Configuration (Required for authentication and authorization)
+FIREBASE_TYPE=service_account
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_PRIVATE_KEY_ID=your_private_key_id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour_private_key_content\n-----END PRIVATE KEY-----\n"
+FIREBASE_CLIENT_EMAIL=your_firebase_client_email
+FIREBASE_CLIENT_ID=your_client_id
+...
 ```
 
-### 3. Run the Dashboard
-Ensure `uv` and `node` are installed, then run the installation and startup commands:
+### 2. Run the Dashboard
+Ensure `uv` and `node` (v18+) are installed, then run the installation and startup commands:
 ```bash
 make install
 make run
 ```
-If `make` is not installed on your system:
+If `make` is not installed on your system, you can run them manually:
 ```bash
 # Terminal 1: Run the React frontend
 cd src/UI && npm install && npm run dev
@@ -54,43 +67,24 @@ cd src/UI && npm install && npm run dev
 cd src/Backend && uv sync
 cd src/Backend && uv run python main.py
 ```
-
-### 📦 Running as a Standalone Executable
-You can compile TicketRadar into a standalone executable (`TicketRadar.exe`) to distribute and run it without a local Python setup.
-
-#### How to Build
-To compile the executable:
-```bash
-make build
-```
-*(If `make` is not installed on your Windows machine, run: `cd src/Backend && uv run pyinstaller ../../export/pyinstaller/TicketRadar.spec --clean`)*
-
-The output binary will be created at `dist/TicketRadar.exe`.
-
-#### How to Use
-1. Copy your `.env` configuration file into the **same directory** as `TicketRadar.exe`.
-2. Double-click `TicketRadar.exe` to launch the application.
-3. The app will launch a terminal console window, read the `.env` settings, start the local server, and automatically open your default browser to the TicketRadar dashboard.
-4. **How to Stop**: Simply close the terminal console window, or press `Ctrl+C` inside the terminal window.
+*Note: The backend runs without automatically opening the browser to prevent repeated tab popups during hot-reload development.*
 
 ---
 
 ## 🖥️ Using the Dashboard
 
-1. **Verify Connection**: Expand the **📬 Test Alerts Connection** panel in the sidebar to verify your email or webhook configurations immediately.
-2. **Register a Monitor**:
-   - Paste the Movie Page URL.
+1. **Sign In / Request Access**: Create an account or sign in via the Firebase Auth screen. If your account is new, submit an access request (secured with reCAPTCHA v2) and wait for admin approval.
+2. **Verify Connection**: Expand the **📬 Test Alerts Connection** panel in the dashboard to verify your email or webhook configurations immediately.
+3. **Register a Monitor**:
+   - Paste the BookMyShow Movie Page URL.
    - Select your target date from the date picker.
-   - Enter your target theatre names in the text area (**one theatre per line**). Substring matching is supported but it is strictly case-sensitive.
-   - Choose the alert channel.
-   - Check or uncheck **Run browser in background** to show or hide Chrome during checks.
+   - Enter your target theatre names in the text area (**one theatre per line**). Substring matching is supported and is case-sensitive.
+   - Choose the alert channel (Email or Discord Webhook).
    - Click **Start Radar**.
-3. **Control Monitors**: You can Pause, Restart, or Delete monitors at any time. Click **View logs** on any card to see real-time output.
+4. **Control Monitors**: You can Pause, Restart, or Delete monitors at any time. Click **View logs** on any card to see real-time log output streamed instantly via long polling.
 
 ---
 
 ## 📄 License
 
 This project is open-source and licensed under the [MIT License](LICENSE).
-
-

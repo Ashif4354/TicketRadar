@@ -21,8 +21,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header  # noqa: E402, F401
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.Backend.config import settings, config_error
@@ -532,16 +531,6 @@ async def request_access(payload: RequestAccessPayload, claims: dict = Depends(g
     return {"success": True, "message": "Access request submitted successfully."}
 
 
-class SPAStaticFiles(StaticFiles):
-    async def get_response(self, path: str, scope):
-        try:
-            return await super().get_response(path, scope)
-        except (HTTPException, Exception):
-            index_path = os.path.join(self.directory, "index.html")
-            if os.path.exists(index_path):
-                return FileResponse(index_path)
-            raise HTTPException(status_code=404, detail="File not found")
-
 # Serve React Frontend Static Files
 # Resolve the UI/dist folder path
 if hasattr(sys, "_MEIPASS"):
@@ -553,8 +542,8 @@ else:
 
 # Check if front-end files exist, if so mount them
 if os.path.exists(ui_dist_dir):
-    app.mount("/", SPAStaticFiles(directory=ui_dist_dir, html=True), name="frontend")
-    logger.info(f"Mounted frontend static files from: {ui_dist_dir}")
+    app.frontend("/", directory=ui_dist_dir, fallback="index.html")
+    logger.info(f"Mounted frontend static files from: {ui_dist_dir} via app.frontend")
 else:
     logger.warning(f"Frontend static files directory not found at: {ui_dist_dir}. Serving API only.")
 
