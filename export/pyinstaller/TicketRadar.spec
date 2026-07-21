@@ -1,21 +1,29 @@
 # -*- mode: python ; coding: utf-8 -*-
+# PyInstaller spec for TicketRadar
+# Run from project root: uv run pyinstaller export/pyinstaller/TicketRadar.spec --clean
 
 import os
 import sys
 import streamlit
 from PyInstaller.utils.hooks import copy_metadata
 
-# Get the path to the streamlit package
+# SPECPATH is auto-defined by PyInstaller as the directory containing this spec file.
+# Project root is two levels up from export/pyinstaller/.
+ROOT_DIR = os.path.abspath(os.path.join(SPECPATH, '..', '..'))
+
+# Get the path to the installed streamlit package
 streamlit_dir = os.path.dirname(streamlit.__file__)
 
 # Datas to copy into the executable
 datas = [
-    ("main.py", "."),
+    # Bootstrap script that Streamlit re-executes as the app
+    (os.path.join(ROOT_DIR, "main.py"), "."),
+    # Streamlit web assets
     (os.path.join(streamlit_dir, "static"), "streamlit/static"),
     (os.path.join(streamlit_dir, "runtime"), "streamlit/runtime"),
 ]
 
-# Add metadata for Streamlit and Pydantic
+# Package metadata required by importlib.metadata at runtime
 datas += copy_metadata('streamlit')
 datas += copy_metadata('pydantic')
 datas += copy_metadata('pydantic_settings')
@@ -23,8 +31,8 @@ datas += copy_metadata('pydantic_settings')
 block_cipher = None
 
 a = Analysis(
-    ['main.py'],
-    pathex=[],
+    [os.path.join(ROOT_DIR, 'main.py')],
+    pathex=[ROOT_DIR],
     binaries=[],
     datas=datas,
     hiddenimports=[

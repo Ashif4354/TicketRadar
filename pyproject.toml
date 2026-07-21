@@ -16,4 +16,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pyinstaller>=6.21.0",
+    "nuitka>=2.6.0",
+    "ordered-set>=4.1.0",  # required by nuitka
 ]
