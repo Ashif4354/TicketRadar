@@ -5,7 +5,7 @@ import logging
 import firebase_admin
 from firebase_admin import credentials, auth, app_check, firestore
 from fastapi import Header, HTTPException, status, Depends
-from src.Backend.config import settings
+from ..utils.config import settings
 
 logger = logging.getLogger("ticketradar.auth")
 

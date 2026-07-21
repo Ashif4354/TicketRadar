@@ -7,7 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List
 
-# Ensure the project root directory is in Python path to support src.Backend imports
+# Ensure the backend directory is in Python path to support lib imports
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.abspath(os.path.join(backend_dir, "..", ".."))
 if root_dir not in sys.path:
@@ -24,13 +24,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.Backend.config import settings, config_error
-from src.Backend.core.job import MonitorJob
-from src.Backend.core.monitor import JobManager
-from src.Backend.services.notification.factory import NotificationStrategyFactory
-from src.Backend.services.scraper.factory import ScraperFactory
-from src.Backend.logger import get_job_logs_user
-from src.Backend.core.auth import (
+from lib.utils.config import settings, config_error
+from lib.core.job import MonitorJob
+from lib.core.monitor import JobManager
+from lib.services.notification.factory import NotificationStrategyFactory
+from lib.services.scraper.factory import ScraperFactory
+from lib.utils.logger import get_job_logs_user
+from lib.core.auth import (
     get_current_user_claims,
     get_authorized_user,
     get_admin_user,

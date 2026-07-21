@@ -2,7 +2,7 @@
 
 import httpx
 from typing import List
-from src.Backend.services.notification.base import NotificationStrategy
+from .base import NotificationStrategy
 
 class DiscordWebhookNotificationStrategy(NotificationStrategy):
     """
