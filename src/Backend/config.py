@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # Scraper Settings
     default_check_interval: int = Field(default=30)
 
+    # reCAPTCHA Configuration
+    recaptcha_site: str = Field(default="6LfUdl0tAAAAALD21Jd3geQFRavY8xeWMbadKybZ")
+    recaptcha_secret: str = Field(default="6LfUdl0tAAAAAAjyjVtoGRY2cY52NJUOhc4R3mLu")
+
     # Use pydantic configuration to load from .env
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_PATH,
@@ -54,6 +58,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore"
     )
+
 
 # Instantiate settings gracefully
 try:

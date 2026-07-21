@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { 
   Radar, Film, Calendar, Mail, MessageSquare, Clock, 
   Play, Pause, Trash2, Sliders, Plus, Send, 
@@ -92,6 +93,10 @@ export default function App() {
   const [testTarget, setTestTarget] = useState("");
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // reCAPTCHA ref
+  const recaptchaRef = React.useRef<ReCAPTCHA>(null);
+  const mainRecaptchaRef = React.useRef<ReCAPTCHA>(null);
 
   // Logs state
   const [expandedLogs, setExpandedLogs] = useState<{ [jobId: string]: boolean }>({});
@@ -192,6 +197,15 @@ export default function App() {
   // Test alerts connection submit handler
   const handleTestAlertSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Get reCAPTCHA response token from react-google-recaptcha ref
+    const token = recaptchaRef.current?.getValue() || "";
+
+    if (!token) {
+      setTestResult({ success: false, message: "Please complete the reCAPTCHA challenge first." });
+      return;
+    }
+
     setTestLoading(true);
     setTestResult(null);
 
@@ -201,7 +215,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           medium: testMedium,
-          target: testTarget
+          target: testTarget,
+          recaptcha_token: token
         })
       });
       const data = await res.json();
@@ -214,8 +229,16 @@ export default function App() {
       setTestResult({ success: false, message: err.message || "Failed to reach server." });
     } finally {
       setTestLoading(false);
+      // Reset reCAPTCHA after submission attempt
+      try {
+        recaptchaRef.current?.reset();
+      } catch (err) {
+        console.error("Failed to reset reCAPTCHA:", err);
+      }
     }
   };
+
+
 
   // Register New Monitor Task submit handler
   const handleCreateMonitorSubmit = async (e: React.FormEvent) => {
@@ -223,7 +246,12 @@ export default function App() {
     setFormErrors([]);
     setFormSuccess(null);
 
+    const token = mainRecaptchaRef.current?.getValue() || "";
     const errors: string[] = [];
+
+    if (!token) {
+      errors.push("Please complete the reCAPTCHA challenge first.");
+    }
 
     if (!url.trim()) {
       errors.push("Movie Page URL is required.");
@@ -266,6 +294,7 @@ export default function App() {
         ? { recipient_email: email.trim() } 
         : { webhook_url: webhook.trim() },
       check_interval: intervalSec,
+      recaptcha_token: token,
       params: {
         url: url.trim(),
         date_str: dateFormatted,
@@ -290,6 +319,12 @@ export default function App() {
       }
     } catch (err: any) {
       setFormErrors([err.message || "Failed to reach server."]);
+    } finally {
+      try {
+        mainRecaptchaRef.current?.reset();
+      } catch (err) {
+        console.error("Failed to reset main reCAPTCHA:", err);
+      }
     }
   };
 
@@ -584,6 +619,17 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* reCAPTCHA Checkbox Container */}
+                  <div className="flex justify-center py-1">
+                    <div className="g-recaptcha-premium-container">
+                      <ReCAPTCHA
+                        ref={mainRecaptchaRef}
+                        sitekey="6LfUdl0tAAAAALD21Jd3geQFRavY8xeWMbadKybZ"
+                        theme="dark"
+                      />
+                    </div>
+                  </div>
+
                   <Button type="submit" variant="premium" className="w-full">
                     <Plus className="h-4 w-4" />
                     Launch Radar Daemon
@@ -637,6 +683,17 @@ export default function App() {
                         required
                         className="bg-muted/10 border-input"
                       />
+                    </div>
+
+                    {/* reCAPTCHA Checkbox Container */}
+                    <div className="flex justify-center py-1">
+                      <div className="g-recaptcha-premium-container">
+                        <ReCAPTCHA
+                          ref={recaptchaRef}
+                          sitekey="6LfUdl0tAAAAALD21Jd3geQFRavY8xeWMbadKybZ"
+                          theme="dark"
+                        />
+                      </div>
                     </div>
 
                     <Button type="submit" variant="secondary" className="w-full" disabled={testLoading}>

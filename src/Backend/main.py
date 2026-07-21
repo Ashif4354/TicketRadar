@@ -16,6 +16,7 @@ if root_dir not in sys.path:
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
+import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks  # noqa: E402, F401
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +41,8 @@ manager = JobManager()
 class TestAlertRequest(BaseModel):
     medium: str = Field(..., description="Alert medium: 'email' or 'discord'")
     target: str = Field(..., description="Target email address or webhook URL")
+    recaptcha_token: str = Field(..., description="Google reCAPTCHA token")
+
 
 class JobParams(BaseModel):
     url: str
@@ -52,6 +55,32 @@ class CreateJobRequest(BaseModel):
     notification_config: Dict[str, Any]
     check_interval: int = 30
     params: JobParams
+    recaptcha_token: str = Field(..., description="Google reCAPTCHA token")
+
+async def verify_recaptcha(token: str):
+    """Verifies a reCAPTCHA v2 token with Google's siteverify API."""
+    if not token:
+        raise HTTPException(status_code=400, detail="reCAPTCHA token is required.")
+        
+    recaptcha_url = "https://www.google.com/recaptcha/api/siteverify"
+    secret_key = settings.recaptcha_secret if settings else "6LfUdl0tAAAAAAjyjVtoGRY2cY52NJUOhc4R3mLu"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                recaptcha_url,
+                data={
+                    "secret": secret_key,
+                    "response": token
+                }
+            )
+            resp_data = resp.json()
+            if not resp_data.get("success"):
+                logger.warning(f"reCAPTCHA validation failed: {resp_data}")
+                raise HTTPException(status_code=400, detail="reCAPTCHA verification failed.")
+    except httpx.HTTPError as e:
+        logger.error(f"reCAPTCHA verification request failed: {e}")
+        raise HTTPException(status_code=500, detail="Unable to verify reCAPTCHA with Google servers.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -107,6 +136,10 @@ async def test_notification(payload: TestAlertRequest):
     if not target:
         raise HTTPException(status_code=400, detail="Target recipient/URL is required.")
         
+    # Verify reCAPTCHA token
+    await verify_recaptcha(payload.recaptcha_token)
+
+        
     if "email" in medium:
         config = {"recipient_email": target}
         notif_type = "email"
@@ -143,6 +176,10 @@ async def create_job(payload: CreateJobRequest):
     """Create and start a new monitor job."""
     if config_error:
         raise HTTPException(status_code=400, detail=f"Configuration Error: {config_error}")
+        
+    # Verify reCAPTCHA token
+    await verify_recaptcha(payload.recaptcha_token)
+
         
     # Validate provider
     service_provider = payload.service_provider

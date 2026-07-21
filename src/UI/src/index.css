@@ -111,3 +111,40 @@ select option {
   color: #f3f4f6 !important;
 }
 
+/* Fix reCAPTCHA v2 checkbox styling & focus outline issues */
+iframe[title="reCAPTCHA"],
+iframe[src*="recaptcha"] {
+  border: none !important;
+  outline: none !important;
+  border-radius: 8px;
+  background-color: transparent !important;
+}
+
+.g-recaptcha,
+.g-recaptcha * {
+  border-color: transparent !important;
+}
+
+/* Custom premium wrapper for Google reCAPTCHA checkbox to match theme border */
+.g-recaptcha-premium-container {
+  width: 302px;
+  height: 76px;
+  overflow: hidden;
+  position: relative;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border));
+  background-color: #222222; /* Matches dark recaptcha bg */
+}
+
+/* Position the inner recaptcha div to crop the outer 1px border */
+.g-recaptcha-premium-container > div {
+  position: absolute !important;
+  top: -1px !important;
+  left: -1px !important;
+  width: 304px !important;
+  height: 78px !important;
+}
+
+
+
+
