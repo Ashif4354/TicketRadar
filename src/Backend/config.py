@@ -10,11 +10,11 @@ import platformdirs
 USER_DATA_DIR = platformdirs.user_data_dir(appname="TicketRadar", appauthor="DarkGlance")
 os.makedirs(USER_DATA_DIR, exist_ok=True)
 
-# Get absolute path to project root
+# Get absolute path to backend directory (or executable directory if compiled)
 if "__compiled__" in globals() or hasattr(sys, "frozen"):
     BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Check locations for .env file in order
 locations = [

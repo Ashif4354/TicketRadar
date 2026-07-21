@@ -63,7 +63,6 @@ cmd = [
 
     # --- Project source & bootstrap ---
     f'--include-data-dir={os.path.join(ROOT_DIR, "src")}=src',
-    f'--include-data-files={os.path.join(ROOT_DIR, "main.py")}=main.py',
 
     # --- importlib.metadata (required by streamlit, pydantic at runtime) ---
     # Distribution names must match exactly (use hyphens where applicable)
@@ -93,7 +92,7 @@ cmd = [
     '--jobs=1',
 
     # --- Entry point ---
-    os.path.join(ROOT_DIR, 'main.py'),
+    os.path.join(ROOT_DIR, 'src', 'Backend', 'main.py'),
 ]
 
 # ---------------------------------------------------------------------------

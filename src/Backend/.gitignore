@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+wheels/
+*.egg-info
+
+# Build & distribution artifacts
+build/
+dist/
+
+# Nuitka intermediate artifacts
+*.build/
+*.dist/
+*.onefile-build/
+
+# Virtual environments
+.venv
+.env
+
+logs/

@@ -17,7 +17,7 @@ streamlit_dir = os.path.dirname(streamlit.__file__)
 # Datas to copy into the executable
 datas = [
     # Bootstrap script that Streamlit re-executes as the app
-    (os.path.join(ROOT_DIR, "main.py"), "."),
+    (os.path.join(ROOT_DIR, "src", "Backend", "main.py"), "."),
     # Streamlit web assets
     (os.path.join(streamlit_dir, "static"), "streamlit/static"),
     (os.path.join(streamlit_dir, "runtime"), "streamlit/runtime"),
@@ -31,7 +31,7 @@ datas += copy_metadata('pydantic_settings')
 block_cipher = None
 
 a = Analysis(
-    [os.path.join(ROOT_DIR, 'main.py')],
+    [os.path.join(ROOT_DIR, 'src', 'Backend', 'main.py')],
     pathex=[ROOT_DIR],
     binaries=[],
     datas=datas,

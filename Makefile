@@ -7,17 +7,17 @@ all: build-nuitka
 
 # Install all dependencies using uv
 install:
-	uv sync
+	uv --project src/Backend sync
 
 # ── Build targets ──────────────────────────────────────────────────────────────
 
 # Build with Nuitka (standalone, fastest boot — recommended)
 build-nuitka:
-	uv run python export/nuitka/build.py
+	uv --project src/Backend run python export/nuitka/build.py
 
 # Build with PyInstaller (single onefile exe — portable but slower boot)
 build-pyinstaller:
-	uv run pyinstaller export/pyinstaller/TicketRadar.spec --clean \
+	uv --project src/Backend run pyinstaller export/pyinstaller/TicketRadar.spec --clean \
 		--distpath dist/pyinstaller \
 		--workpath build/pyinstaller
 
@@ -28,7 +28,7 @@ build: build-nuitka
 
 # Run the app locally in development mode
 run:
-	uv run streamlit run main.py
+	cd src/Backend && uv run streamlit run main.py
 
 # ── Clean ──────────────────────────────────────────────────────────────────────
 

@@ -27,9 +27,9 @@ It features a modern dark-mode web dashboard built with **Streamlit**, uses **Pl
 TicketRadar launches Google Chrome directly from your system paths using Playwright's `"chrome"` channel. Ensure Google Chrome is installed on your host system.
 
 ### 2. Configure Environment Variables
-Copy `.env.example` to `.env` in the project root:
+Copy `src/Backend/.env.example` to `src/Backend/.env`:
 ```bash
-cp .env.example .env
+cp src/Backend/.env.example src/Backend/.env
 ```
 Open `.env` and fill in your Gmail SMTP configurations (App Password required for 2-step verification accounts):
 ```ini
@@ -42,7 +42,7 @@ SMTP_PASSWORD=your-app-password
 ### 3. Run the Dashboard
 Ensure `uv` is installed, then launch the Streamlit dashboard:
 ```bash
-uv run streamlit run main.py
+cd src/Backend && uv run streamlit run main.py
 ```
 
 ### 📦 Running as a Standalone Executable
@@ -53,7 +53,7 @@ To compile the executable:
 ```bash
 make build
 ```
-*(If `make` is not installed on your Windows machine, run: `uv run pyinstaller TicketRadar.spec --clean`)*
+*(If `make` is not installed on your Windows machine, run: `uv --project src/Backend run pyinstaller export/pyinstaller/TicketRadar.spec --clean`)*
 
 The output binary will be created at `dist/TicketRadar.exe`.
 
