@@ -1,8 +1,8 @@
 # src/services/notification/factory.py
 
-from src.services.notification.base import NotificationStrategy
-from src.services.notification.email_strategy import EmailNotificationStrategy
-from src.services.notification.discord_strategy import DiscordWebhookNotificationStrategy
+from src.Backend.services.notification.base import NotificationStrategy
+from src.Backend.services.notification.email_strategy import EmailNotificationStrategy
+from src.Backend.services.notification.discord_strategy import DiscordWebhookNotificationStrategy
 
 class NotificationStrategyFactory:
     """

@@ -1,7 +1,7 @@
 # src/services/scraper/factory.py
 
 from typing import Type
-from src.services.scraper.providers.base import BookingChecker
+from src.Backend.services.scraper.providers.base import BookingChecker
 
 class ScraperFactory:
     """
@@ -24,7 +24,7 @@ class ScraperFactory:
         """
         provider_clean = provider_name.strip().lower()
         if provider_clean == "bookmyshow":
-            from src.services.scraper.providers.bookmyshow import BookMyShowBookingChecker
+            from src.Backend.services.scraper.providers.bookmyshow import BookMyShowBookingChecker
             return BookMyShowBookingChecker
         else:
             raise ValueError(f"Unknown service provider: {provider_name}")

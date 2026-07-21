@@ -3,7 +3,7 @@
 import logging
 import re
 import os
-from src.config import LOG_FORMAT, LOG_DIR
+from src.Backend.config import LOG_FORMAT, LOG_DIR
 
 # Initialize directory
 os.makedirs(LOG_DIR, exist_ok=True)

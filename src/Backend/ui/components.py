@@ -1,8 +1,8 @@
 # src/ui/components.py
 
 import streamlit as st
-from src.core.job import MonitorJob
-from src.logger import get_job_logs_user
+from src.Backend.core.job import MonitorJob
+from src.Backend.logger import get_job_logs_user
 
 def render_job_card(job: MonitorJob, manager) -> None:
     """

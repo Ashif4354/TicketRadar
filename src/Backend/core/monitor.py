@@ -7,10 +7,10 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from src.core.job import MonitorJob
-from src.logger import get_job_logger, delete_job_log_file
-from src.services.scraper.factory import ScraperFactory
-from src.services.notification.factory import NotificationStrategyFactory
+from src.Backend.core.job import MonitorJob
+from src.Backend.logger import get_job_logger, delete_job_log_file
+from src.Backend.services.scraper.factory import ScraperFactory
+from src.Backend.services.notification.factory import NotificationStrategyFactory
 
 logger = logging.getLogger(__name__)
 

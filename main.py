@@ -35,13 +35,13 @@ import asyncio
 # Ensure the root project directory is in Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.config import settings, config_error  # noqa: F401
-from src.core.job import MonitorJob
-from src.core.monitor import JobManager
-from src.ui.styles import inject_premium_styles
-from src.ui.components import render_job_card
-from src.services.notification.factory import NotificationStrategyFactory
-from src.services.scraper.factory import ScraperFactory
+from src.Backend.config import settings, config_error  # noqa: F401
+from src.Backend.core.job import MonitorJob
+from src.Backend.core.monitor import JobManager
+from src.Backend.ui.styles import inject_premium_styles
+from src.Backend.ui.components import render_job_card
+from src.Backend.services.notification.factory import NotificationStrategyFactory
+from src.Backend.services.scraper.factory import ScraperFactory
 
 # Configure the Streamlit Page metadata and layout
 st.set_page_config(

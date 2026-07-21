@@ -4,8 +4,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List
 import aiosmtplib
-from src.services.notification.base import NotificationStrategy
-from src.config import settings
+from src.Backend.services.notification.base import NotificationStrategy
+from src.Backend.config import settings
 
 class EmailNotificationStrategy(NotificationStrategy):
     """

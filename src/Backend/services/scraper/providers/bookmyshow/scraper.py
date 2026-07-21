@@ -9,7 +9,7 @@ from typing import List, Tuple, Optional, Dict, Any
 import httpx
 from bs4 import BeautifulSoup
 
-from src.services.scraper.providers.base import BookingChecker
+from src.Backend.services.scraper.providers.base import BookingChecker
 
 logger = logging.getLogger(__name__)
 
