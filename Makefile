@@ -31,10 +31,11 @@ build: build-nuitka
 
 # Run the app locally in development mode (starts both Vite dev server and FastAPI)
 run:
+    @echo Starting FastAPI backend...
+	cd src/Backend && uv run python main.py
 	@echo Starting Vite dev server in background...
 	start /B cmd /c "cd src/UI && npm run dev"
-	@echo Starting FastAPI backend...
-	cd src/Backend && uv run python main.py
+	
 
 # ── Clean ──────────────────────────────────────────────────────────────────────
 

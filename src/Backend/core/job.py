@@ -19,7 +19,8 @@ class MonitorJob:
         notification_config: Dict[str, Any],
         service_provider: str = "bookmyshow",
         check_interval: Optional[int] = None,
-        job_id: Optional[str] = None
+        job_id: Optional[str] = None,
+        created_by: Optional[str] = None
     ):
         self.id = job_id or str(uuid.uuid4())[:8]  # Short, readable ID
         self.params = params
@@ -28,6 +29,7 @@ class MonitorJob:
         self.service_provider = service_provider.strip().lower()
         self.check_interval = check_interval or 30
         self.movie_name = "Fetching..."
+        self.created_by = created_by
         
         self.created_at = datetime.now()
         self.status = "Idle"  # Idle, Running, Success, Error, Stopped
@@ -82,4 +84,5 @@ class MonitorJob:
                 "status": self.status,
                 "last_checked_at": self.last_checked_at,
                 "last_result": self.last_result,
+                "created_by": self.created_by,
             }

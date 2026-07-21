@@ -12,6 +12,8 @@ dependencies = [
     "uvicorn>=0.30.0",
     "platformdirs>=4.3.0",
     "beautifulsoup4>=4.15.0",
+    "firebase-admin>=6.5.0",
+    "google-cloud-firestore>=2.19.0",
 ]
 
 [dependency-groups]

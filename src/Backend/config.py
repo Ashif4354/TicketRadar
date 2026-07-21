@@ -50,6 +50,19 @@ class Settings(BaseSettings):
     recaptcha_site: str = Field(default="6LfUdl0tAAAAALD21Jd3geQFRavY8xeWMbadKybZ")
     recaptcha_secret: str = Field(default="6LfUdl0tAAAAAAjyjVtoGRY2cY52NJUOhc4R3mLu")
 
+    # Firebase Configuration
+    firebase_type: str = Field(default="")
+    firebase_project_id: str = Field(default="")
+    firebase_private_key_id: str = Field(default="")
+    firebase_private_key: str = Field(default="")
+    firebase_client_email: str = Field(default="")
+    firebase_client_id: str = Field(default="")
+    firebase_auth_uri: str = Field(default="")
+    firebase_token_uri: str = Field(default="")
+    firebase_auth_provider_x509_cert_url: str = Field(default="")
+    firebase_client_x509_cert_url: str = Field(default="")
+    firebase_universe_domain: str = Field(default="")
+
     # Use pydantic configuration to load from .env
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_PATH,
