@@ -354,7 +354,7 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        setFormSuccess(`Successfully registered monitor #${data.id}! Radar daemon started.`);
+        setFormSuccess(`Successfully registered monitor #${data.id}! Ticket tracker started.`);
         setUrl("");
         setTheatres("");
         fetchJobs();
@@ -434,7 +434,7 @@ export default function App() {
                 TicketRadar
               </span>
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider -mt-0.5">
-                Automated Showwatch Daemon
+                Automated Show Tracker
               </p>
             </div>
           </div>
@@ -450,10 +450,10 @@ export default function App() {
             <AlertTriangle className="h-6 w-6 shrink-0 mt-0.5" />
             <div className="flex-1 space-y-2">
               <h4 className="font-semibold text-foreground text-sm flex items-center gap-2">
-                Configuration Validation Error
+                Setup Configuration Issue
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                The radar engine detects missing settings in your local environment. Check if your <code>.env</code> file is configured correctly.
+                Some settings are missing. Please check if your <code>.env</code> configuration file is set up correctly.
               </p>
               <pre className="text-xs font-mono bg-black/40 border border-border/50 p-3 rounded-lg overflow-x-auto text-rose-400">
                 {config.config_error}
@@ -503,10 +503,10 @@ export default function App() {
               <CardHeader className="border-b border-border/50 pb-4">
                 <CardTitle className="text-base font-bold flex items-center gap-2">
                   <Sparkles className="h-4.5 w-4.5 text-rose-500" />
-                  Add New Monitor
+                  Add Movie Tracker
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Deploy a background watch daemon to track movie ticket releases.
+                  Start tracking movie ticket releases in the background.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
@@ -525,7 +525,7 @@ export default function App() {
                   {/* Notification Medium */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Alert Dispatcher
+                      Notification Method
                     </label>
                     <Select 
                       value={medium} 
@@ -568,7 +568,7 @@ export default function App() {
                         className="bg-muted/10 border-input"
                       />
                       <p className="text-[10px] text-muted-foreground/80 leading-normal">
-                        Receive a custom Rich Embed inside your Discord channel.
+                        Receive a custom notification message inside your Discord channel.
                       </p>
                     </div>
                   )}
@@ -676,7 +676,7 @@ export default function App() {
 
                   <Button type="submit" variant="premium" className="w-full">
                     <Plus className="h-4 w-4" />
-                    Launch Radar Daemon
+                    Start Ticket Tracker
                   </Button>
                 </form>
               </CardContent>
@@ -690,7 +690,7 @@ export default function App() {
               >
                 <span className="flex items-center gap-2 text-foreground">
                   <Send className="h-4 w-4 text-rose-500" />
-                  Test Dispatcher Link
+                  Test Notification Settings
                 </span>
                 {testExpanded ? (
                   <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -744,12 +744,12 @@ export default function App() {
                       {testLoading ? (
                         <>
                           <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          Sending test alert...
+                          Sending test notification...
                         </>
                       ) : (
                         <>
                           <Send className="h-3.5 w-3.5" />
-                          Dispatch Verification
+                          Send Test Notification
                         </>
                       )}
                     </Button>
@@ -781,7 +781,7 @@ export default function App() {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold tracking-tight flex items-center gap-2">
                 <Power className="h-4.5 w-4.5 text-rose-500" />
-                Active Monitor Daemons
+                Active Ticket Trackers
                 <Badge variant="outline" className="ml-1 bg-muted/20 border-border">
                   {jobs.length} Active
                 </Badge>
@@ -794,9 +794,9 @@ export default function App() {
                   <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground/60 mb-4">
                     <Radar className="h-6 w-6" />
                   </div>
-                  <h4 className="text-sm font-semibold text-foreground mb-1">No Active Radar Daemons</h4>
+                  <h4 className="text-sm font-semibold text-foreground mb-1">No Active Ticket Trackers</h4>
                   <p className="text-xs text-muted-foreground max-w-sm">
-                    No tasks are registered. Set up target movie parameters in the sidebar to initiate tracking operations.
+                    No trackers are set up. Use the panel on the left to start tracking a movie.
                   </p>
                 </Card>
               ) : (
@@ -862,7 +862,7 @@ export default function App() {
                               ) : (
                                 <MessageSquare className="h-3 w-3 text-violet-400" />
                               )}
-                              Dispatcher
+                              Alert Method
                             </span>
                             <span className="text-xs font-semibold text-foreground/90 truncate">
                               {job.notification_medium.toUpperCase()}
@@ -904,7 +904,7 @@ export default function App() {
 
                           <div className="bg-muted/10 border border-border/20 rounded-lg p-3 text-xs">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
-                              Latest Engine Status Message
+                              Last Status Message
                             </span>
                             <div className="font-mono text-muted-foreground text-[11px] leading-relaxed break-all bg-black/35 border border-border/30 rounded-md p-2 shadow-inner">
                               {job.last_result}
@@ -919,7 +919,7 @@ export default function App() {
                             className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors outline-none cursor-pointer"
                           >
                             <Terminal className="h-3.5 w-3.5 text-rose-400" />
-                            <span>Daemon Trace Terminal</span>
+                            <span>Live Activity Logs</span>
                             {isExpanded ? (
                               <ChevronUp className="h-3 w-3 ml-0.5" />
                             ) : (
@@ -934,7 +934,7 @@ export default function App() {
                               ) : (
                                 <div className="flex items-center gap-2 text-muted-foreground">
                                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                  <span>Reading daemon logs...</span>
+                                  <span>Reading activity logs...</span>
                                 </div>
                               )}
                             </div>
@@ -975,7 +975,7 @@ export default function App() {
                           className="h-8 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          Decommission
+                          Delete Tracker
                         </Button>
                       </div>
 
@@ -994,7 +994,7 @@ export default function App() {
       {/* Footer */}
       <footer className="mt-auto border-t border-border/80 bg-card py-6 text-xs text-muted-foreground">
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© 2026 TicketRadar Daemon Engine. Monitoring active BookMyShow showtimes continuously.</p>
+          <p>© 2026 TicketRadar. Monitoring active BookMyShow showtimes continuously.</p>
           <div className="flex items-center gap-2 bg-muted/30 border border-border/50 px-3 py-1.5 rounded-lg font-medium text-foreground">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
