@@ -1024,56 +1024,16 @@ function AppDashboard() {
     setTargetDate(`${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`);
   }, [fetchConfig, fetchJobs]);
 
-  // Long polling for auto-refresh dashboard
+  // Auto-refresh dashboard every 10 seconds when enabled
   useEffect(() => {
     if (!autoRefresh) return;
 
-    const abortController = new AbortController();
-    let isMounted = true;
-    let currentVersion: string | null = null;
+    const intervalId = setInterval(() => {
+      fetchJobs();
+    }, 10000);
 
-    const poll = async () => {
-      while (isMounted && autoRefresh && !abortController.signal.aborted) {
-        try {
-          const url = currentVersion 
-            ? `/api/jobs?version=${encodeURIComponent(currentVersion)}&timeout=10` 
-            : '/api/jobs';
-          
-          setRefreshing(true);
-          const res = await authenticatedFetch(url, { signal: abortController.signal });
-          if (!res.ok) {
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            continue;
-          }
-          
-          const nextVersion = res.headers.get('X-State-Version');
-          currentVersion = nextVersion;
-          
-          const data = await res.json();
-          if (isMounted) {
-            setJobs(data);
-          }
-        } catch (err: any) {
-          if (err.name === 'AbortError') {
-            break;
-          }
-          console.error("Failed to fetch jobs during long polling:", err);
-          await new Promise(resolve => setTimeout(resolve, 3000));
-        } finally {
-          if (isMounted) {
-            setRefreshing(false);
-          }
-        }
-      }
-    };
-
-    poll();
-
-    return () => {
-      isMounted = false;
-      abortController.abort();
-    };
-  }, [autoRefresh]);
+    return () => clearInterval(intervalId);
+  }, [autoRefresh, fetchJobs]);
 
 
 
