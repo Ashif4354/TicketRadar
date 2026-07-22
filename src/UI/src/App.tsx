@@ -1758,6 +1758,18 @@ export default function App() {
         try {
           const tokenResult = await currentUser.getIdTokenResult(true);
           setClaims(tokenResult.claims);
+
+          // Record login event for admin Discord notification
+          const idToken = tokenResult.token;
+          const appCheckToken = await getAppCheckToken();
+          fetch('/api/users/login-event', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${idToken}`,
+              'X-Firebase-AppCheck': appCheckToken,
+              'Content-Type': 'application/json'
+            }
+          }).catch(err => console.error("Error sending login event:", err));
         } catch (err) {
           console.error("Error fetching custom claims:", err);
         }
@@ -1768,6 +1780,7 @@ export default function App() {
       setAuthLoading(false);
     });
   }, []);
+
 
   if (authLoading) {
     return (

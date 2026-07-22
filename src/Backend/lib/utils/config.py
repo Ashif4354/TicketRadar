@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     firebase_client_x509_cert_url: str = Field(default="")
     firebase_universe_domain: str = Field(default="")
 
+    # Admin Discord Webhook Configuration
+    admin_discord_webhook_url: str = Field(default="")
+
     # Use pydantic configuration to load from .env
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_PATH,
