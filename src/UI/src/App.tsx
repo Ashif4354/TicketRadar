@@ -108,14 +108,14 @@ function Footer() {
   return (
     <footer className="mt-auto border-t border-border/80 bg-card py-6 text-xs text-muted-foreground">
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p>© 2026 TicketRadar. Monitoring active BookMyShow showtimes continuously.</p>
+        <p>© 2026 TicketRadar. Checking active BookMyShow showtimes continuously.</p>
         <div className="flex items-center gap-2 bg-muted/30 border border-border/50 px-3 py-1.5 rounded-lg font-medium text-foreground">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <span className="text-muted-foreground">Server Connection:</span>
-          <span>Active</span>
+          <span className="text-muted-foreground">Status:</span>
+          <span>Ready & Active</span>
         </div>
       </div>
     </footer>
@@ -163,7 +163,7 @@ function Header({ user, claims }: HeaderProps) {
               TicketRadar
             </span>
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider -mt-0.5">
-              Automated Show Tracker
+              Movie Ticket Alerts
             </p>
           </div>
         </Link>
@@ -266,7 +266,7 @@ function LandingPage() {
 
       <div className="z-10 space-y-8 relative">
         <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase mb-2 animate-pulse">
-          <Sparkles className="h-3.5 w-3.5 mr-1 inline" /> Google Authentication Enabled
+          <Sparkles className="h-3.5 w-3.5 mr-1 inline" /> Instant & Secure Sign-In
         </Badge>
         
         <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight">
@@ -277,10 +277,10 @@ function LandingPage() {
         </h1>
         
         <p className="text-sm sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-          Tired of checking BookMyShow every hour? TicketRadar runs continuous background monitors and sends instant notifications (Email/Discord) as soon as bookings open for your target date and theatres.
+          Tired of checking BookMyShow every hour? TicketRadar automatically checks ticket availability for you and sends instant alerts to your Email or Discord the moment tickets open for your movie and cinema.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+        <div className="flex flex-col items-center justify-center gap-3 pt-4">
           <Button
             onClick={handleGetStarted}
             size="lg"
@@ -293,35 +293,27 @@ function LandingPage() {
             href="https://in.bookmyshow.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground font-semibold py-2 px-4 transition-colors"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground font-semibold py-1.5 px-4 transition-colors"
           >
-            Supported Scraper: BookMyShow
+            Supported Booking Provider: BookMyShow
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-16 text-left">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-12 max-w-3xl mx-auto text-left">
           <div className="bg-card border border-border/80 p-5 rounded-xl space-y-2 glassmorphism hover:border-rose-500/20 transition-all duration-300">
             <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center font-bold">1</div>
-            <h3 className="font-bold text-sm text-foreground">Continuous Monitoring</h3>
+            <h3 className="font-bold text-sm text-foreground">Automatic Ticket Checking</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Define target movie URL, date, and theatre filters. Our background agents scan availability every few seconds.
+              Provide your movie link, date, and preferred cinemas. TicketRadar checks for open seats every few seconds.
             </p>
           </div>
 
           <div className="bg-card border border-border/80 p-5 rounded-xl space-y-2 glassmorphism hover:border-rose-500/20 transition-all duration-300">
             <div className="h-9 w-9 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center font-bold">2</div>
-            <h3 className="font-bold text-sm text-foreground">Instant Alerts</h3>
+            <h3 className="font-bold text-sm text-foreground">Instant Notifications</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Get notified immediately via Email or Discord Webhook the exact second tickets become available.
-            </p>
-          </div>
-
-          <div className="bg-card border border-border/80 p-5 rounded-xl space-y-2 glassmorphism hover:border-rose-500/20 transition-all duration-300">
-            <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center font-bold">3</div>
-            <h3 className="font-bold text-sm text-foreground">Secure & Reliable</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Equipped with App Check and Google reCAPTCHA authentication to maintain high security and prevent bot abuse.
+              Get notified immediately on Email or Discord the exact second tickets go on sale.
             </p>
           </div>
         </div>
@@ -359,7 +351,7 @@ function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-extrabold tracking-tight">Log in to TicketRadar</CardTitle>
           <CardDescription className="text-xs text-muted-foreground">
-            Sign in using your Google account to create and manage ticket monitors.
+            Sign in with your Google account to set up ticket alerts.
           </CardDescription>
         </CardHeader>
 
@@ -387,7 +379,7 @@ function LoginPage() {
           </Button>
 
           <div className="text-[10px] text-muted-foreground pt-2">
-            By signing in, you agree to access rules and verify security requests.
+            By signing in, you agree to the terms of service.
           </div>
         </CardContent>
       </Card>
@@ -433,7 +425,7 @@ function UnauthorizedPage() {
 
     const token = recaptchaRef.current?.getValue() || "";
     if (!token) {
-      setError("Please complete the reCAPTCHA challenge first.");
+      setError("Please complete the security check first.");
       return;
     }
 
@@ -469,15 +461,15 @@ function UnauthorizedPage() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 shadow-lg mb-2">
             <Lock className="h-7 w-7" />
           </div>
-          <CardTitle className="text-2xl font-extrabold tracking-tight">Authorization Required</CardTitle>
+          <CardTitle className="text-2xl font-extrabold tracking-tight">Access Required</CardTitle>
           <CardDescription className="text-xs text-muted-foreground">
-            You do not have access to the app content.
+            Your account needs approval before setting up ticket alerts.
           </CardDescription>
         </CardHeader>
         
         <CardContent className="space-y-4 p-0">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Your Google account is signed in, but you do not have permission to view or manage monitors yet. Please request authorization below.
+            Your Google account is signed in, but needs approval before you can create ticket alerts. Please request access below.
           </p>
 
           {error && (
@@ -682,7 +674,7 @@ function AdminDashboard() {
             <Shield className="h-8 w-8 text-rose-500 shrink-0" />
             Admin Panel
           </h1>
-          <p className="text-xs text-muted-foreground">Manage user authorizations, custom claims, and live monitor tasks.</p>
+          <p className="text-xs text-muted-foreground">Manage user access and active ticket trackers.</p>
         </div>
         <Link to="/app">
           <Button variant="outline" size="sm" className="h-9 px-4 text-xs font-semibold">
@@ -720,7 +712,7 @@ function AdminDashboard() {
               : 'text-muted-foreground border-transparent hover:text-foreground'
           }`}
         >
-          System Monitors
+          All Ticket Trackers
         </button>
       </div>
 
@@ -1286,7 +1278,7 @@ function AppDashboard() {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8 bg-card border border-border/80 p-4 rounded-xl shadow-sm text-left">
         <div className="flex items-center gap-3">
           <Sliders className="h-4.5 w-4.5 text-rose-500" />
-          <span className="text-sm font-semibold tracking-tight">Radar Dashboard Panel</span>
+          <span className="text-sm font-semibold tracking-tight">Ticket Tracker Dashboard</span>
         </div>
 
         <div className="flex items-center gap-4">
@@ -1297,7 +1289,7 @@ function AppDashboard() {
               onChange={(e) => setAutoRefresh(e.target.checked)} 
               className="rounded border-input bg-muted/30 text-rose-500 focus:ring-rose-500 focus:ring-offset-background h-4 w-4 accent-rose-500 cursor-pointer"
             />
-            Auto Refresh (10s)
+            Auto Update Page
           </label>
           <Button 
             variant="outline" 
@@ -1307,7 +1299,7 @@ function AppDashboard() {
             className="text-xs font-semibold h-8"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            Sync Dashboard
+            Refresh Status
           </Button>
         </div>
       </div>
@@ -1325,10 +1317,10 @@ function AppDashboard() {
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400">
                   <Plus className="h-4 w-4" />
                 </div>
-                Create Show Monitor
+                Set Up New Ticket Alert
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground leading-relaxed">
-                Add target theater terms and receive notifications as soon as movie ticketing opens.
+                Enter your movie link, show date, and preferred cinemas to get notified when tickets open.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-5">
@@ -1360,17 +1352,17 @@ function AppDashboard() {
                   </div>
                 )}
 
-                {/* Scraper Provider selection */}
+                {/* Booking Provider selection */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Scraper Provider</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Booking Platform</label>
                   <Select value={serviceProvider} disabled className="h-9.5 text-xs bg-muted/20 border-border/80">
-                    <option value="BookMyShow">BookMyShow Scraper strategy</option>
+                    <option value="BookMyShow">BookMyShow</option>
                   </Select>
                 </div>
 
                 {/* Movie url page input */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">BookMyShow Movie URL</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Movie Ticket Page Link</label>
                   <Input 
                     type="text" 
                     placeholder="https://in.bookmyshow.com/buytickets/..." 
@@ -1379,13 +1371,13 @@ function AppDashboard() {
                     className="h-9.5 text-xs bg-muted/10 border-border/80 placeholder:text-muted-foreground/50 focus:border-rose-500/40"
                   />
                   <p className="text-[10px] text-muted-foreground leading-normal">
-                    Enter the BookMyShow tickets pricing page URL showing theatre listings.
+                    Paste the BookMyShow ticket booking page link for your movie.
                   </p>
                 </div>
 
                 {/* Target Date selection */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Target Date</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Show Date</label>
                   <Input 
                     type="date" 
                     value={targetDate}
@@ -1396,7 +1388,7 @@ function AppDashboard() {
 
                 {/* Target Theatre name filters */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Target Theatre Filter</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Preferred Cinemas</label>
                   <Textarea 
                     placeholder="PVR Director's Cut
 Cinepolis Nexus
@@ -1406,14 +1398,14 @@ Inox Forum Mall"
                     className="min-h-[90px] max-h-[140px] text-xs bg-muted/10 border-border/80 placeholder:text-muted-foreground/40 focus:border-rose-500/40 leading-relaxed"
                   />
                   <p className="text-[10px] text-muted-foreground leading-normal">
-                    Enter target cinema hall keywords (one per line). Match exactly as listed on BookMyShow.
+                    Type the names of your preferred cinemas (one per line). Example: PVR Forum, INOX Nexus.
                   </p>
                 </div>
 
                 {/* Notification configuration */}
                 <div className="space-y-3.5 border-t border-border/30 pt-4 mt-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Alert Delivery System</label>
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Where should we notify you?</label>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -1435,7 +1427,7 @@ Inox Forum Mall"
                             : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
                         }`}
                       >
-                        Discord Webhook
+                        Discord
                       </button>
                     </div>
                   </div>
@@ -1444,7 +1436,7 @@ Inox Forum Mall"
                     <div className="space-y-1.5">
                       <Input 
                         type="email" 
-                        placeholder="recipient-email@gmail.com" 
+                        placeholder="your-email@gmail.com" 
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
@@ -1454,7 +1446,7 @@ Inox Forum Mall"
                     <div className="space-y-1.5">
                       <Input 
                         type="text" 
-                        placeholder="https://discord.com/api/webhooks/..." 
+                        placeholder="Paste your Discord Webhook Link" 
                         value={webhook}
                         onChange={(e) => setWebhook(e.target.value)}
                         className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
@@ -1468,7 +1460,7 @@ Inox Forum Mall"
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                       <Timer className="h-3.5 w-3.5 text-rose-500" />
-                      Scan Interval Rate
+                      Check Frequency
                     </span>
                     <span className="font-mono text-foreground/80">{intervalSec}s</span>
                   </div>
@@ -1482,9 +1474,9 @@ Inox Forum Mall"
                     className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-rose-500"
                   />
                   <div className="flex justify-between text-[9px] text-muted-foreground/60 font-semibold px-0.5">
-                    <span>10s (Fast)</span>
-                    <span>60s</span>
-                    <span>120s (Slow)</span>
+                    <span>Every 10s (Faster)</span>
+                    <span>Every 60s</span>
+                    <span>Every 2 min</span>
                   </div>
                 </div>
 
@@ -1504,7 +1496,7 @@ Inox Forum Mall"
                   type="submit" 
                   className="w-full h-10 text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white cursor-pointer rounded-lg mt-2"
                 >
-                  Activate Ticket Tracker
+                  Start Ticket Alert
                 </Button>
               </form>
             </CardContent>
@@ -1519,7 +1511,7 @@ Inox Forum Mall"
               >
                 <span className="flex items-center gap-2">
                   <Power className="h-4 w-4 text-rose-500" />
-                  Test Notification Connection
+                  Send Test Notification
                 </span>
                 {testExpanded ? (
                   <ChevronUp className="h-4 w-4" />
@@ -1531,7 +1523,7 @@ Inox Forum Mall"
               {testExpanded && (
                 <form onSubmit={handleTestAlertSubmit} className="mt-4 space-y-3.5 border-t border-border/30 pt-4 text-left">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Test Medium</span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Notification Method</span>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -1553,7 +1545,7 @@ Inox Forum Mall"
                             : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
                         }`}
                       >
-                        Discord Webhook
+                        Discord
                       </button>
                     </div>
                   </div>
@@ -1561,7 +1553,7 @@ Inox Forum Mall"
                   <div className="space-y-1.5">
                     <Input 
                       type="text" 
-                      placeholder={testMedium === "Email" ? "your-email@gmail.com" : "Discord webhook URL"}
+                      placeholder={testMedium === "Email" ? "your-email@gmail.com" : "Paste your Discord Webhook Link"}
                       value={testTarget}
                       onChange={(e) => setTestTarget(e.target.value)}
                       className="h-9 text-xs bg-muted/10 border-border/80"
@@ -1589,7 +1581,7 @@ Inox Forum Mall"
                     ) : (
                       <>
                         <Send className="h-3.5 w-3.5" />
-                        Send Test Notification
+                        Send Test Message
                       </>
                     )}
                   </Button>
@@ -1630,14 +1622,22 @@ Inox Forum Mall"
                   <Film className="h-7 w-7" />
                 </div>
                 <div className="space-y-1.5">
-                  <h3 className="text-base font-bold tracking-tight text-foreground">No Ticket Monitors Registered</h3>
+                  <h3 className="text-base font-bold tracking-tight text-foreground">No Active Ticket Trackers</h3>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                    Create a new BookMyShow monitor job on the left panel to watch tickets availability for theatres.
+                    Set up a new ticket alert using the form on the left to start tracking tickets.
                   </p>
                 </div>
               </div>
             ) : (
               jobs.map((job) => {
+                const getStatusText = (status: string) => {
+                  const s = status.toLowerCase();
+                  if (s === 'running') return 'Active';
+                  if (s === 'stopped') return 'Paused';
+                  if (s === 'success') return 'Tickets Found!';
+                  return status;
+                };
+
                 return (
                   <Card key={job.id} className="border border-border/80 bg-card shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden glassmorphism">
                     
@@ -1649,15 +1649,15 @@ Inox Forum Mall"
                           {job.movie_name}
                         </CardTitle>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Monitor Job #{job.id}</span>
+                          <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Tracker #{job.id}</span>
                           <span className="text-border/60">•</span>
-                          <span className="text-[10px] text-muted-foreground">Scanned every {job.check_interval}s</span>
+                          <span className="text-[10px] text-muted-foreground">Checks every {job.check_interval}s</span>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-2.5">
                         <Badge variant={getStatusBadgeVariant(job.status)} className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full tracking-wider">
-                          {job.status}
+                          {getStatusText(job.status)}
                         </Badge>
                       </div>
                     </CardHeader>
@@ -1669,7 +1669,7 @@ Inox Forum Mall"
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Calendar className="h-4 w-4 text-rose-500 shrink-0" />
-                            <span>Target Screening Date:</span>
+                            <span>Show Date:</span>
                             <span className="font-semibold text-foreground/80">
                               {formatBmsDate(job.date_str)}
                             </span>
@@ -1677,7 +1677,7 @@ Inox Forum Mall"
 
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Clock className="h-4 w-4 text-rose-500 shrink-0" />
-                            <span>Last Inspected:</span>
+                            <span>Last Checked:</span>
                             <span className="font-semibold text-foreground/80">
                               {formatTimestamp(job.last_checked_at)}
                             </span>
@@ -1685,7 +1685,7 @@ Inox Forum Mall"
 
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <MessageSquare className="h-4 w-4 text-rose-500 shrink-0" />
-                            <span>Notification channel:</span>
+                            <span>Notify Via:</span>
                             <Badge variant="outline" className="text-[9px] font-bold px-2 py-0.5 bg-muted/30">
                               {job.notification_medium.toUpperCase()}
                             </Badge>
@@ -1694,7 +1694,7 @@ Inox Forum Mall"
 
                         <div className="space-y-2">
                           <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                            BookMyShow Source Webpage
+                            Movie Ticket Link
                           </div>
                           <a 
                             href={job.url} 
@@ -1702,7 +1702,7 @@ Inox Forum Mall"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-medium truncate max-w-xs cursor-pointer"
                           >
-                            Open tickets booking page
+                            View on BookMyShow
                             <ExternalLink className="h-3 w-3 shrink-0" />
                           </a>
                         </div>
@@ -1711,7 +1711,7 @@ Inox Forum Mall"
                       {/* Targeted Cinemas HALL keywords list */}
                       <div className="border-t border-border/30 pt-4 space-y-2">
                         <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                          Targeted Cinemas Hall Keywords
+                          Selected Cinemas
                         </div>
                         <div className="text-xs text-foreground/80 flex flex-wrap gap-1.5">
                           {job.theatres.map((th, idx) => (
@@ -1724,7 +1724,7 @@ Inox Forum Mall"
 
                       <div className="bg-muted/10 border border-border/20 rounded-lg p-3 text-xs">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
-                          Last Status Message
+                          Latest Status
                         </span>
                         <div className="font-mono text-muted-foreground text-[11px] leading-relaxed break-all bg-black/35 border border-border/30 rounded-md p-2 shadow-inner">
                           {job.last_result}
@@ -1744,7 +1744,7 @@ Inox Forum Mall"
                             className="h-8 text-xs font-semibold"
                           >
                             <Pause className="h-3.5 w-3.5 text-amber-400" />
-                            Pause Tracking
+                            Pause Alert
                           </Button>
                         ) : (
                           <Button 
@@ -1754,7 +1754,7 @@ Inox Forum Mall"
                             className="h-8 text-xs font-semibold"
                           >
                             <Play className="h-3.5 w-3.5 text-emerald-400" />
-                            Resume Tracking
+                            Resume Alert
                           </Button>
                         )}
                       </div>
@@ -1766,7 +1766,7 @@ Inox Forum Mall"
                         className="h-8 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        Delete Tracker
+                        Remove Alert
                       </Button>
                     </div>
 
