@@ -60,7 +60,7 @@ class CreateJobRequest(BaseModel):
     service_provider: str = "BookMyShow"
     notification_medium: str
     notification_config: Dict[str, Any]
-    check_interval: int = 30
+    check_interval: int = Field(default=30, ge=30, description="Check interval in seconds (minimum 30s)")
     params: JobParams
     recaptcha_token: str = Field(..., description="Google reCAPTCHA token")
 
@@ -235,6 +235,9 @@ async def create_job(payload: CreateJobRequest, claims: dict = Depends(get_autho
     # Verify reCAPTCHA token
     await verify_recaptcha(payload.recaptcha_token)
 
+    # Validate check interval minimum
+    if payload.check_interval < 30:
+        raise HTTPException(status_code=400, detail="Check interval cannot be less than 30 seconds.")
         
     # Validate provider
     service_provider = payload.service_provider

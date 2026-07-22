@@ -992,7 +992,7 @@ function AppDashboard() {
         const data = await res.json();
         setConfig(data);
         if (data.default_check_interval) {
-          setIntervalSec(data.default_check_interval);
+          setIntervalSec(Math.max(30, data.default_check_interval));
         }
       }
     } catch (err) {
@@ -1159,6 +1159,10 @@ function AppDashboard() {
 
     if (medium === "Discord Webhook" && !webhook.trim()) {
       errors.push("Discord Webhook URL is required.");
+    }
+
+    if (intervalSec < 30) {
+      errors.push("Check frequency cannot be less than 30 seconds.");
     }
 
     if (errors.length > 0) {
@@ -1466,15 +1470,15 @@ Inox Forum Mall"
                   </div>
                   <input 
                     type="range" 
-                    min="10" 
+                    min="30" 
                     max="120" 
                     step="5"
                     value={intervalSec} 
-                    onChange={(e) => setIntervalSec(parseInt(e.target.value, 10))} 
+                    onChange={(e) => setIntervalSec(Math.max(30, parseInt(e.target.value, 10)))} 
                     className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-rose-500"
                   />
                   <div className="flex justify-between text-[9px] text-muted-foreground/60 font-semibold px-0.5">
-                    <span>Every 10s (Faster)</span>
+                    <span>Every 30s (Fastest)</span>
                     <span>Every 60s</span>
                     <span>Every 2 min</span>
                   </div>
