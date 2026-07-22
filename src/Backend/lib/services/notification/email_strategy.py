@@ -2,6 +2,7 @@
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 from typing import List
 import aiosmtplib
 from .base import NotificationStrategy
@@ -30,7 +31,7 @@ class EmailNotificationStrategy(NotificationStrategy):
         # Setup standard MIME multipart message
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = settings.smtp_email
+        msg["From"] = formataddr(("TicketRadar", settings.smtp_email))
         msg["To"] = self.recipient_email
 
         # Build table rows for HTML and text output
