@@ -178,9 +178,11 @@ export function AdminDashboard() {
             Refresh Data
           </Button>
 
-          <Button asChild variant="ghost" size="sm" className="text-xs">
-            <Link to="/app">Back to App</Link>
-          </Button>
+          <Link to="/app">
+            <Button variant="ghost" size="sm" className="text-xs">
+              Back to App
+            </Button>
+          </Link>
         </div>
       </div>
 
