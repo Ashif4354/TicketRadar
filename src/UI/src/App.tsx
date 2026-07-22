@@ -265,9 +265,6 @@ function LandingPage() {
       </div>
 
       <div className="z-10 space-y-8 relative">
-        <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase mb-2 animate-pulse">
-          <Sparkles className="h-3.5 w-3.5 mr-1 inline" /> Instant & Secure Sign-In
-        </Badge>
         
         <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight">
           Movie Ticket Tracking,<br />
