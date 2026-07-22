@@ -52,7 +52,13 @@ except Exception as e:
 
 async def verify_app_check(x_firebase_appcheck: str = Header(None, alias="X-Firebase-AppCheck")):
     """Verifies the Firebase App Check token to ensure calls originate from the client app."""
+    disable_app_check = os.getenv("DISABLE_APP_CHECK", "false").lower() in ("true", "1")
+    is_dev = os.getenv("ENVIRONMENT", "development").lower() == "development"
+
     if not x_firebase_appcheck:
+        if disable_app_check or is_dev:
+            logger.warning("Missing X-Firebase-AppCheck header — bypassing check in development/disabled mode.")
+            return
         logger.warning("Missing X-Firebase-AppCheck header.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -61,6 +67,9 @@ async def verify_app_check(x_firebase_appcheck: str = Header(None, alias="X-Fire
     try:
         app_check.verify_token(x_firebase_appcheck)
     except Exception as e:
+        if disable_app_check or is_dev:
+            logger.warning(f"App Check verification failed ({e}) — bypassing check in development/disabled mode.")
+            return
         logger.error(f"App Check verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

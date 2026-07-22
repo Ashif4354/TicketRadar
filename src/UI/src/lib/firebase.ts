@@ -21,11 +21,18 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
+// Enable debug token in development mode for local testing
+if (import.meta.env.DEV) {
+  (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN || true;
+}
+
+const siteKey = import.meta.env.VITE_APP_CHECK_SITE_KEY || '6Ldf_dummy_key_for_dev_mode';
+
 // Initialize App Check
-export const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider(import.meta.env.VITE_APP_CHECK_SITE_KEY),
+export const appCheck = siteKey ? initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider(siteKey),
   isTokenAutoRefreshEnabled: true
-});
+}) : null;
 
 export const loginWithGoogle = () => {
   return signInWithPopup(auth, googleProvider);
@@ -36,6 +43,7 @@ export const logout = () => {
 };
 
 export const getAppCheckToken = async (): Promise<string> => {
+  if (!appCheck) return "";
   try {
     const result = await getToken(appCheck, false);
     return result.token;
