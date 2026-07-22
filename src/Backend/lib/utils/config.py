@@ -83,7 +83,3 @@ except Exception as e:
 
 # Application Constants
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_DIR = USER_DATA_DIR
-
-# Ensure logs directory exists
-os.makedirs(LOG_DIR, exist_ok=True)

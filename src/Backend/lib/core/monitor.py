@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 from .job import MonitorJob
-from ..utils.logger import get_job_logger, delete_job_log_file
+from ..utils.logger import get_job_logger
 from ..services.scraper.factory import ScraperFactory
 from ..services.notification.factory import NotificationStrategyFactory
 
@@ -116,8 +116,7 @@ class JobManager:
             if job_id in self.stop_events:
                 del self.stop_events[job_id]
                 
-        # Delete the job log file
-        delete_job_log_file(job_id)
+        # Log job deletion
         logger.info(f"Job {job_id} completely deleted and cleaned.")
         return True
 

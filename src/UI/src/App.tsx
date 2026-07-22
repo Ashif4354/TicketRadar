@@ -6,7 +6,7 @@ import ReCAPTCHA from 'react-google-recaptcha';
 import { 
   Radar, Film, Calendar, MessageSquare, Clock, 
   Play, Pause, Trash2, Sliders, Plus, Send, 
-  AlertTriangle, CheckCircle2, Terminal, ChevronDown, ChevronUp,
+  AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
   ExternalLink, RefreshCw, Sparkles, LogOut, Shield, Lock, Timer, Power
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -930,7 +930,7 @@ function AdminDashboard() {
                               disabled={actionLoading !== null}
                               variant="secondary"
                               size="sm"
-                              className="h-7 text-[10px] font-bold"
+                              className="h-7 text-[10px] font-bold cursor-pointer"
                             >
                               Stop
                             </Button>
@@ -940,7 +940,7 @@ function AdminDashboard() {
                             disabled={actionLoading !== null}
                             variant="destructive"
                             size="sm"
-                            className="h-7 text-[10px] font-bold"
+                            className="h-7 text-[10px] font-bold cursor-pointer"
                           >
                             Delete
                           </Button>
@@ -990,9 +990,6 @@ function AppDashboard() {
   const recaptchaRef = React.useRef<ReCAPTCHA>(null);
   const mainRecaptchaRef = React.useRef<ReCAPTCHA>(null);
 
-  // Logs state
-  const [expandedLogs, setExpandedLogs] = useState<{ [jobId: string]: boolean }>({});
-  const [jobLogs, setJobLogs] = useState<{ [jobId: string]: string }>({});
   const [refreshing, setRefreshing] = useState(false);
 
   // Helper: Fetch App Configuration status
@@ -1024,19 +1021,6 @@ function AppDashboard() {
       console.error("Failed to fetch jobs:", err);
     } finally {
       setRefreshing(false);
-    }
-  }, []);
-
-  // Helper: Fetch logs for a specific job
-  const fetchLogs = useCallback(async (jobId: string) => {
-    try {
-      const res = await authenticatedFetch(`/api/jobs/${jobId}/logs`);
-      if (res.ok) {
-        const data = await res.json();
-        setJobLogs(prev => ({ ...prev, [jobId]: data.logs }));
-      }
-    } catch (err) {
-      console.error(`Failed to fetch logs for job ${jobId}:`, err);
     }
   }, []);
 
@@ -1102,31 +1086,7 @@ function AppDashboard() {
     };
   }, [autoRefresh]);
 
-  // Polling logs for expanded cards
-  useEffect(() => {
-    const activeJobIds = Object.keys(expandedLogs).filter(id => expandedLogs[id]);
-    if (activeJobIds.length === 0) return;
 
-    const interval = setInterval(() => {
-      activeJobIds.forEach(id => {
-        const jobExists = jobs.some(j => j.id === id);
-        if (jobExists) {
-          fetchLogs(id);
-        }
-      });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [expandedLogs, jobs, fetchLogs]);
-
-  // Toggle log accordion
-  const toggleLogs = (jobId: string) => {
-    const isExpanding = !expandedLogs[jobId];
-    setExpandedLogs(prev => ({ ...prev, [jobId]: isExpanding }));
-    if (isExpanding) {
-      fetchLogs(jobId);
-    }
-  };
 
   // Test alerts connection submit handler
   const handleTestAlertSubmit = async (e: React.FormEvent) => {
@@ -1285,11 +1245,6 @@ function AppDashboard() {
       const res = await authenticatedFetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchJobs();
-        setExpandedLogs(prev => {
-          const updated = { ...prev };
-          delete updated[jobId];
-          return updated;
-        });
       }
     } catch (err) {
       console.error("Failed to delete job:", err);
@@ -1683,7 +1638,6 @@ Inox Forum Mall"
               </div>
             ) : (
               jobs.map((job) => {
-                const isExpanded = expandedLogs[job.id] || false;
                 return (
                   <Card key={job.id} className="border border-border/80 bg-card shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden glassmorphism">
                     
@@ -1777,34 +1731,6 @@ Inox Forum Mall"
                         </div>
                       </div>
 
-                      {/* Interactive Logs Console */}
-                      <div className="border-t border-border/30 pt-4">
-                        <button 
-                          onClick={() => toggleLogs(job.id)}
-                          className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors outline-none cursor-pointer"
-                        >
-                          <Terminal className="h-3.5 w-3.5 text-rose-400" />
-                          <span>Live Activity Logs</span>
-                          {isExpanded ? (
-                            <ChevronUp className="h-3 w-3 ml-0.5" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3 ml-0.5" />
-                          )}
-                        </button>
-                        
-                        {isExpanded && (
-                          <div className="mt-3 rounded-lg border border-border bg-black text-emerald-400 font-mono text-[11px] p-4 max-h-[180px] overflow-y-auto shadow-inner leading-relaxed text-left border-l-3 border-l-rose-500">
-                            {jobLogs[job.id] ? (
-                              <pre className="whitespace-pre-wrap">{jobLogs[job.id]}</pre>
-                            ) : (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                <span>Reading activity logs...</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
                     </CardContent>
 
                     {/* Control Panel Buttons Row */}

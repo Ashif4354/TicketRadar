@@ -29,7 +29,6 @@ from lib.core.job import MonitorJob
 from lib.core.monitor import JobManager
 from lib.services.notification.factory import NotificationStrategyFactory
 from lib.services.scraper.factory import ScraperFactory
-from lib.utils.logger import get_job_logs_user
 from lib.core.auth import (
     get_current_user_claims,
     get_authorized_user,
@@ -338,12 +337,6 @@ async def delete_job(job_id: str, claims: dict = Depends(get_authorized_user)):
     else:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
 
-@app.get("/api/jobs/{job_id}/logs")
-async def get_logs(job_id: str, tail: int = 60, claims: dict = Depends(get_authorized_user)):
-    """Retrieves user-facing logs for a specific job."""
-    verify_job_access(job_id, claims)
-    logs = get_job_logs_user(job_id, tail_lines=tail)
-    return {"job_id": job_id, "logs": logs}
 
 
 # Admin router and public request-access API
