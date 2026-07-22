@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --background: 240 10% 4%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 4%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 346.8 77.2% 49.8%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 18%;
+    --input: 240 3.7% 18%;
+    --ring: 346.8 77.2% 49.8%;
+    --radius: 0.75rem;
+  }
+}
+
+@theme {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+/* Custom premium scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
+
+/* Custom premium styles */
+.glow-primary {
+  box-shadow: 0 0 40px -10px hsl(var(--primary) / 0.2);
+}
+
+.glow-card-hover:hover {
+  box-shadow: 0 0 30px -5px hsl(var(--primary) / 0.08);
+  border-color: hsl(var(--primary) / 0.3);
+}
+
+.glassmorphism {
+  background: rgba(15, 15, 20, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Style Chrome/Safari/Edge date picker indicator */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px;
+  transition: background-color 0.2s;
+  filter: invert(0) !important;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background: rgba(255, 255, 255, 0.15);
+  filter: invert(0) !important;
+}
+
+/* Custom styled select options for dropdown dark theme consistency */
+select option {
+  background-color: #111116 !important;
+  color: #f3f4f6 !important;
+}
+
+/* Fix reCAPTCHA v2 checkbox styling & focus outline issues */
+iframe[title="reCAPTCHA"],
+iframe[src*="recaptcha"] {
+  border: none !important;
+  outline: none !important;
+  border-radius: 8px;
+  background-color: transparent !important;
+}
+
+.g-recaptcha,
+.g-recaptcha * {
+  border-color: transparent !important;
+}
+
+/* Custom premium wrapper for Google reCAPTCHA checkbox to match theme border */
+.g-recaptcha-premium-container {
+  width: 302px;
+  height: 76px;
+  overflow: hidden;
+  position: relative;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border));
+  background-color: #222222; /* Matches dark recaptcha bg */
+}
+
+/* Position the inner recaptcha div to crop the outer 1px border */
+.g-recaptcha-premium-container > div {
+  position: absolute !important;
+  top: -1px !important;
+  left: -1px !important;
+  width: 304px !important;
+  height: 78px !important;
+}
+
+
+
+

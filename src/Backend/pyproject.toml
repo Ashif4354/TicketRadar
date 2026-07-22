@@ -1,0 +1,24 @@
+[project]
+name = "ticketradar"
+version = "0.1.0"
+description = "A fully asynchronous movie ticket booking monitor and alert system using Streamlit and httpx"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "aiosmtplib>=5.1.2",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.14.2",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "platformdirs>=4.3.0",
+    "beautifulsoup4>=4.15.0",
+    "firebase-admin>=6.5.0",
+    "google-cloud-firestore>=2.19.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.21.0",
+    "nuitka>=2.6.0",
+    "ordered-set>=4.1.0",  # required by nuitka
+]
