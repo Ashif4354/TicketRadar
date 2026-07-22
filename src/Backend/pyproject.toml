@@ -8,12 +8,13 @@ dependencies = [
     "aiosmtplib>=5.1.2",
     "httpx>=0.28.1",
     "pydantic-settings>=2.14.2",
-    "fastapi>=0.115.0",
+    "fastapi[standard]>=0.115.0",
     "uvicorn>=0.30.0",
     "platformdirs>=4.3.0",
     "beautifulsoup4>=4.15.0",
     "firebase-admin>=6.5.0",
     "google-cloud-firestore>=2.19.0",
+    "google-cloud-logging>=3.11.0",
 ]
 
 [dependency-groups]

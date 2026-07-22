@@ -7,7 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List
 
-# Ensure the project root directory is in Python path to support src.Backend imports
+# Ensure the backend directory is in Python path to support lib imports
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.abspath(os.path.join(backend_dir, "..", ".."))
 if root_dir not in sys.path:
@@ -24,13 +24,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.Backend.config import settings, config_error
-from src.Backend.core.job import MonitorJob
-from src.Backend.core.monitor import JobManager
-from src.Backend.services.notification.factory import NotificationStrategyFactory
-from src.Backend.services.scraper.factory import ScraperFactory
-from src.Backend.logger import get_job_logs_user
-from src.Backend.core.auth import (
+from lib.utils.config import settings, config_error
+from lib.core.job import MonitorJob
+from lib.core.monitor import JobManager
+from lib.services.notification.factory import NotificationStrategyFactory
+from lib.services.notification import admin_notifier
+from lib.services.scraper.factory import ScraperFactory
+from lib.core.auth import (
     get_current_user_claims,
     get_authorized_user,
     get_admin_user,
@@ -38,12 +38,44 @@ from src.Backend.core.auth import (
     auth as firebase_auth
 )
 
+from lib.services.gcp_logger import gcp_logger
+
 # Initialize logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ticketradar.api")
 
 # Get JobManager instance (singleton)
 manager = JobManager()
+
+def get_user_details(uid: str = None, claims: dict = None) -> tuple[str, str, str]:
+    """Helper to extract user display name, email, and photo URL from claims or Firebase Auth."""
+    name = ""
+    email = ""
+    photo_url = ""
+
+    if claims:
+        email = claims.get("email", "")
+        name = claims.get("name", "") or claims.get("displayName", "")
+        photo_url = claims.get("picture", "") or claims.get("photoUrl", "")
+        if not uid:
+            uid = claims.get("uid")
+
+    if uid and (not name or not email or not photo_url):
+        try:
+            u = firebase_auth.get_user(uid)
+            email = email or u.email or ""
+            name = name or u.display_name or ""
+            photo_url = photo_url or u.photo_url or ""
+        except Exception as e:
+            logger.debug(f"Failed to fetch user from Firebase Auth ({uid}): {e}")
+
+    if not name and email:
+        name = email.split("@")[0]
+    elif not name:
+        name = "User"
+
+    return name, email, photo_url
+
 
 # Pydantic models for request/response validation
 class TestAlertRequest(BaseModel):
@@ -61,7 +93,7 @@ class CreateJobRequest(BaseModel):
     service_provider: str = "BookMyShow"
     notification_medium: str
     notification_config: Dict[str, Any]
-    check_interval: int = 30
+    check_interval: int = Field(default=30, ge=30, description="Check interval in seconds (minimum 30s)")
     params: JobParams
     recaptcha_token: str = Field(..., description="Google reCAPTCHA token")
 
@@ -158,10 +190,28 @@ async def test_notification(payload: TestAlertRequest, claims: dict = Depends(ge
             url="https://in.bookmyshow.com"
         )
         if success:
+            gcp_logger.log_event(
+                "Test Notification Sent",
+                user_id=claims.get("uid"),
+                details={"medium": medium, "target": target, "status": "SUCCESS"}
+            )
             return {"success": True, "message": "Test notification sent successfully!"}
         else:
+            gcp_logger.log_event(
+                "Test Notification Failed",
+                user_id=claims.get("uid"),
+                details={"medium": medium, "target": target, "error": msg},
+                level="WARNING"
+            )
             return {"success": False, "message": msg}
     except Exception as err:
+        gcp_logger.log_event(
+            "Test Notification Error",
+            user_id=claims.get("uid"),
+            details={"medium": medium, "target": target},
+            level="ERROR",
+            exception=err
+        )
         return {"success": False, "message": str(err)}
 
 def get_jobs_state_hash(jobs: List[MonitorJob]) -> str:
@@ -180,55 +230,93 @@ def get_jobs_state_hash(jobs: List[MonitorJob]) -> str:
     return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
 @app.get("/api/jobs")
-async def get_jobs(
-    version: str = None,
-    timeout: int = 10,
-    claims: dict = Depends(get_authorized_user)
-):
-    """Returns a list of all current jobs and their states.
-    Supports long polling if 'version' parameter is provided.
-    """
-    start_time = asyncio.get_event_loop().time()
+async def get_jobs(claims: dict = Depends(get_authorized_user)):
+    """Returns a list of all current jobs and their states."""
     is_admin = claims.get("role") == "admin"
     user_uid = claims.get("uid")
     
-    while True:
-        all_jobs = manager.get_all_jobs()
-        if is_admin:
-            current_jobs = all_jobs
-        else:
-            current_jobs = [j for j in all_jobs if j.created_by == user_uid]
-            
-        current_hash = get_jobs_state_hash(current_jobs)
+    all_jobs = manager.get_all_jobs()
+    if is_admin:
+        current_jobs = all_jobs
+    else:
+        current_jobs = [j for j in all_jobs if j.created_by == user_uid]
         
-        # If version is not provided or it doesn't match the current hash, return immediately
-        if not version or current_hash != version:
-            headers = {
-                "X-State-Version": current_hash,
-                "Cache-Control": "no-cache, no-store, must-revalidate"
-            }
-            return JSONResponse(
-                content=jsonable_encoder([job.get_state() for job in current_jobs]),
-                headers=headers
-            )
+    return JSONResponse(
+        content=jsonable_encoder([job.get_state() for job in current_jobs]),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
+
+@app.post("/api/users/login-event")
+async def record_login_event(
+    background_tasks: BackgroundTasks,
+    claims: dict = Depends(get_current_user_claims)
+):
+    """
+    Records user login event and notifies admin on Discord if it's the user's first time logging in.
+    """
+    uid = claims.get("uid")
+    if not uid:
+        return {"success": False, "message": "Missing user UID in token claims."}
+
+    user_name, email, photo_url = get_user_details(uid, claims)
+
+    if db is not None:
+        try:
+            user_ref = db.collection("users").document(uid)
+            doc = user_ref.get()
+            is_first = not doc.exists or not doc.to_dict().get("first_login_notified", False)
+
+            if is_first:
+                user_ref.set({
+                    "uid": uid,
+                    "email": email,
+                    "displayName": user_name,
+                    "photoUrl": photo_url,
+                    "first_login_notified": True,
+                    "first_login_at": google_firestore.SERVER_TIMESTAMP
+                }, merge=True)
+                background_tasks.add_task(admin_notifier.notify_first_login, user_name, email, photo_url)
             
-        # Check if timeout is reached
-        elapsed = asyncio.get_event_loop().time() - start_time
-        if elapsed >= timeout:
-            headers = {
-                "X-State-Version": current_hash,
-                "Cache-Control": "no-cache, no-store, must-revalidate"
-            }
-            return JSONResponse(
-                content=jsonable_encoder([job.get_state() for job in current_jobs]),
-                headers=headers
+            gcp_logger.log_event(
+                "User Logged In",
+                user_id=uid,
+                details={
+                    "displayName": user_name,
+                    "email": email,
+                    "is_first_login": is_first
+                }
             )
-            
-        # Wait a short duration before checking again
-        await asyncio.sleep(0.5)
+        except Exception as e:
+            logger.error(f"Firestore check failed for user login {uid}: {e}")
+            background_tasks.add_task(admin_notifier.notify_first_login, user_name, email, photo_url)
+            gcp_logger.log_event(
+                "User Logged In",
+                user_id=uid,
+                details={
+                    "displayName": user_name,
+                    "email": email,
+                    "firestore_error": str(e)
+                }
+            )
+    else:
+        background_tasks.add_task(admin_notifier.notify_first_login, user_name, email, photo_url)
+        gcp_logger.log_event(
+            "User Logged In",
+            user_id=uid,
+            details={
+                "displayName": user_name,
+                "email": email
+            }
+        )
+
+    return {"success": True}
 
 @app.post("/api/jobs")
-async def create_job(payload: CreateJobRequest, claims: dict = Depends(get_authorized_user)):
+async def create_job(
+    payload: CreateJobRequest,
+    background_tasks: BackgroundTasks,
+    claims: dict = Depends(get_authorized_user)
+):
     """Create and start a new monitor job."""
     if config_error:
         raise HTTPException(status_code=400, detail=f"Configuration Error: {config_error}")
@@ -236,6 +324,9 @@ async def create_job(payload: CreateJobRequest, claims: dict = Depends(get_autho
     # Verify reCAPTCHA token
     await verify_recaptcha(payload.recaptcha_token)
 
+    # Validate check interval minimum
+    if payload.check_interval < 30:
+        raise HTTPException(status_code=400, detail="Check interval cannot be less than 30 seconds.")
         
     # Validate provider
     service_provider = payload.service_provider
@@ -283,6 +374,31 @@ async def create_job(payload: CreateJobRequest, claims: dict = Depends(get_autho
     
     success = manager.start_job(new_job)
     if success:
+        user_name, email, _ = get_user_details(claims.get("uid"), claims)
+        background_tasks.add_task(
+            admin_notifier.notify_job_created,
+            new_job.id,
+            new_job.movie_name,
+            user_name,
+            email,
+            service_provider,
+            new_job.theatres,
+            payload.params.date_str
+        )
+        gcp_logger.log_event(
+            "Job Created",
+            user_id=claims.get("uid"),
+            details={
+                "job_id": new_job.id,
+                "movie_name": new_job.movie_name,
+                "service_provider": service_provider,
+                "theatres": new_job.theatres,
+                "date_str": payload.params.date_str,
+                "check_interval": payload.check_interval,
+                "notification_medium": medium_name,
+                "user_email": email
+            }
+        )
         return new_job.get_state()
     else:
         raise HTTPException(status_code=500, detail="Failed to start monitoring job. An active thread might already be running.")
@@ -314,36 +430,92 @@ async def start_job(job_id: str, claims: dict = Depends(get_authorized_user)):
     job.update_state("Idle", "Manual restart requested.")
     success = manager.start_job(job)
     if success:
+        user_name, email, _ = get_user_details(claims.get("uid"), claims)
+        gcp_logger.log_event(
+            "Job Started",
+            user_id=claims.get("uid"),
+            details={
+                "job_id": job.id,
+                "movie_name": job.movie_name,
+                "service_provider": job.service_provider,
+                "user_email": email
+            }
+        )
         return {"success": True, "state": job.get_state()}
     else:
         raise HTTPException(status_code=500, detail="Failed to start job.")
 
 @app.post("/api/jobs/{job_id}/stop")
-async def stop_job(job_id: str, claims: dict = Depends(get_authorized_user)):
+async def stop_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    claims: dict = Depends(get_authorized_user)
+):
     """Stops a running job."""
-    verify_job_access(job_id, claims)
+    job = verify_job_access(job_id, claims)
     success = manager.stop_job(job_id)
     if success:
+        user_name, email, _ = get_user_details(claims.get("uid"), claims)
+        background_tasks.add_task(
+            admin_notifier.notify_job_stopped,
+            job.id,
+            job.movie_name,
+            user_name,
+            email,
+            job.service_provider,
+            job.theatres,
+            job.date_str
+        )
+        gcp_logger.log_event(
+            "Job Stopped",
+            user_id=claims.get("uid"),
+            details={
+                "job_id": job.id,
+                "movie_name": job.movie_name,
+                "service_provider": job.service_provider,
+                "user_email": email
+            }
+        )
         return {"success": True, "message": f"Job #{job_id} stopped."}
     else:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found or could not be stopped.")
 
 @app.delete("/api/jobs/{job_id}")
-async def delete_job(job_id: str, claims: dict = Depends(get_authorized_user)):
+async def delete_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    claims: dict = Depends(get_authorized_user)
+):
     """Deletes a job."""
-    verify_job_access(job_id, claims)
+    job = verify_job_access(job_id, claims)
     success = manager.delete_job(job_id)
     if success:
+        user_name, email, _ = get_user_details(claims.get("uid"), claims)
+        background_tasks.add_task(
+            admin_notifier.notify_job_deleted,
+            job.id,
+            job.movie_name,
+            user_name,
+            email,
+            job.service_provider,
+            job.theatres,
+            job.date_str
+        )
+        gcp_logger.log_event(
+            "Job Deleted",
+            user_id=claims.get("uid"),
+            details={
+                "job_id": job.id,
+                "movie_name": job.movie_name,
+                "service_provider": job.service_provider,
+                "user_email": email
+            }
+        )
         return {"success": True, "message": f"Job #{job_id} deleted."}
     else:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
 
-@app.get("/api/jobs/{job_id}/logs")
-async def get_logs(job_id: str, tail: int = 60, claims: dict = Depends(get_authorized_user)):
-    """Retrieves user-facing logs for a specific job."""
-    verify_job_access(job_id, claims)
-    logs = get_job_logs_user(job_id, tail_lines=tail)
-    return {"job_id": job_id, "logs": logs}
+
 
 
 # Admin router and public request-access API
@@ -379,7 +551,12 @@ async def admin_list_users():
         raise HTTPException(status_code=500, detail=str(e))
 
 @admin_router.post("/users/{uid}/role")
-async def admin_update_role(uid: str, payload: UpdateRoleRequest):
+async def admin_update_role(
+    uid: str,
+    payload: UpdateRoleRequest,
+    background_tasks: BackgroundTasks,
+    admin_claims: dict = Depends(get_admin_user)
+):
     """Updates the user's role claim (admin or user)."""
     if payload.role not in ["admin", "user"]:
         raise HTTPException(status_code=400, detail="Invalid role. Must be 'admin' or 'user'.")
@@ -388,32 +565,84 @@ async def admin_update_role(uid: str, payload: UpdateRoleRequest):
         claims = user.custom_claims or {}
         claims["role"] = payload.role
         firebase_auth.set_custom_user_claims(uid, claims)
+
+        name, email, photo_url = get_user_details(uid)
+        if payload.role == "admin":
+            background_tasks.add_task(admin_notifier.notify_new_admin_created, name, email, photo_url)
+
+        gcp_logger.log_event(
+            "User Role Updated",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_claims.get("email"),
+                "target_uid": uid,
+                "target_email": email,
+                "new_role": payload.role
+            }
+        )
+
         return {"success": True, "message": f"User role updated to {payload.role}."}
     except Exception as e:
         logger.error(f"Error updating role: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @admin_router.post("/users/{uid}/block")
-async def admin_block_user(uid: str):
+async def admin_block_user(
+    uid: str,
+    background_tasks: BackgroundTasks,
+    admin_claims: dict = Depends(get_admin_user)
+):
     """Sets the 'blocked' claim to True."""
     try:
         user = firebase_auth.get_user(uid)
         claims = user.custom_claims or {}
         claims["blocked"] = True
         firebase_auth.set_custom_user_claims(uid, claims)
+
+        name, email, photo_url = get_user_details(uid)
+        background_tasks.add_task(admin_notifier.notify_user_block_status, name, email, True, photo_url)
+
+        gcp_logger.log_event(
+            "User Blocked",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_claims.get("email"),
+                "target_uid": uid,
+                "target_email": email
+            }
+        )
+
         return {"success": True, "message": "User blocked successfully."}
     except Exception as e:
         logger.error(f"Error blocking user: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @admin_router.post("/users/{uid}/unblock")
-async def admin_unblock_user(uid: str):
+async def admin_unblock_user(
+    uid: str,
+    background_tasks: BackgroundTasks,
+    admin_claims: dict = Depends(get_admin_user)
+):
     """Sets the 'blocked' claim to False."""
     try:
         user = firebase_auth.get_user(uid)
         claims = user.custom_claims or {}
         claims["blocked"] = False
         firebase_auth.set_custom_user_claims(uid, claims)
+
+        name, email, photo_url = get_user_details(uid)
+        background_tasks.add_task(admin_notifier.notify_user_block_status, name, email, False, photo_url)
+
+        gcp_logger.log_event(
+            "User Unblocked",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_claims.get("email"),
+                "target_uid": uid,
+                "target_email": email
+            }
+        )
+
         return {"success": True, "message": "User unblocked successfully."}
     except Exception as e:
         logger.error(f"Error unblocking user: {e}")
@@ -443,7 +672,11 @@ async def admin_list_requests():
         raise HTTPException(status_code=500, detail=str(e))
 
 @admin_router.post("/requests/{uid}/approve")
-async def admin_approve_request(uid: str):
+async def admin_approve_request(
+    uid: str,
+    background_tasks: BackgroundTasks,
+    admin_claims: dict = Depends(get_admin_user)
+):
     """Approves an access request, sets 'authorized=True', and updates Firestore."""
     try:
         user = firebase_auth.get_user(uid)
@@ -458,13 +691,31 @@ async def admin_approve_request(uid: str):
                 "status": "approved",
                 "approved_at": google_firestore.SERVER_TIMESTAMP
             })
+
+        name, email, photo_url = get_user_details(uid)
+        background_tasks.add_task(admin_notifier.notify_access_request_status, name, email, "approved", photo_url)
+
+        gcp_logger.log_event(
+            "Access Request Approved",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_claims.get("email"),
+                "target_uid": uid,
+                "target_email": email
+            }
+        )
+
         return {"success": True, "message": "Access request approved successfully."}
     except Exception as e:
         logger.error(f"Error approving access request: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @admin_router.post("/requests/{uid}/deny")
-async def admin_deny_request(uid: str):
+async def admin_deny_request(
+    uid: str,
+    background_tasks: BackgroundTasks,
+    admin_claims: dict = Depends(get_admin_user)
+):
     """Denies an access request (updates Firestore to 'denied')."""
     try:
         if db is not None:
@@ -472,25 +723,99 @@ async def admin_deny_request(uid: str):
                 "status": "denied",
                 "denied_at": google_firestore.SERVER_TIMESTAMP
             })
+
+        name, email, photo_url = get_user_details(uid)
+        background_tasks.add_task(admin_notifier.notify_access_request_status, name, email, "denied", photo_url)
+
+        gcp_logger.log_event(
+            "Access Request Denied",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_claims.get("email"),
+                "target_uid": uid,
+                "target_email": email
+            }
+        )
+
         return {"success": True, "message": "Access request denied."}
     except Exception as e:
         logger.error(f"Error denying access request: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @admin_router.post("/jobs/{job_id}/stop")
-async def admin_stop_job(job_id: str):
+async def admin_stop_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    admin_claims: dict = Depends(get_admin_user)
+):
     """Stops any running job."""
+    job = manager.get_job(job_id)
     success = manager.stop_job(job_id)
     if success:
+        owner_name, owner_email, _ = get_user_details(job.created_by if job else None)
+        admin_name, admin_email, _ = get_user_details(admin_claims.get("uid"), admin_claims)
+        background_tasks.add_task(
+            admin_notifier.notify_job_admin_action,
+            "stopped",
+            job.id if job else job_id,
+            job.movie_name if job else "N/A",
+            owner_name,
+            owner_email,
+            job.service_provider if job else "N/A",
+            job.theatres if job else [],
+            job.date_str if job else "N/A",
+            admin_name,
+            admin_email
+        )
+        gcp_logger.log_event(
+            "Admin Job Stopped",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_email,
+                "job_id": job_id,
+                "movie_name": job.movie_name if job else "N/A",
+                "owner_email": owner_email
+            }
+        )
         return {"success": True, "message": f"Job #{job_id} stopped."}
     else:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found or could not be stopped.")
 
 @admin_router.delete("/jobs/{job_id}")
-async def admin_delete_job(job_id: str):
+async def admin_delete_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    admin_claims: dict = Depends(get_admin_user)
+):
     """Deletes any job."""
+    job = manager.get_job(job_id)
     success = manager.delete_job(job_id)
     if success:
+        owner_name, owner_email, _ = get_user_details(job.created_by if job else None)
+        admin_name, admin_email, _ = get_user_details(admin_claims.get("uid"), admin_claims)
+        background_tasks.add_task(
+            admin_notifier.notify_job_admin_action,
+            "deleted",
+            job.id if job else job_id,
+            job.movie_name if job else "N/A",
+            owner_name,
+            owner_email,
+            job.service_provider if job else "N/A",
+            job.theatres if job else [],
+            job.date_str if job else "N/A",
+            admin_name,
+            admin_email
+        )
+        gcp_logger.log_event(
+            "Admin Job Deleted",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_email,
+                "job_id": job_id,
+                "movie_name": job.movie_name if job else "N/A",
+                "owner_email": owner_email
+            }
+        )
         return {"success": True, "message": f"Job #{job_id} deleted."}
     else:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
@@ -501,7 +826,11 @@ class RequestAccessPayload(BaseModel):
     recaptcha_token: str
 
 @app.post("/api/request-access")
-async def request_access(payload: RequestAccessPayload, claims: dict = Depends(get_current_user_claims)):
+async def request_access(
+    payload: RequestAccessPayload,
+    background_tasks: BackgroundTasks,
+    claims: dict = Depends(get_current_user_claims)
+):
     """Submits a request access form to Firestore."""
     await verify_recaptcha(payload.recaptcha_token)
     
@@ -527,32 +856,28 @@ async def request_access(payload: RequestAccessPayload, claims: dict = Depends(g
         "status": "pending",
         "requested_at": google_firestore.SERVER_TIMESTAMP
     })
+
+    name, email_val, photo_url = get_user_details(uid, claims)
+    background_tasks.add_task(admin_notifier.notify_access_request_created, name, email_val, photo_url)
     
+    gcp_logger.log_event(
+        "Access Request Submitted",
+        user_id=uid,
+        details={
+            "displayName": display_name,
+            "email": email_val
+        }
+    )
+
     return {"success": True, "message": "Access request submitted successfully."}
 
 
-# Serve React Frontend Static Files
-# Resolve the UI/dist folder path
-if hasattr(sys, "_MEIPASS"):
-    # PyInstaller single-exe temp directory
-    ui_dist_dir = os.path.join(sys._MEIPASS, "src", "UI", "dist")
-else:
-    # Dev/Standard run: relative to this file (src/Backend/main.py)
-    ui_dist_dir = os.path.abspath(os.path.join(backend_dir, "..", "UI", "dist"))
 
-# Check if front-end files exist, if so mount them
-if os.path.exists(ui_dist_dir):
-    app.frontend("/", directory=ui_dist_dir, fallback="index.html")
-    logger.info(f"Mounted frontend static files from: {ui_dist_dir} via app.frontend")
-else:
-    logger.warning(f"Frontend static files directory not found at: {ui_dist_dir}. Serving API only.")
-
-# Fallback root route if static directory is missing
 @app.get("/")
-async def root_fallback():
+async def root():
     return JSONResponse(
         status_code=200,
-        content={"message": "TicketRadar API is active. Frontend static files are not built yet."}
+        content={"message": "TicketRadar API is active."}
     )
 
 if __name__ == "__main__":

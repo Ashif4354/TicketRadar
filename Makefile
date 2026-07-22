@@ -1,9 +1,9 @@
 # Makefile for TicketRadar
 
-.PHONY: install build build-pyinstaller build-nuitka run clean
+.PHONY: install build build-pyinstaller build-nuitka build-ui run ui clean deploy
 
 # Default target
-all: build-nuitka
+all: run
 
 # Install all dependencies using uv and npm
 install:
@@ -11,6 +11,10 @@ install:
 	cd src/UI && npm install
 
 # ── Build targets ──────────────────────────────────────────────────────────────
+
+# Build only the frontend UI
+build-ui:
+	cd src/UI && npm run build
 
 # Build with Nuitka (standalone, fastest boot — recommended)
 build-nuitka:
@@ -27,7 +31,17 @@ build-pyinstaller:
 # Alias: 'make build' defaults to nuitka
 build: build-nuitka
 
+# ── Deployment ─────────────────────────────────────────────────────────────────
+
+# Deploy to FastAPI Cloud
+deploy:
+	cd src/Backend && uv run fastapi deploy
+
 # ── Dev ────────────────────────────────────────────────────────────────────────
+
+# Run only the frontend UI dev server
+ui:
+	cd src/UI && npm run dev
 
 # Run the app locally in development mode (starts both Vite dev server and FastAPI)
 run:

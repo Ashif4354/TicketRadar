@@ -5,9 +5,11 @@ import logging
 import firebase_admin
 from firebase_admin import credentials, auth, app_check, firestore
 from fastapi import Header, HTTPException, status, Depends
-from src.Backend.config import settings
+from ..utils.config import settings
+from ..services.gcp_logger import gcp_logger
 
 logger = logging.getLogger("ticketradar.auth")
+
 
 # Initialize Firebase Admin SDK
 if not firebase_admin._apps:
@@ -88,6 +90,7 @@ async def get_current_user_claims(
         claims = auth.verify_id_token(token)
     except Exception as e:
         logger.error(f"Firebase token verification failed: {e}")
+        gcp_logger.log_event("Authentication Failed", user_id="unauthenticated", details={"reason": str(e)}, level="WARNING")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid or expired ID token: {e}"
@@ -95,6 +98,8 @@ async def get_current_user_claims(
 
     # 3. Check if user is blocked
     if claims.get("blocked", False):
+        user_uid = claims.get("uid") or "unknown"
+        gcp_logger.log_event("Blocked User Access Attempt", user_id=user_uid, details={"email": claims.get("email")}, level="WARNING")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is blocked and cannot access the app content."
