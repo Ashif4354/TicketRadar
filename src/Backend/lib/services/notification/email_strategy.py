@@ -55,6 +55,17 @@ class EmailNotificationStrategy(NotificationStrategy):
             """
             rows_text += f"{t: <40} | UNAVAILABLE\n"
 
+        # Add resume note if there are remaining unavailable theatres
+        resume_note_text = ""
+        resume_note_html = ""
+        if unavailable_theatres:
+            resume_note_text = "\nNote: Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, please resume your tracker from the dashboard.\n"
+            resume_note_html = """
+                <div style="margin-top: 15px; padding: 12px 16px; background-color: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b; border-radius: 6px; font-size: 13px; color: #fbbf24; line-height: 1.5;">
+                  ℹ️ <strong>Note:</strong> Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, please resume your tracker from the dashboard.
+                </div>
+            """
+
         # Text body template (Strictly no "please")
         text_body = (
             f"TicketRadar: Booking Open!\n\n"
@@ -66,7 +77,8 @@ class EmailNotificationStrategy(NotificationStrategy):
             f"{'Theatre Name': <40} | {'Status': <12}\n"
             f"{'-'*55}\n"
             f"{rows_text}"
-            f"{'-'*55}\n\n"
+            f"{'-'*55}\n"
+            f"{resume_note_text}\n"
             f"Book tickets immediately."
         )
 
@@ -83,7 +95,7 @@ class EmailNotificationStrategy(NotificationStrategy):
                 <p style="margin-top: 0;">Booking is now open for <strong>{movie_name}</strong> on the target date <strong>{date_str}</strong>.</p>
                 
                 <h3 style="color: #ffffff; margin-top: 20px; margin-bottom: 10px;">🏢 Theatre Availability</h3>
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px;">
                   <thead>
                     <tr style="background-color: #111827; color: #ffffff;">
                       <th style="padding: 12px; border: 1px solid #374151; text-align: left;">Theatre Name</th>
@@ -94,6 +106,8 @@ class EmailNotificationStrategy(NotificationStrategy):
                     {rows_html}
                   </tbody>
                 </table>
+                
+                {resume_note_html}
 
                 <div style="margin-top: 25px; text-align: center;">
                   <a href="{url}" target="_blank" style="background: linear-gradient(135deg, #ec4899, #ef4444); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);">Book Tickets Now 🔗</a>

@@ -52,6 +52,11 @@ class DiscordWebhookNotificationStrategy(NotificationStrategy):
         # Compile the ASCII table
         ascii_table = self._generate_ascii_table(available_theatres, unavailable_theatres)
 
+        # Add resume note if there are remaining unavailable theatres
+        resume_note = ""
+        if unavailable_theatres:
+            resume_note = "\nℹ️ **Note:** Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, please resume your tracker from the dashboard.\n"
+
         # Build embed description text (Strictly no "please")
         description = (
             f"**Movie:** {movie_name}\n"
@@ -61,6 +66,7 @@ class DiscordWebhookNotificationStrategy(NotificationStrategy):
             f"```text\n"
             f"{ascii_table}\n"
             f"```\n"
+            f"{resume_note}\n"
             f"Book tickets immediately."
         )
 

@@ -187,7 +187,10 @@ class JobManager:
                                 f"📣  Alert sent via {job.notification_medium.upper()}! "
                                 f"Check your inbox / Discord."
                             )
-                            job.update_state("Success", f"{details} Alert delivered.", movie_name=movie_name)
+                            status_msg = f"{details} Alert delivered."
+                            if unavailable:
+                                status_msg += " Tracking paused — resume from dashboard to monitor remaining unavailable theatres."
+                            job.update_state("Success", status_msg, movie_name=movie_name)
                         else:
                             job_logger.error(
                                 f"⚠️  Tickets found but the alert could not be delivered. "
