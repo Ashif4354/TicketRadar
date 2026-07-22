@@ -14,7 +14,8 @@ import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { AppDashboard } from './pages/AppDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 
-import { auth, getAppCheckToken } from './lib/firebase';
+import { auth } from './lib/firebase';
+import { authenticatedFetch } from './utils/api';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 
@@ -32,16 +33,8 @@ export default function App() {
           setClaims(tokenResult.claims);
 
           // Record login event for admin Discord notification
-          const idToken = tokenResult.token;
-          const appCheckToken = await getAppCheckToken();
-          fetch('/api/users/login-event', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${idToken}`,
-              'X-Firebase-AppCheck': appCheckToken,
-              'Content-Type': 'application/json'
-            }
-          }).catch(err => console.error("Error sending login event:", err));
+          authenticatedFetch('/api/users/login-event', { method: 'POST' })
+            .catch(err => console.error("Error sending login event:", err));
         } catch (err) {
           console.error("Error fetching custom claims:", err);
         }
