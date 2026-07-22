@@ -2,9 +2,6 @@
 
 .PHONY: install build build-pyinstaller build-nuitka build-ui run ui clean
 
-# Default target
-all: build-nuitka
-
 # Install all dependencies using uv and npm
 install:
 	cd src/Backend && uv sync

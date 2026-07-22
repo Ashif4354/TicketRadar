@@ -873,28 +873,11 @@ async def request_access(
 
 
 
-# Serve React Frontend Static Files
-# Resolve the UI/dist folder path
-if hasattr(sys, "_MEIPASS"):
-    # PyInstaller single-exe temp directory
-    ui_dist_dir = os.path.join(sys._MEIPASS, "src", "UI", "dist")
-else:
-    # Dev/Standard run: relative to this file (src/Backend/main.py)
-    ui_dist_dir = os.path.abspath(os.path.join(backend_dir, "..", "UI", "dist"))
-
-# Check if front-end files exist, if so mount them
-if os.path.exists(ui_dist_dir):
-    app.frontend("/", directory=ui_dist_dir, fallback="index.html")
-    logger.info(f"Mounted frontend static files from: {ui_dist_dir} via app.frontend")
-else:
-    logger.warning(f"Frontend static files directory not found at: {ui_dist_dir}. Serving API only.")
-
-# Fallback root route if static directory is missing
 @app.get("/")
-async def root_fallback():
+async def root():
     return JSONResponse(
         status_code=200,
-        content={"message": "TicketRadar API is active. Frontend static files are not built yet."}
+        content={"message": "TicketRadar API is active."}
     )
 
 if __name__ == "__main__":
