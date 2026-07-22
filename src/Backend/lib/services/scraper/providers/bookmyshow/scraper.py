@@ -121,20 +121,6 @@ class BookMyShowBookingChecker(BookingChecker):
     using curl_cffi (browser TLS impersonation) + BeautifulSoup (HTML parsing).
     """
 
-    def __init__(self):
-        super().__init__()
-        self._session = None
-
-    def _get_session(self):
-        try:
-            from curl_cffi import requests as curl_requests
-            if self._session is None:
-                self._session = curl_requests.Session(impersonate="chrome")
-                self._session.headers.update(_HEADERS)
-            return self._session
-        except Exception:
-            return None
-
     @classmethod
     def get_required_fields(cls) -> Dict[str, Dict[str, Any]]:
         """
@@ -329,41 +315,31 @@ class BookMyShowBookingChecker(BookingChecker):
                 return False
             return True
 
-        # 1. Try persistent curl_cffi session & impersonation rotation
-        session = self._get_session()
-        impersonate_targets = ["chrome", "chrome120", "chrome110", "edge101", "safari15_5"]
-
-        for attempt, imp in enumerate(impersonate_targets):
-            if attempt > 0:
-                time.sleep(0.5)  # Backoff delay between retries
-            try:
-                from curl_cffi import requests as curl_requests
-                if session is not None:
-                    res = session.get(url, timeout=15.0, allow_redirects=True)
-                else:
+        # 1. Try curl_cffi with fresh impersonation per attempt
+        try:
+            from curl_cffi import requests as curl_requests
+            impersonate_targets = ["chrome120", "chrome110", "chrome", "edge101", "safari15_5"]
+            for attempt, imp in enumerate(impersonate_targets):
+                if attempt > 0:
+                    time.sleep(0.3)
+                try:
                     res = curl_requests.get(
                         url,
                         headers=_HEADERS,
                         impersonate=imp,
-                        timeout=15.0,
+                        timeout=12.0,
                         allow_redirects=True,
                     )
-                if res.status_code == 200 and _is_valid_bms_page(res.text):
-                    log.debug(f"HTTP 200 (via curl_cffi:{imp}, attempt {attempt+1}) — {len(res.text):,} bytes received")
-                    return res.text
-                log.debug(f"curl_cffi:{imp} returned status {res.status_code} or Cloudflare challenge page, trying next target...")
-            except Exception as attempt_exc:
-                log.debug(f"curl_cffi:{imp} attempt failed ({attempt_exc}), trying next target...")
-                # Reset session if connection failed
-                if self._session is not None:
-                    try:
-                        self._session.close()
-                    except Exception:
-                        pass
-                    self._session = None
-                    session = None
+                    if res.status_code == 200 and _is_valid_bms_page(res.text):
+                        log.debug(f"HTTP 200 (via curl_cffi:{imp}, attempt {attempt+1}) — {len(res.text):,} bytes received")
+                        return res.text
+                    log.debug(f"curl_cffi:{imp} returned status {res.status_code} or Cloudflare challenge page, trying next target...")
+                except Exception as attempt_exc:
+                    log.debug(f"curl_cffi:{imp} attempt failed ({attempt_exc}), trying next target...")
+        except ImportError:
+            log.debug("curl_cffi package not available, falling back to system curl...")
 
-        # 2. Try system curl subprocess with realistic browser headers
+        # 2. Try system curl subprocess with full browser headers
         import subprocess
         try:
             cmd = [
@@ -373,34 +349,34 @@ class BookMyShowBookingChecker(BookingChecker):
                 "-H", f"Accept: {_HEADERS['Accept']}",
                 "-H", f"Accept-Language: {_HEADERS['Accept-Language']}",
                 "-H", f"Referer: {_HEADERS['Referer']}",
+                "-H", f"Sec-Fetch-Dest: {_HEADERS['Sec-Fetch-Dest']}",
+                "-H", f"Sec-Fetch-Mode: {_HEADERS['Sec-Fetch-Mode']}",
+                "-H", f"Sec-Fetch-Site: {_HEADERS['Sec-Fetch-Site']}",
                 url,
             ]
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=20)
             if proc.stdout and _is_valid_bms_page(proc.stdout):
                 log.debug(f"HTTP 200 (via system curl) — {len(proc.stdout):,} bytes received")
                 return proc.stdout
         except Exception as exc:
             log.debug(f"System curl subprocess failed ({exc}), falling back to httpx...")
 
-        # 3. Fallback to httpx
-        with httpx.Client(
-            headers=_HEADERS,
-            follow_redirects=True,
-            timeout=30.0,
-        ) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            if not _is_valid_bms_page(response.text):
-                raise RuntimeError("Cloudflare challenge page returned by BookMyShow")
-            log.debug(f"HTTP {response.status_code} (via httpx) — {len(response.text):,} bytes received")
-            return response.text
+        # 3. Fallback to httpx with graceful exception handling
+        try:
+            with httpx.Client(
+                headers=_HEADERS,
+                follow_redirects=True,
+                timeout=20.0,
+            ) as client:
+                response = client.get(url)
+                if response.status_code == 200 and _is_valid_bms_page(response.text):
+                    log.debug(f"HTTP 200 (via httpx) — {len(response.text):,} bytes received")
+                    return response.text
+                raise RuntimeError(f"HTTP {response.status_code} returned by BookMyShow")
+        except Exception as exc:
+            raise RuntimeError(f"BookMyShow Cloudflare security check active. Will retry shortly. ({exc})") from exc
 
     async def close(self) -> None:
-        """Release persistent session resources if open."""
-        if self._session is not None:
-            try:
-                self._session.close()
-            except Exception:
-                pass
-            self._session = None
+        """No persistent resources to release."""
+        pass
 
