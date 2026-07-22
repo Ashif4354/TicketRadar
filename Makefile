@@ -1,6 +1,9 @@
 # Makefile for TicketRadar
 
-.PHONY: install build build-pyinstaller build-nuitka build-ui run ui clean
+.PHONY: install build build-pyinstaller build-nuitka build-ui run ui clean deploy
+
+# Default target
+all: run
 
 # Install all dependencies using uv and npm
 install:
@@ -28,6 +31,12 @@ build-pyinstaller:
 # Alias: 'make build' defaults to nuitka
 build: build-nuitka
 
+# ── Deployment ─────────────────────────────────────────────────────────────────
+
+# Deploy to FastAPI Cloud
+deploy:
+	cd src/Backend && uv run fastapi deploy
+
 # ── Dev ────────────────────────────────────────────────────────────────────────
 
 # Run only the frontend UI dev server
@@ -48,4 +57,3 @@ clean:
 	[shutil.rmtree(d, ignore_errors=True) for d in ['../../build', '../../dist'] if os.path.exists(d)]; \
 	shutil.rmtree('../../src/UI/dist', ignore_errors=True); \
 	[os.remove(f) for f in glob.glob('../../*.exe')]"
-
