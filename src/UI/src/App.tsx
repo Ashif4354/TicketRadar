@@ -7,7 +7,7 @@ import {
   Radar, Film, Calendar, MessageSquare, Clock, 
   Play, Pause, Trash2, Sliders, Plus, Send, 
   AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  ExternalLink, RefreshCw, Sparkles, LogOut, Shield, Lock, Timer, Power
+  ExternalLink, RefreshCw, LogOut, Shield, Lock, Timer, Power
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
