@@ -295,10 +295,45 @@ class BookMyShowBookingChecker(BookingChecker):
 
     def _fetch(self, url: str, log) -> str:
         """
-        Synchronous HTTP GET with browser-like headers.
+        Synchronous HTTP GET using browser impersonation (curl_cffi / system curl)
+        to bypass Cloudflare TLS fingerprinting (403 Forbidden).
         Runs in a thread via asyncio.to_thread so it doesn't block the event loop.
         """
         log.debug(f"GET {url}")
+
+        # 1. Try curl_cffi for browser TLS fingerprint impersonation (bypasses WAF 403)
+        try:
+            from curl_cffi import requests as curl_requests
+            res = curl_requests.get(
+                url,
+                headers=_HEADERS,
+                impersonate="chrome",
+                timeout=30.0,
+                allow_redirects=True,
+            )
+            res.raise_for_status()
+            log.debug(f"HTTP {res.status_code} (via curl_cffi) — {len(res.text):,} bytes received")
+            return res.text
+        except Exception as exc:
+            log.debug(f"curl_cffi fetch failed ({exc}), attempting system curl fallback...")
+
+        # 2. Try system curl subprocess (uses native OS TLS stack)
+        import subprocess
+        try:
+            cmd = [
+                "curl.exe" if subprocess.os.name == "nt" else "curl",
+                "-s", "-L",
+                "-A", _HEADERS.get("User-Agent", "Mozilla/5.0"),
+                url,
+            ]
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+            if proc.stdout and len(proc.stdout) > 500:
+                log.debug(f"HTTP 200 (via system curl) — {len(proc.stdout):,} bytes received")
+                return proc.stdout
+        except Exception as exc:
+            log.debug(f"System curl subprocess failed ({exc}), falling back to httpx...")
+
+        # 3. Fallback to httpx
         with httpx.Client(
             headers=_HEADERS,
             follow_redirects=True,
@@ -306,9 +341,10 @@ class BookMyShowBookingChecker(BookingChecker):
         ) as client:
             response = client.get(url)
             response.raise_for_status()
-            log.debug(f"HTTP {response.status_code} — {len(response.text):,} bytes received")
+            log.debug(f"HTTP {response.status_code} (via httpx) — {len(response.text):,} bytes received")
             return response.text
 
     async def close(self) -> None:
         """No persistent resources to release."""
         pass
+

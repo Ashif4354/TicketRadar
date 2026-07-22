@@ -37,6 +37,7 @@ a = Analysis(
         'pydantic_settings',
         'aiosmtplib',
         'httpx',
+        'curl_cffi',
         'bs4',
         'asyncio',
         'platformdirs',
