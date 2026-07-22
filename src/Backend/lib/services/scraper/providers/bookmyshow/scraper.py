@@ -17,19 +17,23 @@ logger = logging.getLogger(__name__)
 _HEADERS = {
     "Accept": (
         "text/html,application/xhtml+xml,application/xml;"
-        "q=0.9,image/avif,image/webp,image/apng,*/*;"
-        "q=0.8,application/signed-exchange;v=b3;q=0.7"
+        "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
     ),
-    "Service-Worker-Navigation-Preload": "true",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "max-age=0",
+    "Sec-Ch-Ua": '"Chromium";v="130", "Google Chrome";v="130"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
     "Upgrade-Insecure-Requests": "1",
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+        "Chrome/130.0.0.0 Safari/537.36"
     ),
-    "sec-ch-ua": '"Not;A=Brand";v="8", "Chromium";v="150", "Microsoft Edge";v="150"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
 }
 
 
@@ -296,38 +300,54 @@ class BookMyShowBookingChecker(BookingChecker):
     def _fetch(self, url: str, log) -> str:
         """
         Synchronous HTTP GET using browser impersonation (curl_cffi / system curl)
-        to bypass Cloudflare TLS fingerprinting (403 Forbidden).
+        with Cloudflare challenge validation and automatic retry rotation to guarantee high success rates.
         Runs in a thread via asyncio.to_thread so it doesn't block the event loop.
         """
         log.debug(f"GET {url}")
 
-        # 1. Try curl_cffi for browser TLS fingerprint impersonation (bypasses WAF 403)
+        def _is_valid_bms_page(html: str) -> bool:
+            if not html or len(html) < 2000:
+                return False
+            html_lower = html.lower()
+            if "attention required" in html_lower or "just a moment" in html_lower or "cf-browser-verification" in html_lower:
+                return False
+            return True
+
+        # 1. Try curl_cffi with impersonation target rotation
         try:
             from curl_cffi import requests as curl_requests
-            res = curl_requests.get(
-                url,
-                headers=_HEADERS,
-                impersonate="chrome",
-                timeout=30.0,
-                allow_redirects=True,
-            )
-            res.raise_for_status()
-            log.debug(f"HTTP {res.status_code} (via curl_cffi) — {len(res.text):,} bytes received")
-            return res.text
-        except Exception as exc:
-            log.debug(f"curl_cffi fetch failed ({exc}), attempting system curl fallback...")
+            impersonate_targets = ["chrome", "chrome120", "chrome110", "edge101", "safari15_5"]
+            for attempt, imp in enumerate(impersonate_targets):
+                try:
+                    res = curl_requests.get(
+                        url,
+                        headers=_HEADERS,
+                        impersonate=imp,
+                        timeout=15.0,
+                        allow_redirects=True,
+                    )
+                    if res.status_code == 200 and _is_valid_bms_page(res.text):
+                        log.debug(f"HTTP 200 (via curl_cffi:{imp}, attempt {attempt+1}) — {len(res.text):,} bytes received")
+                        return res.text
+                    log.debug(f"curl_cffi:{imp} returned status {res.status_code} or Cloudflare challenge page, trying next target...")
+                except Exception as attempt_exc:
+                    log.debug(f"curl_cffi:{imp} attempt failed ({attempt_exc}), trying next target...")
+        except ImportError:
+            log.debug("curl_cffi package not available, falling back to system curl...")
 
-        # 2. Try system curl subprocess (uses native OS TLS stack)
+        # 2. Try system curl subprocess with realistic browser headers
         import subprocess
         try:
             cmd = [
                 "curl.exe" if subprocess.os.name == "nt" else "curl",
                 "-s", "-L",
-                "-A", _HEADERS.get("User-Agent", "Mozilla/5.0"),
+                "-H", f"User-Agent: {_HEADERS['User-Agent']}",
+                "-H", f"Accept: {_HEADERS['Accept']}",
+                "-H", f"Accept-Language: {_HEADERS['Accept-Language']}",
                 url,
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
-            if proc.stdout and len(proc.stdout) > 500:
+            if proc.stdout and _is_valid_bms_page(proc.stdout):
                 log.debug(f"HTTP 200 (via system curl) — {len(proc.stdout):,} bytes received")
                 return proc.stdout
         except Exception as exc:
@@ -341,6 +361,8 @@ class BookMyShowBookingChecker(BookingChecker):
         ) as client:
             response = client.get(url)
             response.raise_for_status()
+            if not _is_valid_bms_page(response.text):
+                raise RuntimeError("Cloudflare challenge page returned by BookMyShow")
             log.debug(f"HTTP {response.status_code} (via httpx) — {len(response.text):,} bytes received")
             return response.text
 
