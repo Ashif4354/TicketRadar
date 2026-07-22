@@ -53,10 +53,17 @@ export const getAppCheckToken = async (): Promise<string> => {
   }
 };
 
-export const getAuthToken = async (): Promise<string> => {
+export const getAuthToken = async (forceRefresh: boolean = false): Promise<string> => {
+  if (!auth.currentUser) {
+    try {
+      await auth.authStateReady();
+    } catch (e) {
+      // ignore authStateReady error
+    }
+  }
   if (!auth.currentUser) return "";
   try {
-    return await auth.currentUser.getIdToken();
+    return await auth.currentUser.getIdToken(forceRefresh);
   } catch (err) {
     console.error("Failed to get ID token:", err);
     return "";
