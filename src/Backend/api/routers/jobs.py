@@ -142,6 +142,9 @@ async def create_job(
         notif_config = {"webhook_url": webhook}
         medium_name = "Discord Webhook"
 
+    # Fetch creator details
+    user_name, email, _ = get_user_details(claims.get("uid"), claims)
+
     # Create Monitor Job
     new_job = MonitorJob(
         params=params,
@@ -149,12 +152,12 @@ async def create_job(
         notification_config=notif_config,
         service_provider=service_provider,
         check_interval=payload.check_interval,
-        created_by=claims.get("uid")
+        created_by=claims.get("uid"),
+        creator_email=email
     )
 
     success = manager.start_job(new_job)
     if success:
-        user_name, email, _ = get_user_details(claims.get("uid"), claims)
         background_tasks.add_task(
             admin_notifier.notify_job_created,
             new_job.id,

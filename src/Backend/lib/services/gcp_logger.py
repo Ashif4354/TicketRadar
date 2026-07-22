@@ -3,10 +3,15 @@
 import os
 import logging
 import traceback
+import contextvars
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from ..utils.config import settings
+
+# ContextVars to track current running task/job metadata across async tasks
+current_job_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("current_job_id", default=None)
+current_job_creator: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("current_job_creator", default=None)
 
 # Module logger for fallback/local logging
 logger = logging.getLogger("ticketradar.gcp_logger")
@@ -14,13 +19,28 @@ logger = logging.getLogger("ticketradar.gcp_logger")
 class FrameworkLogFilter(logging.Filter):
     """
     Filter to suppress uvicorn and fastapi INFO-level log records from Google Cloud Logging.
-    WARNING, ERROR, and CRITICAL logs from any source are allowed.
+    Also injects task_id and task_creator metadata labels into all standard python log records.
     """
     def filter(self, record: logging.LogRecord) -> bool:
         logger_name = record.name.lower()
         if record.levelno <= logging.INFO:
             if "uvicorn" in logger_name or "fastapi" in logger_name:
                 return False
+
+        # Enrich log record with task metadata for GCP Logging
+        task_id = getattr(record, "job_id", None) or getattr(record, "task_id", None) or current_job_id.get() or "N/A"
+        task_creator = getattr(record, "created_by", None) or getattr(record, "creator_email", None) or getattr(record, "task_creator", None) or current_job_creator.get() or "N/A"
+
+        if not hasattr(record, "_labels") or record._labels is None:
+            record._labels = {}
+        record._labels["task_id"] = str(task_id)
+        record._labels["task_creator"] = str(task_creator)
+
+        if not hasattr(record, "json_fields") or record.json_fields is None:
+            record.json_fields = {}
+        record.json_fields["task_id"] = str(task_id)
+        record.json_fields["task_creator"] = str(task_creator)
+
         return True
 
 class GCPLoggingService:
@@ -106,7 +126,7 @@ class GCPLoggingService:
         - user_id: Authenticated user UID or 'system' / 'unauthenticated'
         - action: Action description (e.g. "Job Created", "User Blocked")
         - details: Contextual event data dictionary
-        - metadata: Request details, severity, service info
+        - metadata: Request details, severity, service info, task_id, task_creator
         """
         timestamp = datetime.now(timezone.utc).isoformat()
         event_details = details if details is not None else {}
@@ -115,9 +135,14 @@ class GCPLoggingService:
             event_details["error"] = str(exception)
             event_details["traceback"] = traceback.format_exc()
 
+        task_id = event_details.get("job_id") or event_details.get("task_id") or current_job_id.get() or "N/A"
+        task_creator = event_details.get("task_creator") or event_details.get("creator_email") or current_job_creator.get() or user_id or "N/A"
+
         metadata: Dict[str, Any] = {
             "service": "ticketradar-backend",
-            "severity": level.upper()
+            "severity": level.upper(),
+            "task_id": str(task_id),
+            "task_creator": str(task_creator)
         }
 
         if request:

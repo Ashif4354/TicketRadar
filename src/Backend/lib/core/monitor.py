@@ -11,7 +11,7 @@ from .job import MonitorJob
 from ..utils.logger import get_job_logger
 from ..services.scraper.factory import ScraperFactory
 from ..services.notification.factory import NotificationStrategyFactory
-from ..services.gcp_logger import gcp_logger
+from ..services.gcp_logger import gcp_logger, current_job_id, current_job_creator
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +223,9 @@ class JobManager:
         )
 
         scraper = ScraperFactory.create_scraper(job.service_provider)
+        creator_email = job.creator_email or job.created_by or "system"
+        tok_id = current_job_id.set(job.id)
+        tok_creator = current_job_creator.set(creator_email)
 
         try:
             while not stop_event.is_set():
@@ -279,6 +282,7 @@ class JobManager:
                                 user_id=job.created_by or "system",
                                 details={
                                     "job_id": job.id,
+                                    "task_creator": creator_email,
                                     "movie_name": job.movie_name,
                                     "available_theatres": available,
                                     "notification_medium": job.notification_medium,
@@ -297,6 +301,7 @@ class JobManager:
                                 user_id=job.created_by or "system",
                                 details={
                                     "job_id": job.id,
+                                    "task_creator": creator_email,
                                     "movie_name": job.movie_name,
                                     "reason": notif_msg
                                 },
@@ -315,8 +320,8 @@ class JobManager:
 
                 else:
                     job_logger.info(f"⏳  Next check in {job.check_interval} seconds...")
+                    # Update state in RAM (for API responses) without writing to Firestore every loop
                     job.update_state("Running", details)
-                    self._save_job_to_firestore(job)
 
                 # Responsive sleep: wake up immediately if stop is requested
                 for _ in range(job.check_interval):
@@ -324,6 +329,8 @@ class JobManager:
                         break
                     await asyncio.sleep(1)
         finally:
+            current_job_id.reset(tok_id)
+            current_job_creator.reset(tok_creator)
             try:
                 await scraper.close()
             except Exception:

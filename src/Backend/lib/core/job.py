@@ -20,7 +20,8 @@ class MonitorJob:
         service_provider: str = "bookmyshow",
         check_interval: Optional[int] = None,
         job_id: Optional[str] = None,
-        created_by: Optional[str] = None
+        created_by: Optional[str] = None,
+        creator_email: Optional[str] = None
     ):
         self.id = job_id or str(uuid.uuid4())[:8]  # Short, readable ID
         self.params = params
@@ -30,6 +31,7 @@ class MonitorJob:
         self.check_interval = max(30, check_interval) if check_interval is not None else 30
         self.movie_name = "Fetching..."
         self.created_by = created_by
+        self.creator_email = creator_email
         
         self.created_at = datetime.now()
         self.status = "Idle"  # Idle, Running, Success, Error, Stopped
@@ -58,7 +60,7 @@ class MonitorJob:
         return [str(t).strip() for t in raw_theatres if str(t).strip()]
 
     def update_state(self, status: str, last_result: str, movie_name: Optional[str] = None) -> None:
-        """Thread-safely updates the state of the job."""
+        """Thread-safely updates the state of the job in memory."""
         with self._lock:
             self.status = status
             self.last_result = last_result
@@ -67,7 +69,7 @@ class MonitorJob:
                 self.movie_name = movie_name
 
     def get_state(self) -> Dict[str, Any]:
-        """Thread-safely returns a snapshot of the job state."""
+        """Thread-safely returns a full snapshot of the job state for API responses."""
         with self._lock:
             return {
                 "id": self.id,
@@ -85,10 +87,14 @@ class MonitorJob:
                 "last_checked_at": self.last_checked_at,
                 "last_result": self.last_result,
                 "created_by": self.created_by,
+                "creator_email": self.creator_email,
             }
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serializes the MonitorJob instance to a Firestore-compatible dictionary."""
+        """
+        Serializes essential job metadata to a Firestore-compatible dictionary.
+        Note: last_result and last_checked_at are omitted to prevent unnecessary cloud costs.
+        """
         with self._lock:
             return {
                 "id": self.id,
@@ -99,10 +105,9 @@ class MonitorJob:
                 "check_interval": self.check_interval,
                 "movie_name": self.movie_name,
                 "created_by": self.created_by,
+                "creator_email": self.creator_email,
                 "status": self.status,
-                "last_result": self.last_result,
                 "created_at": self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
-                "last_checked_at": self.last_checked_at.isoformat() if isinstance(self.last_checked_at, datetime) else self.last_checked_at,
             }
 
     @classmethod
@@ -115,7 +120,8 @@ class MonitorJob:
             service_provider=data.get("service_provider", "bookmyshow"),
             check_interval=data.get("check_interval", 30),
             job_id=data.get("id"),
-            created_by=data.get("created_by")
+            created_by=data.get("created_by"),
+            creator_email=data.get("creator_email")
         )
         job.movie_name = data.get("movie_name", "Fetching...")
         job.status = data.get("status", "Idle")
