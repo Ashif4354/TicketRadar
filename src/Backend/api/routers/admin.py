@@ -21,20 +21,76 @@ router = APIRouter(
 )
 
 
+@router.get("/counts")
+async def admin_get_counts():
+    """Returns lightweight counts for requests, users, and jobs without pulling heavy user claim data."""
+    try:
+        req_count = 0
+        if db is not None:
+            try:
+                docs = db.collection("access_requests").where("status", "==", "pending").stream()
+                req_count = sum(1 for _ in docs)
+            except Exception as fe:
+                logger.warning(f"Error counting pending requests: {fe}")
+
+        page = firebase_auth.list_users()
+        user_count = len(page.users)
+
+        jobs_count = len(manager.get_all_jobs())
+
+        return {
+            "requests": req_count,
+            "users": user_count,
+            "jobs": jobs_count
+        }
+    except Exception as e:
+        logger.error(f"Error fetching admin counts: {e}")
+        return {"requests": 0, "users": 0, "jobs": 0}
+
+
 @router.get("/users")
 async def admin_list_users():
-    """Lists all users from Firebase Authentication."""
+    """Lists all users from Firebase Authentication enriched with exact access status from Firestore DB & Claims."""
     try:
+        access_req_map = {}
+        if db is not None:
+            try:
+                docs = db.collection("access_requests").stream()
+                for doc in docs:
+                    data = doc.to_dict() or {}
+                    status = data.get("status")
+                    uid = data.get("uid")
+                    if uid:
+                        access_req_map[uid] = status
+                    access_req_map[doc.id] = status
+            except Exception as firestore_err:
+                logger.warning(f"Could not fetch access requests for user status: {firestore_err}")
+
         page = firebase_auth.list_users()
         users_list = []
         for u in page.users:
+            claims = u.custom_claims or {}
+            db_status = access_req_map.get(u.uid)
+
+            if claims.get("blocked") is True or db_status == "blocked":
+                access_status = "blocked"
+            elif claims.get("role") == "admin" or claims.get("authorized") is True or db_status == "approved":
+                access_status = "authorized"
+            elif db_status == "pending":
+                access_status = "pending"
+            elif db_status == "denied":
+                access_status = "denied"
+            else:
+                access_status = "not yet requested"
+
             users_list.append({
                 "uid": u.uid,
                 "email": u.email,
                 "displayName": u.display_name,
                 "photoUrl": u.photo_url,
                 "disabled": u.disabled,
-                "custom_claims": u.custom_claims or {}
+                "custom_claims": claims,
+                "access_status": access_status
             })
         return users_list
     except Exception as e:
@@ -89,6 +145,9 @@ async def admin_block_user(
     try:
         user = firebase_auth.get_user(uid)
         claims = user.custom_claims or {}
+        if claims.get("role") == "admin":
+            raise HTTPException(status_code=400, detail="Admin users cannot be blocked.")
+
         claims["blocked"] = True
         firebase_auth.set_custom_user_claims(uid, claims)
 
@@ -106,6 +165,8 @@ async def admin_block_user(
         )
 
         return {"success": True, "message": "User blocked successfully."}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error blocking user: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -145,7 +206,7 @@ async def admin_unblock_user(
 
 @router.get("/requests")
 async def admin_list_requests():
-    """Lists all access requests from Firestore."""
+    """Lists pending and denied access requests from Firestore (excluding approved requests), enriched with user details."""
     if db is None:
         raise HTTPException(status_code=500, detail="Firestore is not available.")
     try:
@@ -154,6 +215,20 @@ async def admin_list_requests():
         reqs = []
         for doc in docs:
             data = doc.to_dict()
+            if data.get("status") == "approved":
+                continue
+
+            uid = data.get("uid")
+            if uid:
+                u_name, u_email, u_photo = get_user_details(uid)
+                resolved_name = data.get("name") or data.get("displayName") or u_name
+                if not resolved_name or resolved_name == "User":
+                    resolved_name = u_email.split("@")[0] if u_email else "User"
+                data["name"] = resolved_name
+                data["displayName"] = resolved_name
+                data["email"] = data.get("email") or u_email
+                data["photoUrl"] = data.get("photoUrl") or u_photo
+
             if "requested_at" in data and data["requested_at"]:
                 data["requested_at"] = data["requested_at"].isoformat()
             if "approved_at" in data and data["approved_at"]:

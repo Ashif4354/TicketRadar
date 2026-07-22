@@ -94,8 +94,7 @@ async def request_access(
         raise HTTPException(status_code=500, detail="Firestore is not configured.")
 
     uid = claims.get("uid")
-    email = claims.get("email")
-    display_name = claims.get("name", "")
+    name, email_val, photo_url = get_user_details(uid, claims)
 
     # Check if already has a pending request
     doc_ref = db.collection("access_requests").document(uid)
@@ -107,20 +106,21 @@ async def request_access(
 
     doc_ref.set({
         "uid": uid,
-        "email": email,
-        "displayName": display_name,
+        "email": email_val,
+        "name": name,
+        "displayName": name,
+        "photoUrl": photo_url,
         "status": "pending",
         "requested_at": google_firestore.SERVER_TIMESTAMP
     })
 
-    name, email_val, photo_url = get_user_details(uid, claims)
     background_tasks.add_task(admin_notifier.notify_access_request_created, name, email_val, photo_url)
 
     gcp_logger.log_event(
         "Access Request Submitted",
         user_id=uid,
         details={
-            "displayName": display_name,
+            "displayName": name,
             "email": email_val
         }
     )
