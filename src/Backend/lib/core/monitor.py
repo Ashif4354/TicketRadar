@@ -49,6 +49,10 @@ class JobManager:
         )
         self.loop_thread.start()
         logger.info("JobManager Singleton initialized. Async background loop running.")
+        
+        # Hydrate active jobs from Firestore and auto-resume running tasks
+        self._load_jobs_from_firestore()
+        self._resume_running_jobs()
 
     def _run_async_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         """Runs the asyncio event loop forever in a background thread."""
@@ -58,6 +62,79 @@ class JobManager:
     async def _create_event(self) -> asyncio.Event:
         """Helper coroutine to create an Event on the loop thread."""
         return asyncio.Event()
+
+    def _save_job_to_firestore(self, job: MonitorJob) -> None:
+        """Upserts a MonitorJob document into the Firestore 'jobs' collection."""
+        try:
+            from .auth import db
+            if db:
+                db.collection("jobs").document(job.id).set(job.to_dict(), merge=True)
+                logger.debug(f"Saved job {job.id} to Firestore.")
+        except Exception as e:
+            logger.error(f"Failed to save job {job.id} to Firestore: {e}")
+
+    def _delete_job_from_firestore(self, job_id: str) -> None:
+        """Deletes a job document from the Firestore 'jobs' collection."""
+        try:
+            from .auth import db
+            if db:
+                db.collection("jobs").document(job_id).delete()
+                logger.info(f"Deleted job {job_id} from Firestore.")
+        except Exception as e:
+            logger.error(f"Failed to delete job {job_id} from Firestore: {e}")
+
+    def _load_jobs_from_firestore(self) -> None:
+        """Loads active/non-deleted jobs from the Firestore 'jobs' collection upon startup."""
+        try:
+            from .auth import db
+            if not db:
+                logger.warning("Firestore client not available. Skipping job restoration from Firestore.")
+                return
+
+            docs = db.collection("jobs").stream()
+            loaded_count = 0
+            with self.lock:
+                for doc in docs:
+                    data = doc.to_dict()
+                    if not data:
+                        continue
+                    if data.get("status") == "Deleted":
+                        continue
+                    job = MonitorJob.from_dict(data)
+                    self.jobs[job.id] = job
+                    loaded_count += 1
+
+            logger.info(f"Successfully restored {loaded_count} active job(s) from Firestore.")
+        except Exception as e:
+            logger.error(f"Failed to load jobs from Firestore: {e}")
+
+    def _resume_running_jobs(self) -> None:
+        """Automatically restarts monitoring loops for jobs that were in 'Running' state."""
+        with self.lock:
+            running_jobs = [job for job in list(self.jobs.values()) if job.status == "Running"]
+        
+        if not running_jobs:
+            return
+
+        logger.info(f"Found {len(running_jobs)} active running job(s) to resume on startup.")
+        for job in running_jobs:
+            # Temporarily reset status so start_job doesn't reject it as already running
+            job.status = "Idle"
+            success = self.start_job(job)
+            if success:
+                logger.info(f"⚡ Auto-resumed monitor loop for job #{job.id} ({job.movie_name}).")
+            else:
+                logger.warning(f"Failed to auto-resume job #{job.id}.")
+
+    def stop_all_jobs_for_shutdown(self) -> None:
+        """Stops background monitoring loops for all jobs on server shutdown without altering persistent job status."""
+        logger.info("Signaling background monitor tasks to stop for server shutdown...")
+        with self.lock:
+            for job_id, event in list(self.stop_events.items()):
+                try:
+                    self.loop.call_soon_threadsafe(event.set)
+                except Exception as e:
+                    logger.error(f"Error setting stop event for job {job_id} on shutdown: {e}")
 
     def start_job(self, job: MonitorJob) -> bool:
         """Starts a background async monitor task for the given job."""
@@ -85,6 +162,7 @@ class JobManager:
             )
             
             job.update_state("Running", "Starting monitoring loop...")
+            self._save_job_to_firestore(job)
             logger.info(f"Asynchronous task scheduled on loop for job {job.id}.")
             return True
 
@@ -102,6 +180,7 @@ class JobManager:
                 logger.info(f"Stop signal sent (Event set) for job {job_id}.")
             
             job.update_state("Stopped", "Monitoring stopped by user.")
+            self._save_job_to_firestore(job)
             return True
 
     def delete_job(self, job_id: str) -> bool:
@@ -117,9 +196,11 @@ class JobManager:
             if job_id in self.stop_events:
                 del self.stop_events[job_id]
                 
+        self._delete_job_from_firestore(job_id)
         # Log job deletion
         logger.info(f"Job {job_id} completely deleted and cleaned.")
         return True
+
 
     def get_job(self, job_id: str) -> Optional[MonitorJob]:
         """Retrieves a job by its ID."""
@@ -192,6 +273,7 @@ class JobManager:
                             if unavailable:
                                 status_msg += " Tracking paused — resume from dashboard to monitor remaining unavailable theatres."
                             job.update_state("Success", status_msg, movie_name=movie_name)
+                            self._save_job_to_firestore(job)
                             gcp_logger.log_event(
                                 "Ticket Booking Alert Delivered",
                                 user_id=job.created_by or "system",
@@ -209,6 +291,7 @@ class JobManager:
                                 f"Reason: {notif_msg}"
                             )
                             job.update_state("Error", f"{details} Alert failed: {notif_msg}", movie_name=movie_name)
+                            self._save_job_to_firestore(job)
                             gcp_logger.log_event(
                                 "Ticket Booking Alert Delivery Failed",
                                 user_id=job.created_by or "system",
@@ -225,6 +308,7 @@ class JobManager:
                             f"⚠️  Tickets found but an error occurred while sending the alert. ({notif_err})"
                         )
                         job.update_state("Error", f"{details} Alert error: {str(notif_err)}", movie_name=movie_name)
+                        self._save_job_to_firestore(job)
 
                     # Stop monitoring once booking is successfully found
                     break
@@ -232,6 +316,7 @@ class JobManager:
                 else:
                     job_logger.info(f"⏳  Next check in {job.check_interval} seconds...")
                     job.update_state("Running", details)
+                    self._save_job_to_firestore(job)
 
                 # Responsive sleep: wake up immediately if stop is requested
                 for _ in range(job.check_interval):

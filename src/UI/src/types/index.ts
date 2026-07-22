@@ -23,6 +23,8 @@ export interface Job {
   last_checked_at: string | null;
   last_result: string;
   created_by?: string;
+  user_name?: string;
+  user_email?: string;
 }
 
 export interface AppConfig {

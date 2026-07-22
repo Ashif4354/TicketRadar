@@ -59,7 +59,7 @@ def verify_job_access(job_id: str, claims: dict) -> MonitorJob:
 
 @router.get("")
 async def get_jobs(claims: dict = Depends(get_authorized_user)):
-    """Returns a list of all current jobs and their states."""
+    """Returns a list of all current jobs and their states, enriched with user details for admin view."""
     is_admin = claims.get("role") == "admin"
     user_uid = claims.get("uid")
 
@@ -69,8 +69,24 @@ async def get_jobs(claims: dict = Depends(get_authorized_user)):
     else:
         current_jobs = [j for j in all_jobs if j.created_by == user_uid]
 
+    user_cache = {}
+    enriched_jobs = []
+    for job in current_jobs:
+        state = job.get_state()
+        creator_uid = job.created_by
+        if creator_uid:
+            if creator_uid not in user_cache:
+                u_name, u_email, _ = get_user_details(creator_uid)
+                user_cache[creator_uid] = {"user_name": u_name, "user_email": u_email}
+            state["user_name"] = user_cache[creator_uid]["user_name"]
+            state["user_email"] = user_cache[creator_uid]["user_email"]
+        else:
+            state["user_name"] = "System"
+            state["user_email"] = ""
+        enriched_jobs.append(state)
+
     return JSONResponse(
-        content=jsonable_encoder([job.get_state() for job in current_jobs]),
+        content=jsonable_encoder(enriched_jobs),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 

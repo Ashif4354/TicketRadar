@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, AlertTriangle, RefreshCw, Film, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -370,7 +370,7 @@ export function AdminDashboard() {
                 <thead>
                   <tr className="border-b border-border/50 text-muted-foreground font-bold">
                     <th className="pb-3">Movie</th>
-                    <th className="pb-3">Created By (Owner UID)</th>
+                    <th className="pb-3">User (Name & UID)</th>
                     <th className="pb-3">Details</th>
                     <th className="pb-3">Status</th>
                     <th className="pb-3 text-right">Actions</th>
@@ -391,7 +391,11 @@ export function AdminDashboard() {
                           </div>
                           <div className="text-[10px] text-muted-foreground font-mono">Job #{j.id}</div>
                         </td>
-                        <td className="py-3.5 text-muted-foreground font-mono text-[10px]">{j.created_by || "System"}</td>
+                        <td className="py-3.5">
+                          <div className="font-semibold text-foreground">{j.user_name || "Unknown User"}</div>
+                          {j.user_email && <div className="text-[10px] text-muted-foreground">{j.user_email}</div>}
+                          <div className="text-[10px] text-muted-foreground/70 font-mono">UID: {j.created_by || "System"}</div>
+                        </td>
                         <td className="py-3.5 text-muted-foreground space-y-0.5">
                           <div className="flex items-center gap-1.5">
                             <Calendar className="h-3 w-3 shrink-0" />

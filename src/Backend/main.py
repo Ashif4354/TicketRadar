@@ -30,10 +30,9 @@ manager = JobManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
-    # Shutdown: Stop all running jobs on exit
+    # Shutdown: Signal all running job loops to stop gracefully for server shutdown
     logger.info("Shutting down backend app...")
-    for job in manager.get_all_jobs():
-        manager.stop_job(job.id)
+    manager.stop_all_jobs_for_shutdown()
 
 
 app = FastAPI(

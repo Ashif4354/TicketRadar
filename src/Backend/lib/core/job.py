@@ -86,3 +86,58 @@ class MonitorJob:
                 "last_result": self.last_result,
                 "created_by": self.created_by,
             }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serializes the MonitorJob instance to a Firestore-compatible dictionary."""
+        with self._lock:
+            return {
+                "id": self.id,
+                "params": self.params,
+                "service_provider": self.service_provider,
+                "notification_medium": self.notification_medium,
+                "notification_config": self.notification_config,
+                "check_interval": self.check_interval,
+                "movie_name": self.movie_name,
+                "created_by": self.created_by,
+                "status": self.status,
+                "last_result": self.last_result,
+                "created_at": self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
+                "last_checked_at": self.last_checked_at.isoformat() if isinstance(self.last_checked_at, datetime) else self.last_checked_at,
+            }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MonitorJob":
+        """Deserializes a dictionary (e.g. from Firestore) into a MonitorJob instance."""
+        job = cls(
+            params=data.get("params", {}),
+            notification_medium=data.get("notification_medium", "email"),
+            notification_config=data.get("notification_config", {}),
+            service_provider=data.get("service_provider", "bookmyshow"),
+            check_interval=data.get("check_interval", 30),
+            job_id=data.get("id"),
+            created_by=data.get("created_by")
+        )
+        job.movie_name = data.get("movie_name", "Fetching...")
+        job.status = data.get("status", "Idle")
+        job.last_result = data.get("last_result", "Created")
+
+        created_at_val = data.get("created_at")
+        if isinstance(created_at_val, str):
+            try:
+                job.created_at = datetime.fromisoformat(created_at_val)
+            except ValueError:
+                pass
+        elif isinstance(created_at_val, datetime):
+            job.created_at = created_at_val
+
+        last_checked_val = data.get("last_checked_at")
+        if isinstance(last_checked_val, str):
+            try:
+                job.last_checked_at = datetime.fromisoformat(last_checked_val)
+            except ValueError:
+                pass
+        elif isinstance(last_checked_val, datetime):
+            job.last_checked_at = last_checked_val
+
+        return job
+
