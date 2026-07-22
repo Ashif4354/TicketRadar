@@ -30,31 +30,11 @@ Copy `src/Backend/.env.example` to `src/Backend/.env`:
 ```bash
 cp src/Backend/.env.example src/Backend/.env
 ```
-Open `.env` and fill in your Gmail SMTP configurations, Google reCAPTCHA keys, and Firebase Admin SDK credentials:
-```ini
-# SMTP Configuration (Required for Email notifications)
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_EMAIL=your-email@gmail.com
-SMTP_PASSWORD=your_gmail_app_password
-
-# reCAPTCHA Configuration
-RECAPTCHA_SITE=your_recaptcha_site_key
-RECAPTCHA_SECRET=your_recaptcha_secret_key
-
-# Firebase Configuration (Required for authentication and authorization)
-FIREBASE_TYPE=service_account
-FIREBASE_PROJECT_ID=your_firebase_project_id
-FIREBASE_PRIVATE_KEY_ID=your_private_key_id
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour_private_key_content\n-----END PRIVATE KEY-----\n"
-FIREBASE_CLIENT_EMAIL=your_firebase_client_email
-FIREBASE_CLIENT_ID=your_client_id
-...
-```
 
 ### 2. Run the Dashboard
 Ensure `uv` and `node` (v18+) are installed, then run the installation and startup commands:
 ```bash
+cp src/UI/.env.example src/UI/.env
 make install
 make run
 ```

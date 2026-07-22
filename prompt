@@ -1,6 +1,0 @@
-Big Migration
-
-We are migrating from streamlit ui to react + fastapi ui (full async)
-
-migrate the streamlit ui to react ui in src/UI with vite
-and make the backend accessible via FastAPI. The goal is to create a seamless user experience while leveraging the benefits of React for the frontend and FastAPI for the backend.
