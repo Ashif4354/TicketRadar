@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 import asyncio
 from urllib.parse import urlparse
 from typing import List, Tuple, Optional, Dict, Any
@@ -21,12 +22,13 @@ _HEADERS = {
     ),
     "Accept-Language": "en-US,en;q=0.9",
     "Cache-Control": "max-age=0",
+    "Referer": "https://in.bookmyshow.com/",
     "Sec-Ch-Ua": '"Chromium";v="130", "Google Chrome";v="130"',
     "Sec-Ch-Ua-Mobile": "?0",
     "Sec-Ch-Ua-Platform": '"Windows"',
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-Site": "same-origin",
     "Sec-Fetch-User": "?1",
     "Upgrade-Insecure-Requests": "1",
     "User-Agent": (
@@ -116,8 +118,22 @@ def _fmt_date(date_str: str) -> str:
 class BookMyShowBookingChecker(BookingChecker):
     """
     Concrete scraper implementing the BookingChecker interface for BookMyShow
-    using httpx (HTTP) + BeautifulSoup (HTML parsing). No browser required.
+    using curl_cffi (browser TLS impersonation) + BeautifulSoup (HTML parsing).
     """
+
+    def __init__(self):
+        super().__init__()
+        self._session = None
+
+    def _get_session(self):
+        try:
+            from curl_cffi import requests as curl_requests
+            if self._session is None:
+                self._session = curl_requests.Session(impersonate="chrome")
+                self._session.headers.update(_HEADERS)
+            return self._session
+        except Exception:
+            return None
 
     @classmethod
     def get_required_fields(cls) -> Dict[str, Dict[str, Any]]:
@@ -313,12 +329,18 @@ class BookMyShowBookingChecker(BookingChecker):
                 return False
             return True
 
-        # 1. Try curl_cffi with impersonation target rotation
-        try:
-            from curl_cffi import requests as curl_requests
-            impersonate_targets = ["chrome", "chrome120", "chrome110", "edge101", "safari15_5"]
-            for attempt, imp in enumerate(impersonate_targets):
-                try:
+        # 1. Try persistent curl_cffi session & impersonation rotation
+        session = self._get_session()
+        impersonate_targets = ["chrome", "chrome120", "chrome110", "edge101", "safari15_5"]
+
+        for attempt, imp in enumerate(impersonate_targets):
+            if attempt > 0:
+                time.sleep(0.5)  # Backoff delay between retries
+            try:
+                from curl_cffi import requests as curl_requests
+                if session is not None:
+                    res = session.get(url, timeout=15.0, allow_redirects=True)
+                else:
                     res = curl_requests.get(
                         url,
                         headers=_HEADERS,
@@ -326,14 +348,20 @@ class BookMyShowBookingChecker(BookingChecker):
                         timeout=15.0,
                         allow_redirects=True,
                     )
-                    if res.status_code == 200 and _is_valid_bms_page(res.text):
-                        log.debug(f"HTTP 200 (via curl_cffi:{imp}, attempt {attempt+1}) — {len(res.text):,} bytes received")
-                        return res.text
-                    log.debug(f"curl_cffi:{imp} returned status {res.status_code} or Cloudflare challenge page, trying next target...")
-                except Exception as attempt_exc:
-                    log.debug(f"curl_cffi:{imp} attempt failed ({attempt_exc}), trying next target...")
-        except ImportError:
-            log.debug("curl_cffi package not available, falling back to system curl...")
+                if res.status_code == 200 and _is_valid_bms_page(res.text):
+                    log.debug(f"HTTP 200 (via curl_cffi:{imp}, attempt {attempt+1}) — {len(res.text):,} bytes received")
+                    return res.text
+                log.debug(f"curl_cffi:{imp} returned status {res.status_code} or Cloudflare challenge page, trying next target...")
+            except Exception as attempt_exc:
+                log.debug(f"curl_cffi:{imp} attempt failed ({attempt_exc}), trying next target...")
+                # Reset session if connection failed
+                if self._session is not None:
+                    try:
+                        self._session.close()
+                    except Exception:
+                        pass
+                    self._session = None
+                    session = None
 
         # 2. Try system curl subprocess with realistic browser headers
         import subprocess
@@ -344,6 +372,7 @@ class BookMyShowBookingChecker(BookingChecker):
                 "-H", f"User-Agent: {_HEADERS['User-Agent']}",
                 "-H", f"Accept: {_HEADERS['Accept']}",
                 "-H", f"Accept-Language: {_HEADERS['Accept-Language']}",
+                "-H", f"Referer: {_HEADERS['Referer']}",
                 url,
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
@@ -367,6 +396,11 @@ class BookMyShowBookingChecker(BookingChecker):
             return response.text
 
     async def close(self) -> None:
-        """No persistent resources to release."""
-        pass
+        """Release persistent session resources if open."""
+        if self._session is not None:
+            try:
+                self._session.close()
+            except Exception:
+                pass
+            self._session = None
 
