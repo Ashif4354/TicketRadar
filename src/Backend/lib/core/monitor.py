@@ -11,6 +11,7 @@ from .job import MonitorJob
 from ..utils.logger import get_job_logger
 from ..services.scraper.factory import ScraperFactory
 from ..services.notification.factory import NotificationStrategyFactory
+from ..services.gcp_logger import gcp_logger
 
 logger = logging.getLogger(__name__)
 
@@ -191,12 +192,33 @@ class JobManager:
                             if unavailable:
                                 status_msg += " Tracking paused — resume from dashboard to monitor remaining unavailable theatres."
                             job.update_state("Success", status_msg, movie_name=movie_name)
+                            gcp_logger.log_event(
+                                "Ticket Booking Alert Delivered",
+                                user_id=job.created_by or "system",
+                                details={
+                                    "job_id": job.id,
+                                    "movie_name": job.movie_name,
+                                    "available_theatres": available,
+                                    "notification_medium": job.notification_medium,
+                                    "date_str": job.date_str
+                                }
+                            )
                         else:
                             job_logger.error(
                                 f"⚠️  Tickets found but the alert could not be delivered. "
                                 f"Reason: {notif_msg}"
                             )
                             job.update_state("Error", f"{details} Alert failed: {notif_msg}", movie_name=movie_name)
+                            gcp_logger.log_event(
+                                "Ticket Booking Alert Delivery Failed",
+                                user_id=job.created_by or "system",
+                                details={
+                                    "job_id": job.id,
+                                    "movie_name": job.movie_name,
+                                    "reason": notif_msg
+                                },
+                                level="ERROR"
+                            )
 
                     except Exception as notif_err:
                         job_logger.error(

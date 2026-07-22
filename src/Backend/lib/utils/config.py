@@ -66,6 +66,19 @@ class Settings(BaseSettings):
     # Admin Discord Webhook Configuration
     admin_discord_webhook_url: str = Field(default="")
 
+    # Google Cloud Logging Configuration
+    gcp_logging_type: str = Field(default="service_account")
+    gcp_logging_project_id: str = Field(default="")
+    gcp_logging_private_key_id: str = Field(default="")
+    gcp_logging_private_key: str = Field(default="")
+    gcp_logging_client_email: str = Field(default="")
+    gcp_logging_client_id: str = Field(default="")
+    gcp_logging_auth_uri: str = Field(default="")
+    gcp_logging_token_uri: str = Field(default="")
+    gcp_logging_auth_provider_x509_cert_url: str = Field(default="")
+    gcp_logging_client_x509_cert_url: str = Field(default="")
+    gcp_logging_universe_domain: str = Field(default="")
+
     # Use pydantic configuration to load from .env
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_PATH,
