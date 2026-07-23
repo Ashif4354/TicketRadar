@@ -217,11 +217,26 @@ class BookMyShowBookingChecker(BookingChecker):
         log.info(f"✅  {date_display} — Booking is open for \"{movie_name}\"! Now checking your theatres...")
 
         # --- 4. Check theatre availability ---
-        # Collect candidate venue strings from HTML elements, <span> tags, and embedded JSON scripts
+        # Collect candidate venue strings from active showtime areas and JSON state
         candidate_venue_texts: List[str] = []
 
-        # 1. Local cinema <a> links (excluding general chain directory links)
-        for a_tag in soup.find_all("a", href=re.compile(r'/cinemas/', re.IGNORECASE)):
+        # 1. Embedded JSON script tags (window.__INITIAL_STATE__ contains active showing cinemas for this date)
+        for s_tag in soup.find_all("script"):
+            if s_tag.string and "venueName" in s_tag.string:
+                for match in re.findall(r'"venueName"\s*:\s*"([^"]+)"', s_tag.string):
+                    cleaned = match.encode('utf-8').decode('unicode_escape', errors='ignore') if '\\u' in match else match
+                    if cleaned:
+                        candidate_venue_texts.append(cleaned)
+
+        # 2. Main content DOM elements, EXCLUDING footer, header, nav, and directory sections
+        main_soup = BeautifulSoup(str(soup), "html.parser")
+        for bad_tag in main_soup.find_all(["footer", "header", "nav"]):
+            bad_tag.decompose()
+        for bad_class in main_soup.find_all(class_=re.compile(r'footer|header|seo-directory', re.IGNORECASE)):
+            bad_class.decompose()
+
+        # Local cinema <a> links in main content
+        for a_tag in main_soup.find_all("a", href=re.compile(r'/cinemas/', re.IGNORECASE)):
             href = a_tag.get("href", "")
             if "/cinemas-list/" not in href:
                 txt = a_tag.get_text(strip=True)
@@ -232,19 +247,11 @@ class BookMyShowBookingChecker(BookingChecker):
                     if stxt:
                         candidate_venue_texts.append(stxt)
 
-        # 2. Venue card containers (class names containing venue/cinema/facility/showtime)
-        for el in soup.find_all(class_=re.compile(r'venue|cinema|facility|showtime', re.IGNORECASE)):
+        # Venue card containers in main content (class names containing venue/cinema/facility/showtime)
+        for el in main_soup.find_all(class_=re.compile(r'venue|cinema|facility|showtime', re.IGNORECASE)):
             txt = el.get_text(strip=True)
             if txt and len(txt) < 200:
                 candidate_venue_texts.append(txt)
-
-        # 3. Embedded JSON script tags (window.__INITIAL_STATE__ contains all active showing cinemas)
-        for s_tag in soup.find_all("script"):
-            if s_tag.string and "venueName" in s_tag.string:
-                for match in re.findall(r'"venueName"\s*:\s*"([^"]+)"', s_tag.string):
-                    cleaned = match.encode('utf-8').decode('unicode_escape', errors='ignore') if '\\u' in match else match
-                    if cleaned:
-                        candidate_venue_texts.append(cleaned)
 
         available_theatres: List[str] = []
         missing_theatres: List[str] = []
@@ -253,8 +260,8 @@ class BookMyShowBookingChecker(BookingChecker):
             if not theatre:
                 continue
 
-            # Exact case-sensitive substring match
-            found = any(theatre in text for text in candidate_venue_texts)
+            # Case-insensitive substring match against active venue strings
+            found = any(theatre.lower() in text.lower() for text in candidate_venue_texts)
 
             if found:
                 available_theatres.append(theatre)
