@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Radar, Shield, LogOut } from 'lucide-react';
+import { Radar, Shield, LogOut, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { logout } from '../../lib/firebase';
@@ -46,7 +46,15 @@ export function Header({ user, claims }: HeaderProps) {
           </div>
         </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <Link
+            to="/instructions"
+            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/20 hover:bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 transition-colors"
+          >
+            <BookOpen className="h-3.5 w-3.5 text-rose-400" />
+            <span className="hidden sm:inline">Instructions</span>
+          </Link>
+
           {user ? (
             <div className="relative" ref={dropdownRef}>
               <button

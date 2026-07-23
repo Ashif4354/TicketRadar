@@ -9,6 +9,7 @@ import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { TermsPage } from './pages/TermsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
+import { InstructionsPage } from './pages/InstructionsPage';
 import { BlockedPage } from './pages/BlockedPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { AppDashboard } from './pages/AppDashboard';
@@ -71,6 +72,8 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/tc" element={<TermsPage />} />
           <Route path="/pp" element={<PrivacyPage />} />
+          <Route path="/instructions" element={<InstructionsPage />} />
+          <Route path="/instruction" element={<InstructionsPage />} />
           <Route path="/login" element={
             user ? <Navigate to="/" replace /> : <LoginPage />
           } />

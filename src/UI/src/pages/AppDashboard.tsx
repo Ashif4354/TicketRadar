@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { 
   Film, Calendar, MessageSquare, Clock, 
   Play, Pause, Trash2, Sliders, Plus, Send, 
   AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  ExternalLink, RefreshCw, Timer, Power
+  ExternalLink, RefreshCw, Timer, Power, BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -383,10 +384,21 @@ export function AppDashboard() {
 
                 {/* Booking Provider selection */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Booking Platform</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Booking Platform</label>
+                  </div>
                   <Select value={serviceProvider} disabled className="h-9.5 text-xs bg-muted/20 border-border/80">
                     <option value="BookMyShow">BookMyShow</option>
                   </Select>
+                  <div className="pt-0.5">
+                    <Link 
+                      to={`/instructions#${serviceProvider.toLowerCase().replace(/[^a-z0-9]/g, '')}`}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1.5 hover:underline transition-colors"
+                    >
+                      <BookOpen className="h-3 w-3" />
+                      <span>View {serviceProvider} setup instructions & guide →</span>
+                    </Link>
+                  </div>
                 </div>
 
                 {/* Movie url page input */}
