@@ -101,7 +101,7 @@ export function PrivacyPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Selected Theaters:</strong> List of specific cinema locations or venues configured for alerts.</span>
+                  <span><strong>Selected Theatres:</strong> List of specific cinema locations or venues configured for alerts.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
@@ -172,7 +172,7 @@ export function PrivacyPage() {
               6. Data Storage & Security Safeguards
             </h3>
             <p className="text-muted-foreground">
-              All stored user profiles and task configurations are secured using Google Firebase infrastructure with role-based access rules. Sensitive operational tokens and credentials are protected with industry-standard encryption standards. Public scraping routines inspect publicly accessible theater web pages without exposing your identity.
+              All stored user profiles and task configurations are secured using Google Firebase infrastructure with role-based access rules. Sensitive operational tokens and credentials are protected with industry-standard encryption standards. Public scraping routines inspect publicly accessible theatre web pages without exposing your identity.
             </p>
           </section>
 

@@ -348,7 +348,7 @@ export function AppDashboard() {
                 Set Up New Ticket Alert
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground leading-relaxed">
-                Enter your movie link, show date, and preferred cinemas to get notified when tickets open.
+                Enter your movie link, show date, and preferred theatres/cinemas to get notified when tickets open.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-5">
@@ -416,7 +416,7 @@ export function AppDashboard() {
 
                 {/* Target Theatre name filters */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Preferred Cinemas</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Preferred Theatres/Cinemas</label>
                   <Textarea 
                     placeholder="PVR Director's Cut
 Cinepolis Nexus
@@ -426,7 +426,7 @@ Inox Forum Mall"
                     className="min-h-[90px] max-h-[140px] text-xs bg-muted/10 border-border/80 placeholder:text-muted-foreground/40 focus:border-rose-500/40 leading-relaxed"
                   />
                   <p className="text-[10px] text-muted-foreground leading-normal">
-                    Type the names of your preferred cinemas (one per line). Example: PVR Forum, INOX Nexus.
+                    Type the names of your preferred theatres/cinemas (one per line). Example: PVR Forum, INOX Nexus.
                   </p>
                 </div>
 

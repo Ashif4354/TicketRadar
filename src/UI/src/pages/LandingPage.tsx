@@ -52,7 +52,7 @@ export function LandingPage() {
             <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center font-bold">1</div>
             <h3 className="font-bold text-sm text-foreground">Automatic Ticket Checking</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Provide your movie link, date, and preferred cinemas. TicketRadar checks for open seats every few seconds.
+              Provide your movie link, date, and preferred Theatres/Cinemas. TicketRadar checks for open seats every few seconds.
             </p>
           </div>
 
