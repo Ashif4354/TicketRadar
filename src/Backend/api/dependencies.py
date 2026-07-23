@@ -41,6 +41,11 @@ def get_user_details(uid: str = None, claims: dict = None) -> tuple[str, str, st
 
 async def verify_recaptcha(token: str):
     """Verifies a reCAPTCHA v2 token with Google's siteverify API."""
+    import os
+    if os.getenv("DISABLE_SECURITY", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_security", False)):
+        logger.debug("reCAPTCHA verification bypassed as security is disabled.")
+        return True
+
     if not token:
         raise HTTPException(status_code=400, detail="reCAPTCHA token is required.")
 

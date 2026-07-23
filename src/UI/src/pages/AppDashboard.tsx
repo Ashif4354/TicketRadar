@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { DatePicker } from '@/components/ui/date-picker';
 import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp, formatInterval } from '../utils/formatters';
+import { isSecurityDisabled } from '../utils/security';
 import type { Job, AppConfig } from '../types';
 
 export function AppDashboard() {
@@ -111,7 +112,7 @@ export function AppDashboard() {
     e.preventDefault();
 
     const token = recaptchaRef.current?.getValue() || "";
-    if (!token) {
+    if (!isSecurityDisabled(config) && !token) {
       setTestResult({ success: false, message: "Please complete the reCAPTCHA challenge first." });
       return;
     }
@@ -142,7 +143,7 @@ export function AppDashboard() {
       try {
         recaptchaRef.current?.reset();
       } catch (err) {
-        console.error("Failed to reset reCAPTCHA:", err);
+        // ignore error when recaptcha component is not rendered
       }
     }
   };
@@ -156,7 +157,7 @@ export function AppDashboard() {
     const token = mainRecaptchaRef.current?.getValue() || "";
     const errors: string[] = [];
 
-    if (!token) {
+    if (!isSecurityDisabled(config) && !token) {
       errors.push("Please complete the reCAPTCHA challenge first.");
     }
 
@@ -571,15 +572,17 @@ Inox Forum Mall"
                 </div>
 
                 {/* Google reCAPTCHA Verification container */}
-                <div className="space-y-1.5 border-t border-border/30 pt-4 flex flex-col items-center">
-                  <div className="g-recaptcha-premium-container">
-                    <ReCAPTCHA
-                      ref={mainRecaptchaRef}
-                      sitekey={siteKeyVal}
-                      theme="dark"
-                    />
+                {!isSecurityDisabled(config) && (
+                  <div className="space-y-1.5 border-t border-border/30 pt-4 flex flex-col items-center">
+                    <div className="g-recaptcha-premium-container">
+                      <ReCAPTCHA
+                        ref={mainRecaptchaRef}
+                        sitekey={siteKeyVal}
+                        theme="dark"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Submit button */}
                 <Button 
@@ -651,15 +654,17 @@ Inox Forum Mall"
                   </div>
 
                   {/* ReCAPTCHA for testing alerts */}
-                  <div className="flex flex-col items-center py-1">
-                    <div className="g-recaptcha-premium-container">
-                      <ReCAPTCHA
-                        ref={recaptchaRef}
-                        sitekey={siteKeyVal}
-                        theme="dark"
-                      />
+                  {!isSecurityDisabled(config) && (
+                    <div className="flex flex-col items-center py-1">
+                      <div className="g-recaptcha-premium-container">
+                        <ReCAPTCHA
+                          ref={recaptchaRef}
+                          sitekey={siteKeyVal}
+                          theme="dark"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <Button 
                     type="submit" 

@@ -4,12 +4,14 @@ import { Lock, AlertTriangle, CheckCircle2, RefreshCw, Send } from 'lucide-react
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { authenticatedFetch } from '../utils/api';
+import { isSecurityDisabled } from '../utils/security';
 
 export function UnauthorizedPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
+  const securityDisabled = isSecurityDisabled();
 
   const handleRequestAccess = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,7 +19,7 @@ export function UnauthorizedPage() {
     setSuccess(null);
 
     const token = recaptchaRef.current?.getValue() || "";
-    if (!token) {
+    if (!securityDisabled && !token) {
       setError("Please complete the security check first.");
       return;
     }
@@ -42,7 +44,7 @@ export function UnauthorizedPage() {
       try {
         recaptchaRef.current?.reset();
       } catch (err) {
-        console.error("Failed to reset reCAPTCHA:", err);
+        // ignore error when reCAPTCHA is not rendered
       }
     }
   };
@@ -64,6 +66,9 @@ export function UnauthorizedPage() {
           <p className="text-xs text-muted-foreground leading-relaxed">
             Your Google account is signed in, but needs approval before you can create ticket alerts. Please request access below.
           </p>
+          <p className="text-[11px] text-muted-foreground/80 italic border-l-2 border-amber-500/40 pl-2 text-left">
+            Access is currently granted primarily to a close circle. If you wish to run TicketRadar independently, you can deploy it on-premise directly from the GitHub repository with security settings configured as needed.
+          </p>
 
           {error && (
             <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2 text-left">
@@ -79,13 +84,15 @@ export function UnauthorizedPage() {
             </div>
           ) : (
             <form onSubmit={handleRequestAccess} className="space-y-4 flex flex-col items-center">
-              <div className="g-recaptcha-premium-container">
-                <ReCAPTCHA
-                  ref={recaptchaRef}
-                  sitekey={import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY}
-                  theme="dark"
-                />
-              </div>
+              {!securityDisabled && (
+                <div className="g-recaptcha-premium-container">
+                  <ReCAPTCHA
+                    ref={recaptchaRef}
+                    sitekey={import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY}
+                    theme="dark"
+                  />
+                </div>
+              )}
 
               <Button
                 type="submit"

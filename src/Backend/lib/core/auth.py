@@ -52,12 +52,20 @@ except Exception as e:
 
 async def verify_app_check(x_firebase_appcheck: str = Header(None, alias="X-Firebase-AppCheck")):
     """Verifies the Firebase App Check token to ensure calls originate from the client app."""
-    disable_app_check = os.getenv("DISABLE_APP_CHECK", "false").lower() in ("true", "1")
+    disable_security = (
+        os.getenv("DISABLE_SECURITY", "false").lower() in ("true", "1") or
+        os.getenv("DISABLE_APP_CHECK", "false").lower() in ("true", "1") or
+        (settings and getattr(settings, "disable_security", False))
+    )
     is_dev = os.getenv("ENVIRONMENT", "development").lower() == "development"
 
+    if disable_security:
+        logger.debug("Bypassing Firebase App Check as security is disabled.")
+        return
+
     if not x_firebase_appcheck:
-        if disable_app_check or is_dev:
-            logger.warning("Missing X-Firebase-AppCheck header — bypassing check in development/disabled mode.")
+        if is_dev:
+            logger.warning("Missing X-Firebase-AppCheck header — bypassing check in development mode.")
             return
         logger.warning("Missing X-Firebase-AppCheck header.")
         raise HTTPException(
@@ -67,8 +75,8 @@ async def verify_app_check(x_firebase_appcheck: str = Header(None, alias="X-Fire
     try:
         app_check.verify_token(x_firebase_appcheck)
     except Exception as e:
-        if disable_app_check or is_dev:
-            logger.warning(f"App Check verification failed ({e}) — bypassing check in development/disabled mode.")
+        if is_dev:
+            logger.warning(f"App Check verification failed ({e}) — bypassing check in development mode.")
             return
         logger.error(f"App Check verification failed: {e}")
         raise HTTPException(

@@ -33,6 +33,7 @@ export interface AppConfig {
   smtp_email: string | null;
   default_check_interval: number;
   recaptcha_site?: string;
+  disable_security?: boolean;
 }
 
 export interface UserClaims {

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Scraper Settings
     default_check_interval: int = Field(default=60)
 
+    # Security Settings
+    disable_security: bool = Field(default=False)
+
     # reCAPTCHA Configuration
     recaptcha_site: str = Field(default="6LfUdl0tAAAAALD21Jd3geQFRavY8xeWMbadKybZ")
     recaptcha_secret: str = Field(default="6LfUdl0tAAAAAAjyjVtoGRY2cY52NJUOhc4R3mLu")

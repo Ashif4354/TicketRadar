@@ -68,6 +68,7 @@ Fill in your configuration details in `src/Backend/.env`:
 - **SMTP Settings**: Gmail / SMTP host (`SMTP_SERVER`), port (`587`), email (`SMTP_EMAIL`), and App Password (`SMTP_PASSWORD`).
 - **Firebase Admin SDK**: Firebase project ID and service account credentials (`FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY`, etc.).
 - **reCAPTCHA v2**: Secret key (`RECAPTCHA_SECRET`).
+- **Disable Security (Self-Hosted / On-Premise / Running from Source Code)**: Set `DISABLE_SECURITY=true` to bypass reCAPTCHA and App Check verification when self-hosting, running on-premise, or executing directly from source code.
 - **Admin Notifications**: Discord Webhook URL for pending access requests (`ADMIN_DISCORD_WEBHOOK_URL`).
 - **GCP Logging (Optional)**: Google Cloud Logging credentials (`GCP_LOGGING_PROJECT_ID`, `GCP_LOGGING_PRIVATE_KEY`, etc.) for remote log streaming.
 
@@ -79,7 +80,16 @@ cp src/UI/.env.example src/UI/.env
 Fill in your configuration details in `src/UI/.env`:
 - **Firebase Web SDK**: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, etc.
 - **reCAPTCHA & App Check**: `VITE_APP_CHECK_SITE_KEY`, `VITE_RECAPTCHA_V2_SITE_KEY`.
+- **Disable Security (Self-Hosted / On-Premise / Running from Source Code)**: Set `VITE_DISABLE_SECURITY=true` to hide human verification reCAPTCHA checkboxes and disable client-side App Check token generation.
 - **Backend Target URL**: `VITE_BACKEND_URL` (default: `http://127.0.0.1:8000`).
+
+> [!TIP]
+> **Self-Hosted / On-Premise / Running from Source Code (Disabling Security)**  
+> If you are self-hosting TicketRadar, deploying on-premise, or running locally from the source code for personal use and want to bypass Google reCAPTCHA v2 and Firebase App Check:
+> 1. Set `DISABLE_SECURITY=true` in `src/Backend/.env`
+> 2. Set `VITE_DISABLE_SECURITY=true` in `src/UI/.env`  
+>
+> With security disabled, human verification reCAPTCHA checkboxes are hidden in the UI, App Check token validation is bypassed, and all features function smoothly without requiring external site keys.
 
 ---
 
