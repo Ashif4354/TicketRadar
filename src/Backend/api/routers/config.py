@@ -21,7 +21,7 @@ async def get_config():
         "config_error": config_error,
         "smtp_server": settings.smtp_server if settings else None,
         "smtp_email": settings.smtp_email if settings else None,
-        "default_check_interval": settings.default_check_interval if settings else 30
+        "default_check_interval": settings.default_check_interval if settings else 60
     }
 
 

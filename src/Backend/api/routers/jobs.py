@@ -110,9 +110,9 @@ async def create_job(
     # Verify reCAPTCHA token
     await verify_recaptcha(payload.recaptcha_token)
 
-    # Validate check interval minimum
-    if payload.check_interval < 30:
-        raise HTTPException(status_code=400, detail="Check interval cannot be less than 30 seconds.")
+    # Validate check interval minimum (minimum 1 minute / 60 seconds)
+    if payload.check_interval < 60:
+        raise HTTPException(status_code=400, detail="Check interval cannot be less than 1 minute (60 seconds).")
 
     # Validate provider
     service_provider = payload.service_provider

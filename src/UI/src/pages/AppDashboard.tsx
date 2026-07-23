@@ -13,8 +13,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 
+import { DatePicker } from '@/components/ui/date-picker';
 import { authenticatedFetch } from '../utils/api';
-import { formatBmsDate, formatTimestamp } from '../utils/formatters';
+import { formatBmsDate, formatTimestamp, formatInterval } from '../utils/formatters';
 import type { Job, AppConfig } from '../types';
 
 export function AppDashboard() {
@@ -28,7 +29,7 @@ export function AppDashboard() {
   const [medium, setMedium] = useState<"Email" | "Discord Webhook">("Email");
   const [email, setEmail] = useState("");
   const [webhook, setWebhook] = useState("");
-  const [intervalSec, setIntervalSec] = useState(30);
+  const [intervalSec, setIntervalSec] = useState(60);
 
   // New Monitor Form inputs
   const [url, setUrl] = useState("");
@@ -58,7 +59,7 @@ export function AppDashboard() {
         const data = await res.json();
         setConfig(data);
         if (data.default_check_interval) {
-          setIntervalSec(Math.max(30, data.default_check_interval));
+          setIntervalSec(Math.max(60, data.default_check_interval));
         }
       }
     } catch (err) {
@@ -185,8 +186,8 @@ export function AppDashboard() {
       errors.push("Discord Webhook URL is required.");
     }
 
-    if (intervalSec < 30) {
-      errors.push("Check frequency cannot be less than 30 seconds.");
+    if (intervalSec < 60) {
+      errors.push("Check frequency cannot be less than 1 minute (60 seconds).");
     }
 
     if (errors.length > 0) {
@@ -403,14 +404,13 @@ export function AppDashboard() {
                   </p>
                 </div>
 
-                {/* Target Date selection */}
+                {/* Target Date selection with Shadcn DatePicker */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Show Date</label>
-                  <Input 
-                    type="date" 
+                  <DatePicker 
                     value={targetDate}
-                    onChange={(e) => setTargetDate(e.target.value)}
-                    className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
+                    onChange={(dateStr) => setTargetDate(dateStr)}
+                    placeholder="Select show date"
                   />
                 </div>
 
@@ -484,28 +484,78 @@ Inox Forum Mall"
                 </div>
 
                 {/* Scan Interval Config */}
-                <div className="space-y-1.5 border-t border-border/30 pt-4">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <div className="space-y-2.5 border-t border-border/30 pt-4">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 shrink-0">
                       <Timer className="h-3.5 w-3.5 text-rose-500" />
                       Check Frequency
                     </span>
-                    <span className="font-mono text-foreground/80">{intervalSec}s</span>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        type="number"
+                        min="1"
+                        step="1"
+                        placeholder="Mins"
+                        value={intervalSec > 0 ? Math.round(intervalSec / 60) : ''}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (!isNaN(val)) {
+                            setIntervalSec(val * 60);
+                          } else {
+                            setIntervalSec(0);
+                          }
+                        }}
+                        className="w-20 h-7 text-xs font-mono font-semibold bg-muted/20 text-right pr-2 border-border/80 focus:border-rose-500/40"
+                      />
+                      <span className="text-[11px] font-medium text-muted-foreground shrink-0">min</span>
+                      <span className="text-[10px] text-muted-foreground/60 font-mono">({formatInterval(intervalSec)})</span>
+                    </div>
                   </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex items-center gap-1.5 flex-wrap py-0.5">
+                    {[
+                      { label: '1m', value: 60 },
+                      { label: '5m', value: 300 },
+                      { label: '15m', value: 900 },
+                      { label: '30m', value: 1800 },
+                      { label: '1h', value: 3600 },
+                      { label: '2h', value: 7200 },
+                    ].map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => setIntervalSec(preset.value)}
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-medium transition-colors cursor-pointer ${
+                          intervalSec === preset.value
+                            ? 'bg-rose-500 text-white font-bold'
+                            : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Range Slider for 1m (60s) to 30m (1800s) in 1-minute steps */}
                   <input 
                     type="range" 
-                    min="30" 
-                    max="120" 
-                    step="5"
-                    value={intervalSec} 
-                    onChange={(e) => setIntervalSec(Math.max(30, parseInt(e.target.value, 10)))} 
+                    min="60" 
+                    max="1800" 
+                    step="60"
+                    value={Math.min(1800, Math.max(60, Math.round(intervalSec / 60) * 60))} 
+                    onChange={(e) => setIntervalSec(parseInt(e.target.value, 10))} 
                     className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-rose-500"
                   />
                   <div className="flex justify-between text-[9px] text-muted-foreground/60 font-semibold px-0.5">
-                    <span>Every 30s (Fastest)</span>
-                    <span>Every 60s</span>
-                    <span>Every 2 min</span>
+                    <span>1m (Min)</span>
+                    <span>10m</span>
+                    <span>20m</span>
+                    <span>30m (Slider max)</span>
                   </div>
+                  <p className="text-[10px] text-muted-foreground leading-normal">
+                    Drag slider for 1m–30m, or type custom minutes in the text field (e.g. 45m, 60m, 120m). Minimum is 1 min.
+                  </p>
                 </div>
 
                 {/* Google reCAPTCHA Verification container */}
@@ -679,7 +729,7 @@ Inox Forum Mall"
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Tracker #{job.id}</span>
                           <span className="text-border/60">•</span>
-                          <span className="text-[10px] text-muted-foreground">Checks every {job.check_interval}s</span>
+                          <span className="text-[10px] text-muted-foreground">Checks every {formatInterval(job.check_interval)}</span>
                         </div>
                       </div>
                       

@@ -117,7 +117,7 @@ export function PrivacyPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Polling Interval:</strong> Configured check frequency in seconds (e.g., every 30 seconds).</span>
+                  <span><strong>Polling Interval:</strong> Configured check frequency in seconds (minimum 1 minute).</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>

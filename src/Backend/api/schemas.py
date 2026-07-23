@@ -20,7 +20,7 @@ class CreateJobRequest(BaseModel):
     service_provider: str = "BookMyShow"
     notification_medium: str
     notification_config: Dict[str, Any]
-    check_interval: int = Field(default=30, ge=30, description="Check interval in seconds (minimum 30s)")
+    check_interval: int = Field(default=60, ge=60, description="Check interval in seconds (minimum 60s / 1 min)")
     params: JobParams
     recaptcha_token: str = Field(..., description="Google reCAPTCHA token")
 

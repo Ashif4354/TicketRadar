@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     smtp_password: str
 
     # Scraper Settings
-    default_check_interval: int = Field(default=30)
+    default_check_interval: int = Field(default=60)
 
     # reCAPTCHA Configuration
     recaptcha_site: str = Field(default="6LfUdl0tAAAAALD21Jd3geQFRavY8xeWMbadKybZ")

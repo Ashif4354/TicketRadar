@@ -28,7 +28,7 @@ class MonitorJob:
         self.notification_medium = notification_medium.strip().lower()
         self.notification_config = notification_config
         self.service_provider = service_provider.strip().lower()
-        self.check_interval = max(30, check_interval) if check_interval is not None else 30
+        self.check_interval = max(60, check_interval) if check_interval is not None else 60
         self.movie_name = "Fetching..."
         self.created_by = created_by
         self.creator_email = creator_email

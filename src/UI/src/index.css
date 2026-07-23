@@ -146,6 +146,53 @@ iframe[src*="recaptcha"] {
   height: 78px !important;
 }
 
+/* Custom Shadcn DatePicker Theme - Near Opaque & Rose App Palette */
+.rdp-root {
+  --rdp-accent-color: #f43f5e !important;
+  --rdp-accent-background-color: rgba(244, 63, 94, 0.15) !important;
+  --rdp-day-height: 36px !important;
+  --rdp-day-width: 36px !important;
+  --rdp-day_button-height: 34px !important;
+  --rdp-day_button-width: 34px !important;
+  --rdp-day_button-border-radius: 8px !important;
+  --rdp-today-color: #f43f5e !important;
+  color: #f3f4f6;
+}
+
+.rdp-button:hover:not([disabled]) {
+  background-color: rgba(244, 63, 94, 0.2) !important;
+  color: #fb7185 !important;
+}
+
+.rdp-selected .rdp-day_button {
+  background-color: #f43f5e !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
+}
+
+.rdp-today:not(.rdp-selected) .rdp-day_button {
+  border: 1px solid rgba(244, 63, 94, 0.6) !important;
+  color: #f43f5e !important;
+  font-weight: 700 !important;
+}
+
+.rdp-caption_label {
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  color: #f9fafb !important;
+}
+
+.rdp-nav_button {
+  border-radius: 8px !important;
+  color: #9ca3af !important;
+}
+
+.rdp-nav_button:hover {
+  background-color: rgba(244, 63, 94, 0.2) !important;
+  color: #ffffff !important;
+}
+
 
 
 
