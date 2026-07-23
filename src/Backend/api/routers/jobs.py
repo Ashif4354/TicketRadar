@@ -58,13 +58,19 @@ def verify_job_access(job_id: str, claims: dict) -> MonitorJob:
 
 
 @router.get("")
-async def get_jobs(claims: dict = Depends(get_authorized_user)):
-    """Returns a list of all current jobs and their states, enriched with user details for admin view."""
+async def get_jobs(all: bool = False, claims: dict = Depends(get_authorized_user)):
+    """Returns a list of current jobs. By default returns only the user's own jobs. If all=True and user is admin, returns all jobs."""
     is_admin = claims.get("role") == "admin"
     user_uid = claims.get("uid")
 
+    if all and not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Only administrators are permitted to use parameter all=true."
+        )
+
     all_jobs = manager.get_all_jobs()
-    if is_admin:
+    if is_admin and all:
         current_jobs = all_jobs
     else:
         current_jobs = [j for j in all_jobs if j.created_by == user_uid]

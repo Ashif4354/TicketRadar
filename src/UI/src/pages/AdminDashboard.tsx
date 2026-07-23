@@ -52,7 +52,7 @@ export function AdminDashboard() {
         if (res.ok) setUsers(await res.json());
         else setError("Failed to fetch user list.");
       } else if (activeTab === 'jobs') {
-        const res = await authenticatedFetch('/api/jobs');
+        const res = await authenticatedFetch('/api/jobs?all=true');
         if (res.ok) setJobs(await res.json());
         else setError("Failed to fetch jobs.");
       }
