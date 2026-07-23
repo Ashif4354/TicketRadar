@@ -9,14 +9,27 @@ export function formatBmsDate(dateStr: string): string {
   return `${parseInt(d, 10)} ${mName} ${y}`;
 }
 
-export function formatTimestamp(ts: string | null): string {
+export function formatTimestamp(ts: string | number | null): string {
   if (!ts) return "Never";
   try {
     const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    if (isNaN(d.getTime())) return String(ts);
+    
+    const formatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(d);
+    const map: Record<string, string> = {};
+    parts.forEach(p => { if (p.type !== 'literal') map[p.type] = p.value; });
+    return `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}:${map.second} IST`;
   } catch (e) {
-    return ts;
+    return String(ts);
   }
 }

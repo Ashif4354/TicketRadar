@@ -18,8 +18,8 @@ export function Footer() {
   return (
     <footer className="mt-auto border-t border-border/80 bg-card py-6 text-xs text-muted-foreground">
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
-          <p>© 2026 TicketRadar. Continuous BookMyShow showtime monitoring.</p>
+        <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-3 text-center sm:text-left">
+          <p>© 2026 TicketRadar. Continuous movie showtime monitoring.</p>
           <span className="hidden sm:inline text-border">|</span>
           <div className="flex items-center gap-3">
             <Link to="/tc" className="hover:text-foreground transition-colors underline-offset-4 hover:underline font-medium">
@@ -32,7 +32,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center md:justify-end gap-4">
           <a
             href="https://github.com/Ashif4354/TicketRadar"
             target="_blank"

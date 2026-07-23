@@ -67,7 +67,7 @@ export function Header({ user, claims }: HeaderProps) {
               </button>
 
               {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-xl border border-border/80 bg-card p-4 shadow-xl glassmorphism text-left animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 mt-2 w-64 rounded-xl border border-border bg-[#141419] p-4 shadow-2xl text-left animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="flex items-center gap-3 border-b border-border/40 pb-3 mb-3">
                     {user.photoURL ? (
                       <img src={user.photoURL} className="h-10 w-10 rounded-full border border-border" alt="" />

@@ -310,20 +310,20 @@ export function AdminDashboard() {
                               </td>
                               <td className="py-3.5 px-4">
                                 {isDenied ? (
-                                  <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Denied</Badge>
+                                  <Badge className="w-32 inline-flex justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Denied</Badge>
                                 ) : (
-                                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Pending</Badge>
+                                  <Badge className="w-32 inline-flex justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Pending</Badge>
                                 )}
                               </td>
                               <td className="py-3.5 px-4 text-muted-foreground text-[11px]">
-                                {r.requested_at ? new Date(r.requested_at).toLocaleString() : 'N/A'}
+                                {r.requested_at ? formatTimestamp(r.requested_at) : 'N/A'}
                               </td>
                               <td className="py-3.5 px-4 text-right space-x-2">
                                 <Button
                                   onClick={() => handleApproveRequest(r.uid)}
                                   disabled={actionLoading !== null}
                                   size="sm"
-                                  className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1"
+                                  className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1 w-24 justify-center"
                                 >
                                   <CheckCircle className="h-3 w-3" /> Approve
                                 </Button>
@@ -333,7 +333,7 @@ export function AdminDashboard() {
                                     disabled={actionLoading !== null}
                                     variant="destructive"
                                     size="sm"
-                                    className="h-7 text-[11px] font-bold gap-1"
+                                    className="h-7 text-[11px] font-bold gap-1 w-24 justify-center"
                                   >
                                     <XCircle className="h-3 w-3" /> Deny
                                   </Button>
@@ -400,22 +400,22 @@ export function AdminDashboard() {
                               </td>
                               <td className="py-3.5 px-4">
                                 {isAdmin ? (
-                                  <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Admin</Badge>
+                                  <Badge className="w-16 inline-flex justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Admin</Badge>
                                 ) : (
-                                  <Badge className="bg-muted text-muted-foreground border border-border text-[10px] font-semibold px-2 py-0.5 rounded-full">User</Badge>
+                                  <Badge className="w-16 inline-flex justify-center bg-muted text-muted-foreground border border-border text-[10px] font-semibold px-2 py-0.5 rounded-full">User</Badge>
                                 )}
                               </td>
                               <td className="py-3.5 px-4">
                                 {u.access_status === 'blocked' ? (
-                                  <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Blocked</Badge>
+                                  <Badge className="w-32 inline-flex justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Blocked</Badge>
                                 ) : u.access_status === 'authorized' ? (
-                                  <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Authorized</Badge>
+                                  <Badge className="w-32 inline-flex justify-center bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Authorized</Badge>
                                 ) : u.access_status === 'pending' ? (
-                                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Pending</Badge>
+                                  <Badge className="w-32 inline-flex justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Pending</Badge>
                                 ) : u.access_status === 'denied' ? (
-                                  <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Denied</Badge>
+                                  <Badge className="w-32 inline-flex justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Denied</Badge>
                                 ) : (
-                                  <Badge className="bg-slate-500/10 text-slate-400 border border-slate-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Not Yet Requested</Badge>
+                                  <Badge className="w-32 inline-flex justify-center bg-slate-500/10 text-slate-400 border border-slate-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Not Yet Requested</Badge>
                                 )}
                               </td>
                               <td className="py-3.5 px-4 text-right space-x-2">
@@ -430,7 +430,7 @@ export function AdminDashboard() {
                                         onClick={() => handleApproveRequest(u.uid)}
                                         disabled={actionLoading !== null}
                                         size="sm"
-                                        className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1"
+                                        className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1 w-24 justify-center"
                                       >
                                         <CheckCircle className="h-3 w-3" /> Approve
                                       </Button>
@@ -440,7 +440,7 @@ export function AdminDashboard() {
                                       disabled={actionLoading !== null}
                                       variant={isBlocked ? "outline" : "destructive"}
                                       size="sm"
-                                      className="h-7 text-[11px] font-bold"
+                                      className="h-7 text-[11px] font-bold w-24 justify-center"
                                     >
                                       {isBlocked ? "Unblock" : "Block User"}
                                     </Button>
