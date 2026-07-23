@@ -1,70 +1,176 @@
 # TicketRadar 🍿
 
-TicketRadar is a fully asynchronous movie ticket booking monitor and alert system. It continuously watches movie booking pages and alerts you when booking opens for a specific date and theatre list.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-6-646CFF.svg)](https://vitejs.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+TicketRadar is a fully asynchronous movie ticket booking monitor and alert system. It continuously watches movie booking pages and alerts you in real time as soon as ticket bookings open for your requested date and theatre list.
 
 > [!NOTE]
-> TicketRadar only supports BookMyShow for now. Support for additional ticket booking services and platforms will be implemented in the future.
-
-It features a modern dark-mode web dashboard built with **React** and **FastAPI**, uses **HTTPX** and **BeautifulSoup4** for lightweight, non-blocking browserless HTML scraping, and supports notifications via **Gmail SMTP** or **Discord Webhooks**. The application is secured with **Firebase Authentication**, **App Check**, and Google **reCAPTCHA v2**.
+> TicketRadar currently supports **BookMyShow**. Support for additional ticket booking services and multiplex chains (such as District by Zomato and PVR INOX) will be added in upcoming releases.
 
 ---
 
-## 🌟 Key Features
+## 📸 Overview & Key Features
 
-1. **Fully Asynchronous Execution**: All monitoring checkers run concurrently as non-blocking coroutines on a dedicated background event loop running in a daemon thread.
-2. **Fast & Lightweight Scraper**: Uses HTTPX and BeautifulSoup4 for efficient HTML scraping, removing the overhead of heavy headful/headless browser environments.
-3. **Real-time Live Dashboard**: React frontend communicates with the FastAPI backend via long-polling, ensuring status updates and real-time logs are shown instantly without spamming the backend or requiring full page refreshes.
-4. **Secure User Authentication**: Integrated with Firebase Authentication (supports login/signup) and an access-request approval workflow, secured with Google reCAPTCHA v2 and Firebase App Check.
-5. **Movie Name Auto-Extraction**: Automatically extracts the movie name from the page DOM using XPath/CSS class matching, falling back to URL slug parsing if DOM elements are not found.
-6. **Table-Formatted Alerts**:
-   - **SMTP Email**: Renders a styled HTML table showing the available and unavailable theatres side-by-side.
-   - **Discord Webhook**: Compiles a clean, monospace ASCII-art grid table showing theatre availability.
-7. **Polite Log Output**: Strictly adheres to a "no-please" policy in all user interfaces, alerts, logs, and messages.
+- **⚡ Fully Asynchronous Execution**: All monitoring checkers run concurrently as non-blocking coroutines on a dedicated background event loop in FastAPI.
+- **🪶 Lightweight Browserless Scraper**: Uses **HTTPX**, **BeautifulSoup4**, and **curl-cffi** (TLS fingerprint impersonation) for fast, lightweight HTML parsing without heavy headless browser overhead.
+- **🖥️ Modern Real-Time Dashboard**: Responsive dark-mode frontend built with **React 19**, **Vite**, and **Tailwind CSS**. Streams live logs and status updates from the FastAPI backend via long-polling.
+- **🔒 Secure Authentication & Role Management**: Secured with **Firebase Authentication**, **App Check**, and Google **reCAPTCHA v2**, featuring an access-request approval workflow and an **Admin Control Panel**.
+- **🎯 Smart Theatre & Movie Matching**: Auto-extracts movie titles, handles URL date segment rewriting, and performs case-insensitive substring matching on theatre names.
+- **📊 Rich Side-by-Side Availability Alerts**:
+  - **SMTP Email**: Renders a formatted HTML table displaying available vs. unavailable theatres side-by-side.
+  - **Discord Webhook**: Sends a clean monospace ASCII-art grid table showing theatre availability.
+- **🧪 Test Alert Connection**: Dedicated UI modal to test SMTP email credentials or Discord webhooks prior to starting a radar.
+- **🤫 Polite Output**: Enforces clean, professional logging across all user interfaces, notifications, and logs.
 
 ---
 
-## ⚙️ Setup and Installation
+## 📁 Directory Structure
+
+```text
+TicketRadar/
+├── export/                # Build configuration & scripts (Nuitka, PyInstaller)
+├── scripts/               # Utility scripts (e.g. set_admin.py)
+├── src/
+│   ├── Backend/           # FastAPI backend server & monitoring engine
+│   │   ├── api/           # API routes (auth, admin, jobs, config)
+│   │   ├── lib/           # Scraper, notifier, GCP logger & core job manager
+│   │   └── main.py        # FastAPI entry point
+│   └── UI/                # React 19 + Vite frontend application
+│       └── src/           # Components, pages (Dashboard, Admin, Instructions, etc.)
+├── Makefile               # Task automation commands
+└── README.md
+```
+
+---
+
+## ⚙️ Prerequisites & Setup
+
+### Prerequisites
+- **Node.js** (v18 or higher)
+- **Python** (v3.10 or higher)
+- **[uv](https://docs.astral.sh/uv/)** (recommended Python package installer & manager)
+- **Firebase Project** (Auth & Firestore enabled)
+
+---
 
 ### 1. Configure Environment Variables
-Copy `src/Backend/.env.example` to `src/Backend/.env`:
+
+#### Backend Configuration (`src/Backend/.env`)
+Copy the backend example file:
 ```bash
 cp src/Backend/.env.example src/Backend/.env
 ```
+Fill in your configuration details in `src/Backend/.env`:
+- **SMTP Settings**: Gmail / SMTP host (`SMTP_SERVER`), port (`587`), email (`SMTP_EMAIL`), and App Password (`SMTP_PASSWORD`).
+- **Firebase Admin SDK**: Firebase project ID and service account credentials (`FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY`, etc.).
+- **reCAPTCHA v2**: Secret key (`RECAPTCHA_SECRET`).
+- **Admin Notifications**: Discord Webhook URL for pending access requests (`ADMIN_DISCORD_WEBHOOK_URL`).
+- **GCP Logging (Optional)**: Google Cloud Logging credentials (`GCP_LOGGING_PROJECT_ID`, `GCP_LOGGING_PRIVATE_KEY`, etc.) for remote log streaming.
 
-### 2. Run the Dashboard
-Ensure `uv` and `node` (v18+) are installed, then run the installation and startup commands:
+#### Frontend Configuration (`src/UI/.env`)
+Copy the frontend example file:
 ```bash
 cp src/UI/.env.example src/UI/.env
-make install
-make run
 ```
-If `make` is not installed on your system, you can run them manually:
-```bash
-# Terminal 1: Run the React frontend
-cd src/UI && npm install && npm run dev
-
-# Terminal 2: Run the FastAPI backend
-cd src/Backend && uv sync
-cd src/Backend && uv run python main.py
-```
-*Note: The backend runs without automatically opening the browser to prevent repeated tab popups during hot-reload development.*
+Fill in your configuration details in `src/UI/.env`:
+- **Firebase Web SDK**: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, etc.
+- **reCAPTCHA & App Check**: `VITE_APP_CHECK_SITE_KEY`, `VITE_RECAPTCHA_V2_SITE_KEY`.
+- **Backend Target URL**: `VITE_BACKEND_URL` (default: `http://127.0.0.1:8000`).
 
 ---
 
-## 🖥️ Using the Dashboard
+### 2. Install Dependencies
 
-1. **Sign In / Request Access**: Create an account or sign in via the Firebase Auth screen. If your account is new, submit an access request (secured with reCAPTCHA v2) and wait for admin approval.
-2. **Verify Connection**: Expand the **📬 Test Alerts Connection** panel in the dashboard to verify your email or webhook configurations immediately.
-3. **Register a Monitor**:
-   - Paste the BookMyShow Movie Page URL.
-   - Select your target date from the date picker.
-   - Enter your target theatre names in the text area (**one theatre per line**). Substring matching is supported and is case-sensitive.
-   - Choose the alert channel (Email or Discord Webhook).
+Install both backend (`uv sync`) and frontend (`npm install`) dependencies in a single step using `make`:
+```bash
+make install
+```
+*Or manually:*
+```bash
+# Install backend dependencies
+cd src/Backend && uv sync
+
+# Install frontend dependencies
+cd src/UI && npm install
+```
+
+---
+
+### 3. Set Up Initial Admin Account
+
+1. **Register User Account**: Launch the app and register/sign up with your email address via the frontend UI (`http://localhost:5173`).
+2. **Promote Account to Admin**: Once registered in Firebase Authentication, run the admin promotion script:
+```bash
+cd src/Backend
+uv run python ../../scripts/set_admin.py your-email@example.com
+```
+This script sets Firebase Custom Claims (`role: admin`, `authorized: true`) for the specified user account to grant access to the Admin Dashboard (`/admin`) and approve pending access requests.
+
+---
+
+### 4. Running for Development
+
+To run TicketRadar in development mode, start both the React frontend dev server and the FastAPI backend server in separate terminal windows:
+
+#### Terminal 1: React Frontend (UI)
+```bash
+make ui
+# Or manually: cd src/UI && npm run dev
+```
+*The frontend dashboard will be available at `http://localhost:5173`.*
+
+#### Terminal 2: FastAPI Backend
+```bash
+make run
+# Or manually: cd src/Backend && uv sync && uv run python main.py
+```
+*The API backend will be available at `http://127.0.0.1:8000`.*
+
+---
+
+## 🖥️ Using TicketRadar
+
+1. **Sign In & Access Request**: Open the dashboard at `http://localhost:5173`. Create an account or sign in via Firebase Auth. New users submit an access request which notifies admins.
+2. **Verify Alert Configuration**: Expand the **📬 Test Alerts Connection** section to send a test email or Discord notification before launching a radar.
+3. **Register a Radar Monitor**:
+   - **Booking URL**: Paste the BookMyShow movie showtimes URL (e.g. `https://in.bookmyshow.com/buytickets/...`).
+   - **Target Date**: Pick your intended movie date.
+   - **Target Theatres**: List theatre names (one per line). Substring matching is case-insensitive.
+   - **Check Frequency**: Set interval between checks (1–30 minutes).
+   - **Alert Channels**: Select Email or Discord Webhook.
    - Click **Start Radar**.
-4. **Control Monitors**: You can Pause, Restart, or Delete monitors at any time. Click **View logs** on any card to see real-time log output streamed instantly via long polling.
+4. **Manage Monitors & View Live Logs**: Pause, resume, restart, or delete active monitors. Click **View logs** on any monitor card to stream real-time log output via backend long-polling.
+5. **Detailed Instructions**: Visit the **Instructions (`/instruction`)** page in the dashboard for step-by-step guidance on capturing URLs and formatting theatre lists for BookMyShow.
+
+---
+
+## 📦 Building & Packaging
+
+TicketRadar supports building production assets and standalone desktop executables.
+
+| Command | Description | Output Location |
+| :--- | :--- | :--- |
+| `make build-ui` | Compiles the React frontend production bundle | `src/UI/dist` |
+| `make build-nuitka` | Builds standalone executable using Nuitka (recommended, fast startup) | `dist/nuitka/TicketRadar.dist/TicketRadar.exe` |
+| `make build-pyinstaller` | Builds single-file executable using PyInstaller | `dist/pyinstaller/TicketRadar.exe` |
+| `make clean` | Cleans build artifacts (`build/`, `dist/`, `src/UI/dist`) | — |
+
+---
+
+## 🚀 Cloud Deployment
+
+Deploy the FastAPI backend directly to FastAPI Cloud:
+```bash
+make deploy
+# Runs: cd src/Backend && uv run fastapi deploy
+```
 
 ---
 
 ## 📄 License
 
-This project is open-source and licensed under the [MIT License](LICENSE).
+This project is open-source software licensed under the [MIT License](LICENSE).

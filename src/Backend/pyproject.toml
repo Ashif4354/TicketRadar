@@ -1,7 +1,7 @@
 [project]
 name = "ticketradar"
 version = "0.1.0"
-description = "A fully asynchronous movie ticket booking monitor and alert system using Streamlit and httpx"
+description = "A fully asynchronous movie ticket booking monitor and alert system using FastAPI, React, and httpx"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
