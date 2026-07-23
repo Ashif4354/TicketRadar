@@ -55,9 +55,9 @@ class DiscordWebhookNotificationStrategy(NotificationStrategy):
         # Add resume note if there are remaining unavailable theatres
         resume_note = ""
         if unavailable_theatres:
-            resume_note = "\nℹ️ **Note:** Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, please resume your tracker from the dashboard.\n"
+            resume_note = "\nℹ️ **Note:** Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, resume your tracker from the dashboard.\n"
 
-        # Build embed description text (Strictly no "please")
+        # Build embed description text
         description = (
             f"**Movie:** {movie_name}\n"
             f"**Date:** {date_str}\n"

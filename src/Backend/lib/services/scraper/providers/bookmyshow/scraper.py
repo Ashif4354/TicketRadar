@@ -170,7 +170,7 @@ class BookMyShowBookingChecker(BookingChecker):
         except Exception as exc:
             log.error(
                 f"⚠️  Could not reach BookMyShow. "
-                f"Please check your internet connection and try again. ({exc})"
+                f"Check internet connection and try again. ({exc})"
             )
             return (
                 False,

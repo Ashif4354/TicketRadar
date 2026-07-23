@@ -16,7 +16,7 @@ export function BlockedPage() {
         </CardHeader>
         <CardContent className="p-0">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Your account has been blocked by an administrator. If you believe this is a mistake, please contact the support desk.
+            Your account has been blocked by an administrator. If you believe this is a mistake, contact the support desk.
           </p>
         </CardContent>
       </Card>

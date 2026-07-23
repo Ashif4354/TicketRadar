@@ -1,9 +1,8 @@
 # TicketRadar 🍿
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.14%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-6-646CFF.svg)](https://vitejs.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 TicketRadar is a fully asynchronous movie ticket booking monitor and alert system. It continuously watches movie booking pages and alerts you in real time as soon as ticket bookings open for your requested date and theatre list.
@@ -51,7 +50,7 @@ TicketRadar/
 
 ### Prerequisites
 - **Node.js** (v18 or higher)
-- **Python** (v3.10 or higher)
+- **Python** (v3.14 or higher)
 - **[uv](https://docs.astral.sh/uv/)** (recommended Python package installer & manager)
 - **Firebase Project** (Auth & Firestore enabled)
 

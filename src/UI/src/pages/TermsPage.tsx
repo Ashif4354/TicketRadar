@@ -34,7 +34,7 @@ export function TermsPage() {
               1. Acceptance of Terms
             </h3>
             <p className="text-muted-foreground">
-              By accessing, browsing, or using TicketRadar ("the Service"), you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use the platform.
+              By accessing, browsing, or using TicketRadar ("the Service"), you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions. If you do not agree to these terms, do not use the platform.
             </p>
           </section>
 

@@ -308,7 +308,7 @@ export function InstructionsPage() {
                       <span>Case Sensitivity Warning</span>
                     </div>
                     <p className="text-[11px] leading-relaxed opacity-90">
-                      This field is <strong>case-sensitive</strong>! Please enter the exact name of the theatre as it appears on the BookMyShow site (e.g. <code className="bg-black/30 px-1 py-0.5 rounded text-amber-100">PVR Forum Mall</code> or <code className="bg-black/30 px-1 py-0.5 rounded text-amber-100">Cinepolis Nexus</code>).
+                      This field is <strong>case-sensitive</strong>! Enter the exact name of the theatre as it appears on the BookMyShow site (e.g. <code className="bg-black/30 px-1 py-0.5 rounded text-amber-100">PVR Forum Mall</code> or <code className="bg-black/30 px-1 py-0.5 rounded text-amber-100">Cinepolis Nexus</code>).
                     </p>
                   </div>
                 </div>

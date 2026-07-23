@@ -60,14 +60,14 @@ class EmailNotificationStrategy(NotificationStrategy):
         resume_note_text = ""
         resume_note_html = ""
         if unavailable_theatres:
-            resume_note_text = "\nNote: Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, please resume your tracker from the dashboard.\n"
+            resume_note_text = "\nNote: Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, resume your tracker from the dashboard.\n"
             resume_note_html = """
                 <div style="margin-top: 15px; padding: 12px 16px; background-color: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b; border-radius: 6px; font-size: 13px; color: #fbbf24; line-height: 1.5;">
-                  ℹ️ <strong>Note:</strong> Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, please resume your tracker from the dashboard.
+                  ℹ️ <strong>Note:</strong> Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, resume your tracker from the dashboard.
                 </div>
             """
 
-        # Text body template (Strictly no "please")
+        # Text body template
         text_body = (
             f"TicketRadar: Booking Open!\n\n"
             f"Movie: {movie_name}\n"
@@ -83,7 +83,7 @@ class EmailNotificationStrategy(NotificationStrategy):
             f"Book tickets immediately."
         )
 
-        # HTML body template (Strictly no "please")
+        # HTML body template
         html_body = f"""
         <html>
           <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0e1117; color: #ffffff; padding: 20px;">

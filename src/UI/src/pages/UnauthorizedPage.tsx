@@ -20,7 +20,7 @@ export function UnauthorizedPage() {
 
     const token = recaptchaRef.current?.getValue() || "";
     if (!securityDisabled && !token) {
-      setError("Please complete the security check first.");
+      setError("Complete the security check first.");
       return;
     }
 
@@ -64,10 +64,19 @@ export function UnauthorizedPage() {
         
         <CardContent className="space-y-4 p-0">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Your Google account is signed in, but needs approval before you can create ticket alerts. Please request access below.
+            Your Google account is signed in, but needs approval before you can create ticket alerts. Request access below.
           </p>
-          <p className="text-[11px] text-muted-foreground/80 italic border-l-2 border-amber-500/40 pl-2 text-left">
-            Access is currently granted primarily to a close circle. If you wish to run TicketRadar independently, you can deploy it on-premise directly from the GitHub repository with security settings configured as needed.
+          <p className="text-xs text-muted-foreground/90 italic border-l-2 border-amber-500/40 pl-3 py-1 text-left bg-amber-500/5 rounded-r-md">
+            I am only giving access to my close circle, so if you want to run this, you can surely run it on premise from the{' '}
+            <a 
+              href="https://github.com/Ashif4354/TicketRadar" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-amber-400 underline underline-offset-2 hover:text-amber-300 font-medium not-italic"
+            >
+              github repo
+            </a>
+            .
           </p>
 
           {error && (

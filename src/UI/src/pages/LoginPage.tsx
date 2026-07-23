@@ -87,7 +87,7 @@ export function LoginPage() {
 
           {!acceptedTC ? (
             <p className="text-[11px] text-amber-500/90 font-medium text-center">
-              Please check the agreement box above to enable Google sign-in.
+              Check the agreement box above to enable Google sign-in.
             </p>
           ) : (
             <p className="text-[11px] text-emerald-500/90 font-medium text-center flex items-center justify-center gap-1">

@@ -113,7 +113,7 @@ export function AppDashboard() {
 
     const token = recaptchaRef.current?.getValue() || "";
     if (!isSecurityDisabled(config) && !token) {
-      setTestResult({ success: false, message: "Please complete the reCAPTCHA challenge first." });
+      setTestResult({ success: false, message: "Complete the reCAPTCHA challenge first." });
       return;
     }
 
@@ -158,7 +158,7 @@ export function AppDashboard() {
     const errors: string[] = [];
 
     if (!isSecurityDisabled(config) && !token) {
-      errors.push("Please complete the reCAPTCHA challenge first.");
+      errors.push("Complete the reCAPTCHA challenge first.");
     }
 
     if (!url.trim()) {
@@ -296,7 +296,7 @@ export function AppDashboard() {
               Setup Configuration Issue
             </h4>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Some settings are missing. Please check if your <code>.env</code> configuration file is set up correctly.
+              Some settings are missing. Check if your <code>.env</code> configuration file is set up correctly.
             </p>
             <pre className="text-xs font-mono bg-black/40 border border-border/50 p-3 rounded-lg overflow-x-auto text-rose-400">
               {config.config_error}
