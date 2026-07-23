@@ -23,15 +23,20 @@ export const googleProvider = new GoogleAuthProvider();
 
 const isSecurityDisabled = import.meta.env.VITE_DISABLE_SECURITY === 'true' || import.meta.env.DISABLE_SECURITY === 'true';
 
-// Enable debug token in development mode for local testing
+// In DEV mode, set the debug token BEFORE initializeAppCheck so the SDK
+// uses the debug flow instead of attempting a real reCAPTCHA exchange.
+// Do NOT combine the global debug token flag with ReCaptchaV3Provider —
+// that causes `apps/undefined` 400 errors because the SDK gets confused
+// between the debug and production code paths.
 if (import.meta.env.DEV && !isSecurityDisabled) {
   (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN || true;
 }
 
-const siteKey = import.meta.env.VITE_APP_CHECK_SITE_KEY || '6Ldf_dummy_key_for_dev_mode';
+const siteKey = import.meta.env.VITE_APP_CHECK_SITE_KEY;
 
-// Initialize App Check
-export const appCheck = (!isSecurityDisabled && siteKey) ? initializeAppCheck(app, {
+// Only initialize App Check with ReCaptchaV3Provider in production.
+// In DEV mode the FIREBASE_APPCHECK_DEBUG_TOKEN on `self` handles it.
+export const appCheck = (!isSecurityDisabled && !import.meta.env.DEV && siteKey) ? initializeAppCheck(app, {
   provider: new ReCaptchaV3Provider(siteKey),
   isTokenAutoRefreshEnabled: true
 }) : null;
