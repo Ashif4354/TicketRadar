@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock } from 'lucide-react';
+import { Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -484,7 +484,20 @@ export function AdminDashboard() {
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5">
                                   <Film className="h-4 w-4 text-rose-400 shrink-0" />
-                                  <h3 className="font-bold text-foreground text-sm leading-snug break-words">{j.movie_name}</h3>
+                                  {j.url ? (
+                                    <a
+                                      href={j.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-bold text-foreground text-sm leading-snug break-words hover:text-rose-400 transition-colors flex items-center gap-1 group"
+                                      title={j.url}
+                                    >
+                                      {j.movie_name}
+                                      <ExternalLink className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity" />
+                                    </a>
+                                  ) : (
+                                    <h3 className="font-bold text-foreground text-sm leading-snug break-words">{j.movie_name}</h3>
+                                  )}
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
                                   <span className="font-mono bg-muted/40 px-1.5 py-0.5 rounded text-[10px]">#{j.id}</span>
@@ -620,7 +633,20 @@ export function AdminDashboard() {
                                 <td className="py-3.5 px-4 space-y-1">
                                   <div className="font-semibold text-foreground flex items-center gap-1.5">
                                     <Film className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                                    {j.movie_name}
+                                    {j.url ? (
+                                      <a
+                                        href={j.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:text-rose-400 transition-colors flex items-center gap-1 group"
+                                        title={j.url}
+                                      >
+                                        {j.movie_name}
+                                        <ExternalLink className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity" />
+                                      </a>
+                                    ) : (
+                                      j.movie_name
+                                    )}
                                   </div>
                                   <div className="text-[10px] font-mono text-muted-foreground">Job #{j.id}</div>
                                   <div className="text-[10px] text-muted-foreground flex items-center gap-1">
