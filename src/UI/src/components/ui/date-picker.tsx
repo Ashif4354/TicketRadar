@@ -82,17 +82,24 @@ export function DatePicker({
           </span>
         </div>
         {selectedDate ? (
-          <button
-            type="button"
+          <span
+            role="button"
+            tabIndex={0}
             onClick={(e) => {
               e.stopPropagation();
               onChange('');
             }}
-            className="p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                onChange('');
+              }
+            }}
+            className="p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
             title="Clear date"
           >
             <X className="h-3 w-3" />
-          </button>
+          </span>
         ) : (
           <span className="text-[10px] text-muted-foreground/50 uppercase font-mono">Select</span>
         )}
