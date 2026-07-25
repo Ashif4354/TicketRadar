@@ -25,6 +25,14 @@ class CreateJobRequest(BaseModel):
     recaptcha_token: str = Field(default="", description="Google reCAPTCHA token")
 
 
+class UpdateJobRequest(BaseModel):
+    service_provider: str = "BookMyShow"
+    notification_medium: str
+    notification_config: Dict[str, Any]
+    check_interval: int = Field(default=60, ge=60, description="Check interval in seconds (minimum 60s / 1 min)")
+    params: JobParams
+
+
 class UpdateRoleRequest(BaseModel):
     role: str
 

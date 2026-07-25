@@ -68,6 +68,23 @@ class MonitorJob:
             if movie_name:
                 self.movie_name = movie_name
 
+    def update_data(
+        self,
+        params: Dict[str, Any],
+        notification_medium: str,
+        notification_config: Dict[str, Any],
+        service_provider: str = "bookmyshow",
+        check_interval: Optional[int] = None
+    ) -> None:
+        """Thread-safely updates the job configuration and parameters."""
+        with self._lock:
+            self.params = params
+            self.notification_medium = notification_medium.strip().lower()
+            self.notification_config = notification_config
+            self.service_provider = service_provider.strip().lower()
+            self.check_interval = max(60, check_interval) if check_interval is not None else 60
+            self.movie_name = "Fetching..."
+
     def get_state(self) -> Dict[str, Any]:
         """Thread-safely returns a full snapshot of the job state for API responses."""
         with self._lock:

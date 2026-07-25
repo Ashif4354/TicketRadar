@@ -5,7 +5,7 @@ import {
   Film, Calendar, MessageSquare, Clock, 
   Play, Pause, Trash2, Sliders, Plus, Send, 
   AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  ExternalLink, RefreshCw, Timer, Power, BookOpen
+  ExternalLink, RefreshCw, Timer, Power, BookOpen, Pencil, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -47,9 +47,118 @@ export function AppDashboard() {
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  // reCAPTCHA ref
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
-  const mainRecaptchaRef = useRef<ReCAPTCHA>(null);
+  // Edit Job State
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [editUrl, setEditUrl] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editTheatres, setEditTheatres] = useState("");
+  const [editMedium, setEditMedium] = useState<"Email" | "Discord Webhook">("Email");
+  const [editEmail, setEditEmail] = useState("");
+  const [editWebhook, setEditWebhook] = useState("");
+  const [editIntervalSec, setEditIntervalSec] = useState(60);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const handleOpenEdit = (job: Job) => {
+    setEditingJob(job);
+    setEditUrl(job.url || job.params?.url || "");
+
+    const dateStr = job.date_str || job.params?.date_str || "";
+    if (dateStr.length === 8) {
+      setEditDate(`${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`);
+    } else {
+      setEditDate(dateStr);
+    }
+
+    const theatresArr = job.theatres || job.params?.theatres || [];
+    setEditTheatres(Array.isArray(theatresArr) ? theatresArr.join("\n") : String(theatresArr));
+
+    const med = job.notification_medium?.toLowerCase().includes("webhook") ? "Discord Webhook" : "Email";
+    setEditMedium(med);
+
+    setEditEmail(job.notification_config?.recipient_email || "");
+    setEditWebhook(job.notification_config?.webhook_url || "");
+    setEditIntervalSec(job.check_interval || 60);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingJob) return;
+
+    setEditError(null);
+
+    if (!editUrl.trim() || !editUrl.trim().startsWith("http")) {
+      setEditError("Enter a valid HTTP/HTTPS URL.");
+      return;
+    }
+
+    if (!editDate) {
+      setEditError("Target date is required.");
+      return;
+    }
+
+    const parsedTheatres = editTheatres
+      .split('\n')
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
+
+    if (parsedTheatres.length === 0) {
+      setEditError("At least one theatre name is required.");
+      return;
+    }
+
+    if (editMedium === "Email" && !editEmail.trim()) {
+      setEditError("Recipient email address is required.");
+      return;
+    }
+
+    if (editMedium === "Discord Webhook" && !editWebhook.trim()) {
+      setEditError("Discord Webhook URL is required.");
+      return;
+    }
+
+    if (editIntervalSec < 60) {
+      setEditError("Check frequency cannot be less than 1 minute (60 seconds).");
+      return;
+    }
+
+    const dateFormatted = editDate.replace(/-/g, '');
+
+    const payload = {
+      service_provider: editingJob.service_provider || "BookMyShow",
+      notification_medium: editMedium,
+      notification_config: editMedium === "Email"
+        ? { recipient_email: editEmail.trim() }
+        : { webhook_url: editWebhook.trim() },
+      check_interval: editIntervalSec,
+      params: {
+        url: editUrl.trim(),
+        date_str: dateFormatted,
+        theatres: parsedTheatres
+      }
+    };
+
+    setEditLoading(true);
+    try {
+      const res = await authenticatedFetch(`/api/jobs/${editingJob.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditingJob(null);
+        fetchJobs();
+      } else {
+        setEditError(data.detail || "Failed to update job.");
+      }
+    } catch (err: any) {
+      setEditError(err.message || "Failed to reach server.");
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -829,8 +938,8 @@ Inox Forum Mall"
                     </CardContent>
 
                     {/* Control Panel Buttons Row */}
-                    <div className="bg-muted/20 px-5 py-3.5 flex items-center justify-between border-t border-border/30 gap-4">
-                      <div className="flex items-center gap-2">
+                    <div className="bg-muted/20 px-5 py-3.5 flex items-center justify-between border-t border-border/30 gap-4 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {job.status === "Running" ? (
                           <Button 
                             onClick={() => handleStopJob(job.id)} 
@@ -852,6 +961,15 @@ Inox Forum Mall"
                             Resume Alert
                           </Button>
                         )}
+                        <Button
+                          onClick={() => handleOpenEdit(job)}
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs font-semibold gap-1.5 border-border/60 hover:border-rose-500/40"
+                        >
+                          <Pencil className="h-3.5 w-3.5 text-rose-400" />
+                          Edit Tracker
+                        </Button>
                       </div>
                       
                       <Button 
@@ -874,6 +992,169 @@ Inox Forum Mall"
         </div>
 
       </div>
+
+      {/* Edit Job Modal Overlay */}
+      {editingJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-border/80 rounded-2xl p-6 shadow-2xl space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-border/40 pb-4">
+              <div className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-rose-500" />
+                <h3 className="text-base font-bold text-foreground">Edit Ticket Tracker #{editingJob.id}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingJob(null)}
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+              {/* URL */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">
+                  Movie Booking Page URL 🔗
+                </label>
+                <Input
+                  type="text"
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  placeholder="https://in.bookmyshow.com/buytickets/..."
+                  className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
+                />
+              </div>
+
+              {/* Date */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">
+                  Target Show Date 📅
+                </label>
+                <DatePicker
+                  value={editDate}
+                  onChange={(val) => setEditDate(val)}
+                  placeholder="Select Date"
+                />
+              </div>
+
+              {/* Theatres */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">
+                  Target Cinemas 🏢 (One per line)
+                </label>
+                <Textarea
+                  value={editTheatres}
+                  onChange={(e) => setEditTheatres(e.target.value)}
+                  rows={3}
+                  placeholder="PVR ECX Chanakyapuri&#10;INOX Insignia Epicuria"
+                  className="text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
+                />
+              </div>
+
+              {/* Notification Medium */}
+              <div className="space-y-1.5 border-t border-border/30 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">
+                    Notification Medium
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditMedium("Email")}
+                      className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-all cursor-pointer ${
+                        editMedium === "Email"
+                          ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
+                          : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
+                      }`}
+                    >
+                      Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditMedium("Discord Webhook")}
+                      className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-all cursor-pointer ${
+                        editMedium === "Discord Webhook"
+                          ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
+                          : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
+                      }`}
+                    >
+                      Discord
+                    </button>
+                  </div>
+                </div>
+
+                {editMedium === "Email" ? (
+                  <Input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="your-email@gmail.com"
+                    className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
+                  />
+                ) : (
+                  <Input
+                    type="text"
+                    value={editWebhook}
+                    onChange={(e) => setEditWebhook(e.target.value)}
+                    placeholder="Paste Discord Webhook URL"
+                    className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
+                  />
+                )}
+              </div>
+
+              {/* Check Frequency */}
+              <div className="space-y-2 border-t border-border/30 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">
+                    Check Frequency
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={editIntervalSec > 0 ? Math.round(editIntervalSec / 60) : ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setEditIntervalSec(isNaN(val) ? 0 : val * 60);
+                      }}
+                      className="w-16 h-7 text-xs font-mono text-right bg-muted/20 text-foreground"
+                    />
+                    <span className="text-[11px] text-muted-foreground">min</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex justify-end gap-2 border-t border-border/30 pt-4 mt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setEditingJob(null)}
+                  disabled={editLoading}
+                  className="h-9 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={editLoading}
+                  className="h-9 text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white gap-1.5 cursor-pointer"
+                >
+                  {editLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : "Save & Update Tracker"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </main>
   );

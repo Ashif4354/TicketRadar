@@ -6,7 +6,10 @@ from google.cloud import firestore as google_firestore
 
 from lib.core.auth import get_admin_user, db, auth as firebase_auth
 from lib.core.monitor import JobManager
-from lib.services.notification import admin_notifier
+from lib.services.notification import (
+    admin_notifier,
+    send_user_access_granted_email,
+)
 from lib.services.gcp_logger import gcp_logger
 from api.schemas import UpdateRoleRequest
 from api.dependencies import get_user_details
@@ -265,6 +268,7 @@ async def admin_approve_request(
 
         name, email, photo_url = get_user_details(uid)
         background_tasks.add_task(admin_notifier.notify_access_request_status, name, email, "approved", photo_url)
+        background_tasks.add_task(send_user_access_granted_email, email, name)
 
         gcp_logger.log_event(
             "Access Request Approved",

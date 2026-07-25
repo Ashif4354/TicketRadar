@@ -15,7 +15,7 @@ from lib.services.scraper.factory import ScraperFactory
 from lib.services.notification import admin_notifier
 from lib.services.gcp_logger import gcp_logger
 from lib.core.auth import get_authorized_user
-from api.schemas import CreateJobRequest
+from api.schemas import CreateJobRequest, UpdateJobRequest
 from api.dependencies import verify_recaptcha, get_user_details
 
 logger = logging.getLogger("ticketradar.api")
@@ -290,3 +290,99 @@ async def delete_job(
         return {"success": True, "message": f"Job #{job_id} deleted."}
     else:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
+
+
+@router.put("/{job_id}")
+async def update_job(
+    job_id: str,
+    payload: UpdateJobRequest,
+    claims: dict = Depends(get_authorized_user)
+):
+    """Updates an existing monitor job. Only the job creator is allowed to edit it."""
+    job = manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
+
+    user_uid = claims.get("uid")
+    # Admin is explicitly prohibited from editing other users' jobs
+    if job.created_by != user_uid:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: You are only permitted to edit jobs created by yourself."
+        )
+
+    # Validate check interval minimum (minimum 1 minute / 60 seconds)
+    if payload.check_interval < 60:
+        raise HTTPException(status_code=400, detail="Check interval cannot be less than 1 minute (60 seconds).")
+
+    # Validate provider
+    service_provider = payload.service_provider
+    try:
+        scraper_cls = ScraperFactory.get_scraper_class(service_provider)
+        scraper_cls.get_required_fields()
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Unsupported service provider: {service_provider}")
+
+    # Validate parameters
+    url = payload.params.url.strip()
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Enter a valid HTTP/HTTPS URL.")
+
+    params = {
+        "url": url,
+        "date_str": payload.params.date_str.strip(),
+        "theatres": payload.params.theatres
+    }
+
+    medium = payload.notification_medium.strip().lower()
+    if "email" in medium:
+        recipient = payload.notification_config.get("recipient_email", "").strip()
+        if not recipient:
+            raise HTTPException(status_code=400, detail="Recipient email is required for Email notification.")
+        notif_config = {"recipient_email": recipient}
+        medium_name = "Email"
+    else:
+        webhook = payload.notification_config.get("webhook_url", "").strip()
+        if not webhook:
+            raise HTTPException(status_code=400, detail="Discord Webhook URL is required for Webhook notification.")
+        notif_config = {"webhook_url": webhook}
+        medium_name = "Discord Webhook"
+
+    was_running = (job.status == "Running")
+
+    # Update job internal data
+    job.update_data(
+        params=params,
+        notification_medium=medium_name,
+        notification_config=notif_config,
+        service_provider=service_provider,
+        check_interval=payload.check_interval
+    )
+
+    if was_running:
+        # Stop existing background loop
+        manager.stop_job(job_id)
+        job.update_state("Idle", "Job updated — restarting monitor with new data...")
+        manager._save_job_to_firestore(job)
+        # Restart immediately with new data
+        success = manager.start_job(job)
+        if not success:
+            logger.warning(f"Job #{job_id} updated while running, but automatic restart failed.")
+    else:
+        job.update_state("Stopped", "Job parameters updated. Click Resume Alert to start monitoring.")
+        manager._save_job_to_firestore(job)
+
+    user_name, email, _ = get_user_details(user_uid, claims)
+    gcp_logger.log_event(
+        "Job Updated",
+        user_id=user_uid,
+        details={
+            "job_id": job.id,
+            "movie_name": job.movie_name,
+            "service_provider": service_provider,
+            "was_running": was_running,
+            "user_email": email
+        }
+    )
+
+    return {"success": True, "message": "Job updated successfully.", "state": job.get_state()}
