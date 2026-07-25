@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp } from '../utils/formatters';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs'>('requests');
@@ -18,6 +19,8 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [jobToStop, setJobToStop] = useState<any | null>(null);
+  const [jobToDelete, setJobToDelete] = useState<any | null>(null);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -141,7 +144,6 @@ export function AdminDashboard() {
   };
 
   const handleAdminDeleteJob = async (jobId: string) => {
-    if (!confirm(`Are you sure you want to delete job #${jobId}?`)) return;
     setActionLoading(jobId);
     try {
       const res = await authenticatedFetch(`/admin/jobs/${jobId}`, { method: 'DELETE' });
@@ -654,21 +656,21 @@ export function AdminDashboard() {
 
                                 {j.status === 'Running' && (
                                   <Button
-                                    onClick={() => handleAdminStopJob(j.id)}
+                                    onClick={() => setJobToStop(j)}
                                     disabled={actionLoading !== null}
                                     variant="secondary"
                                     size="sm"
-                                    className="h-7 px-2.5 text-[10px] font-bold"
+                                    className="h-7 px-2.5 text-[10px] font-bold cursor-pointer"
                                   >
                                     Stop
                                   </Button>
                                 )}
                                 <Button
-                                  onClick={() => handleAdminDeleteJob(j.id)}
+                                  onClick={() => setJobToDelete(j)}
                                   disabled={actionLoading !== null}
                                   variant="destructive"
                                   size="sm"
-                                  className="h-7 px-2.5 text-[10px] font-bold"
+                                  className="h-7 px-2.5 text-[10px] font-bold cursor-pointer"
                                 >
                                   Delete
                                 </Button>
@@ -834,21 +836,21 @@ export function AdminDashboard() {
                                 <td className="py-3.5 px-4 text-right space-x-2">
                                   {j.status === 'Running' && (
                                     <Button
-                                      onClick={() => handleAdminStopJob(j.id)}
+                                      onClick={() => setJobToStop(j)}
                                       disabled={actionLoading !== null}
                                       variant="secondary"
                                       size="sm"
-                                      className="h-7 text-[10px] font-bold"
+                                      className="h-7 text-[10px] font-bold cursor-pointer"
                                     >
                                       Stop
                                     </Button>
                                   )}
                                   <Button
-                                    onClick={() => handleAdminDeleteJob(j.id)}
+                                    onClick={() => setJobToDelete(j)}
                                     disabled={actionLoading !== null}
                                     variant="destructive"
                                     size="sm"
-                                    className="h-7 text-[10px] font-bold"
+                                    className="h-7 text-[10px] font-bold cursor-pointer"
                                   >
                                     Delete
                                   </Button>
@@ -866,6 +868,49 @@ export function AdminDashboard() {
           )}
         </>
       )}
+
+      {/* Confirm Admin Stop Job Modal */}
+      <ConfirmModal
+        isOpen={!!jobToStop}
+        onClose={() => setJobToStop(null)}
+        onConfirm={async () => {
+          if (jobToStop) {
+            await handleAdminStopJob(jobToStop.id);
+            setJobToStop(null);
+          }
+        }}
+        title="Stop Monitoring Job"
+        description={
+          <>Are you sure you want to stop job <strong className="text-foreground font-mono">#{jobToStop?.id}</strong> ({jobToStop?.movie_name || 'Movie Tracker'})?</>
+        }
+        confirmText="Stop Job"
+        cancelText="Cancel"
+        variant="warning"
+        icon="stop"
+        isLoading={actionLoading === jobToStop?.id}
+      />
+
+      {/* Confirm Admin Delete Job Modal */}
+      <ConfirmModal
+        isOpen={!!jobToDelete}
+        onClose={() => setJobToDelete(null)}
+        onConfirm={async () => {
+          if (jobToDelete) {
+            await handleAdminDeleteJob(jobToDelete.id);
+            setJobToDelete(null);
+          }
+        }}
+        title="Delete Monitoring Job"
+        description={
+          <>Are you sure you want to permanently delete job <strong className="text-foreground font-mono">#{jobToDelete?.id}</strong> ({jobToDelete?.movie_name || 'Movie Tracker'})? This action cannot be undone.</>
+        }
+        confirmText="Delete Job"
+        cancelText="Cancel"
+        variant="danger"
+        icon="delete"
+        isLoading={actionLoading === jobToDelete?.id}
+      />
+
     </main>
   );
 }

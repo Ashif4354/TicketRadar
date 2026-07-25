@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 
 import { DatePicker } from '@/components/ui/date-picker';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp, formatInterval } from '../utils/formatters';
 import { isSecurityDisabled } from '../utils/security';
@@ -25,6 +26,7 @@ export function AppDashboard() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
 
   // Global Config inputs
   const [serviceProvider] = useState("BookMyShow");
@@ -964,7 +966,7 @@ Inox Forum Mall"
                             onClick={() => handleStopJob(job.id)} 
                             variant="secondary"
                             size="sm"
-                            className="h-8 text-xs font-semibold"
+                            className="h-8 text-xs font-semibold cursor-pointer"
                           >
                             <Pause className="h-3.5 w-3.5 text-amber-400" />
                             Pause Alert
@@ -974,7 +976,7 @@ Inox Forum Mall"
                             onClick={() => handleStartJob(job.id)} 
                             variant="secondary"
                             size="sm"
-                            className="h-8 text-xs font-semibold"
+                            className="h-8 text-xs font-semibold cursor-pointer"
                           >
                             <Play className="h-3.5 w-3.5 text-emerald-400" />
                             Resume Alert
@@ -984,7 +986,7 @@ Inox Forum Mall"
                           onClick={() => handleOpenEdit(job)}
                           variant="outline"
                           size="sm"
-                          className="h-8 text-xs font-semibold gap-1.5 border-border/60 hover:border-rose-500/40"
+                          className="h-8 text-xs font-semibold gap-1.5 border-border/60 hover:border-rose-500/40 cursor-pointer"
                         >
                           <Pencil className="h-3.5 w-3.5 text-rose-400" />
                           Edit Tracker
@@ -992,10 +994,10 @@ Inox Forum Mall"
                       </div>
                       
                       <Button 
-                        onClick={() => handleDeleteJob(job.id)} 
+                        onClick={() => setJobToDelete(job)} 
                         variant="ghost"
                         size="sm"
-                        className="h-8 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20"
+                        className="h-8 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 cursor-pointer"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Remove Alert
@@ -1174,6 +1176,26 @@ Inox Forum Mall"
           </div>
         </div>
       )}
+
+      {/* In-App Confirmation Modal for Delete Tracker */}
+      <ConfirmModal
+        isOpen={!!jobToDelete}
+        onClose={() => setJobToDelete(null)}
+        onConfirm={async () => {
+          if (jobToDelete) {
+            await handleDeleteJob(jobToDelete.id);
+            setJobToDelete(null);
+          }
+        }}
+        title="Remove Ticket Tracker"
+        description={
+          <>Are you sure you want to remove ticket tracker <strong className="text-foreground font-mono">#{jobToDelete?.id}</strong> ({jobToDelete?.movie_name})? This action cannot be undone.</>
+        }
+        confirmText="Remove Alert"
+        cancelText="Cancel"
+        variant="danger"
+        icon="delete"
+      />
 
     </main>
   );
