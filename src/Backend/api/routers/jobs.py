@@ -40,6 +40,25 @@ def get_jobs_state_hash(jobs: List[MonitorJob]) -> str:
     return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
 
+import re
+
+def validate_job_url(service_provider: str, raw_url: str) -> str:
+    """Validates that the provided URL is a valid HTTPS URL and matches provider format rules."""
+    url = raw_url.strip()
+    if not url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="Enter a valid HTTPS URL.")
+
+    sp_lower = service_provider.lower().replace(" ", "").replace("-", "")
+    if "bookmyshow" in sp_lower:
+        pattern = r'^https://(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com/movies/[^/]+/[^/]+/buytickets/[^/]+'
+        if not re.match(pattern, url, re.IGNORECASE):
+            raise HTTPException(
+                status_code=400,
+                detail="Enter a valid BookMyShow movie link."
+            )
+    return url
+
+
 def verify_job_access(job_id: str, claims: dict) -> MonitorJob:
     """Verifies that the user has access to the job (owner or admin)."""
     job = manager.get_job(job_id)
@@ -123,9 +142,7 @@ async def create_job(
         raise HTTPException(status_code=400, detail=f"Unsupported service provider: {service_provider}")
 
     # Validate parameters
-    url = payload.params.url.strip()
-    if not url.startswith("http"):
-        raise HTTPException(status_code=400, detail="Enter a valid HTTP/HTTPS URL.")
+    url = validate_job_url(service_provider, payload.params.url)
 
     params = {
         "url": url,
@@ -324,9 +341,7 @@ async def update_job(
         raise HTTPException(status_code=400, detail=f"Unsupported service provider: {service_provider}")
 
     # Validate parameters
-    url = payload.params.url.strip()
-    if not url.startswith("http"):
-        raise HTTPException(status_code=400, detail="Enter a valid HTTP/HTTPS URL.")
+    url = validate_job_url(service_provider, payload.params.url)
 
     params = {
         "url": url,

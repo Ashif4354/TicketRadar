@@ -47,6 +47,10 @@ export function AppDashboard() {
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // reCAPTCHA ref
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+  const mainRecaptchaRef = useRef<ReCAPTCHA>(null);
+
   // Edit Job State
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [editUrl, setEditUrl] = useState("");
@@ -88,8 +92,12 @@ export function AppDashboard() {
 
     setEditError(null);
 
-    if (!editUrl.trim() || !editUrl.trim().startsWith("http")) {
-      setEditError("Enter a valid HTTP/HTTPS URL.");
+    const bmsPattern = /^https:\/\/(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com\/movies\/[^/]+\/[^/]+\/buytickets\/[^/]+/;
+    if (!editUrl.trim() || !editUrl.trim().startsWith("https://")) {
+      setEditError("Enter a valid HTTPS URL.");
+      return;
+    } else if ((editingJob.service_provider || "BookMyShow").toLowerCase().includes("bookmyshow") && !bmsPattern.test(editUrl.trim())) {
+      setEditError("Enter a valid BookMyShow movie link.");
       return;
     }
 
@@ -270,10 +278,13 @@ export function AppDashboard() {
       errors.push("Complete the reCAPTCHA challenge first.");
     }
 
+    const bmsPattern = /^https:\/\/(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com\/movies\/[^/]+\/[^/]+\/buytickets\/[^/]+/;
     if (!url.trim()) {
       errors.push("Movie Page URL is required.");
-    } else if (!url.trim().startsWith("http")) {
-      errors.push("Enter a valid HTTP/HTTPS URL.");
+    } else if (!url.trim().startsWith("https://")) {
+      errors.push("Enter a valid HTTPS URL.");
+    } else if (serviceProvider.toLowerCase().includes("bookmyshow") && !bmsPattern.test(url.trim())) {
+      errors.push("Enter a valid BookMyShow movie link.");
     }
 
     if (!targetDate) {
