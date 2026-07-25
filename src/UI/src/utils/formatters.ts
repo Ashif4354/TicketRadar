@@ -9,26 +9,54 @@ export function formatBmsDate(dateStr: string): string {
   return `${parseInt(d, 10)} ${mName} ${y}`;
 }
 
-export function formatTimestamp(ts: string | number | null): string {
+export function formatTimestamp(ts: string | number | null, isAdmin: boolean = false): string {
   if (!ts) return "Never";
   try {
-    const d = new Date(ts);
+    let d: Date;
+    if (typeof ts === 'number') {
+      d = new Date(ts);
+    } else if (typeof ts === 'string') {
+      let str = ts.trim();
+      if (str.includes('T') && !str.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(str)) {
+        str += 'Z';
+      }
+      d = new Date(str);
+    } else {
+      d = new Date(ts);
+    }
+
     if (isNaN(d.getTime())) return String(ts);
     
-    const formatter = new Intl.DateTimeFormat('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
-    const parts = formatter.formatToParts(d);
-    const map: Record<string, string> = {};
-    parts.forEach(p => { if (p.type !== 'literal') map[p.type] = p.value; });
-    return `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}:${map.second} IST`;
+    if (isAdmin) {
+      const formatter = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      const parts = formatter.formatToParts(d);
+      const map: Record<string, string> = {};
+      parts.forEach(p => { if (p.type !== 'literal') map[p.type] = p.value; });
+      return `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}:${map.second} IST`;
+    } else {
+      const formatter = new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      const parts = formatter.formatToParts(d);
+      const map: Record<string, string> = {};
+      parts.forEach(p => { if (p.type !== 'literal') map[p.type] = p.value; });
+      return `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}:${map.second}`;
+    }
   } catch (e) {
     return String(ts);
   }

@@ -376,7 +376,7 @@ export function AdminDashboard() {
                                     </div>
                                   </td>
                                   <td className="py-3.5 px-4 text-muted-foreground text-[11px]">
-                                    {r.requested_at ? formatTimestamp(r.requested_at) : 'N/A'}
+                                    {r.requested_at ? formatTimestamp(r.requested_at, true) : 'N/A'}
                                   </td>
                                   <td className="py-3.5 px-4 text-right space-x-2">
                                     <Button
@@ -454,7 +454,7 @@ export function AdminDashboard() {
                                     </div>
                                   </td>
                                   <td className="py-3.5 px-4 text-muted-foreground/70 text-[11px]">
-                                    {r.requested_at ? formatTimestamp(r.requested_at) : 'N/A'}
+                                    {r.requested_at ? formatTimestamp(r.requested_at, true) : 'N/A'}
                                   </td>
                                   <td className="py-3.5 px-4 text-right">
                                     <Button
@@ -637,7 +637,7 @@ export function AdminDashboard() {
                                   <span className="font-mono bg-muted/40 px-1.5 py-0.5 rounded text-[10px]">#{j.id}</span>
                                   <span className="flex items-center gap-1">
                                     <Clock className="h-3 w-3 text-muted-foreground/70" />
-                                    {formatTimestamp(j.created_at)}
+                                    {formatTimestamp(j.created_at, true)}
                                   </span>
                                 </div>
                               </div>
@@ -727,7 +727,7 @@ export function AdminDashboard() {
                               <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 text-muted-foreground">
                                 <Info className="h-3 w-3 text-rose-400 shrink-0" /> Last Checked
                               </span>
-                              <span className="text-[10px] text-muted-foreground">{formatTimestamp(j.last_checked_at)}</span>
+                              <span className="text-[10px] text-muted-foreground">{formatTimestamp(j.last_checked_at, true)}</span>
                             </div>
                             <div className="text-foreground/90 font-mono text-[11px] leading-snug break-all">
                               {j.last_result || "No checks performed yet."}
@@ -785,7 +785,7 @@ export function AdminDashboard() {
                                   <div className="text-[10px] font-mono text-muted-foreground">Job #{j.id}</div>
                                   <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                                     <Clock className="h-3 w-3 shrink-0" />
-                                    <span>{formatTimestamp(j.created_at)}</span>
+                                    <span>{formatTimestamp(j.created_at, true)}</span>
                                   </div>
                                 </td>
                                 <td className="py-3.5 px-4 space-y-0.5">
@@ -825,7 +825,7 @@ export function AdminDashboard() {
                                     {j.status}
                                   </Badge>
                                   <div className="text-[10px] text-muted-foreground">
-                                    Checked: {formatTimestamp(j.last_checked_at)}
+                                    Checked: {formatTimestamp(j.last_checked_at, true)}
                                   </div>
                                   <div className="text-[10px] text-muted-foreground/90 font-mono truncate max-w-[180px]" title={j.last_result}>
                                     {j.last_result || "N/A"}

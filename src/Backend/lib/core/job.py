@@ -1,7 +1,7 @@
 # src/core/job.py
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 from typing import Dict, List, Optional, Any
 
@@ -33,7 +33,7 @@ class MonitorJob:
         self.created_by = created_by
         self.creator_email = creator_email
         
-        self.created_at = datetime.now()
+        self.created_at = datetime.now(timezone.utc)
         self.status = "Idle"  # Idle, Running, Success, Error, Stopped
         self.last_checked_at: Optional[datetime] = None
         self.last_result: str = "Created"
@@ -64,7 +64,7 @@ class MonitorJob:
         with self._lock:
             self.status = status
             self.last_result = last_result
-            self.last_checked_at = datetime.now()
+            self.last_checked_at = datetime.now(timezone.utc)
             if movie_name:
                 self.movie_name = movie_name
 
