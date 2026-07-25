@@ -892,6 +892,14 @@ Inox Forum Mall"
 
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Clock className="h-4 w-4 text-rose-500 shrink-0" />
+                            <span>Created:</span>
+                            <span className="font-semibold text-foreground/80">
+                              {formatTimestamp(job.created_at)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <RefreshCw className="h-4 w-4 text-rose-500 shrink-0" />
                             <span>Last Checked:</span>
                             <span className="font-semibold text-foreground/80">
                               {formatTimestamp(job.last_checked_at)}
