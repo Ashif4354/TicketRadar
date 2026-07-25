@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock, ExternalLink } from 'lucide-react';
+import { Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock, ExternalLink, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ export function AdminDashboard() {
   const [requests, setRequests] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [jobSearch, setJobSearch] = useState('');
   const [counts, setCounts] = useState<{ requests: number; users: number; jobs: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -157,6 +158,36 @@ export function AdminDashboard() {
     }
   };
 
+  // Derived: search-filtered + Running-first sorted jobs
+  const filteredJobs = jobs
+    .filter(j => {
+      if (!jobSearch.trim()) return true;
+      const q = jobSearch.trim().toLowerCase();
+      return [
+        j.movie_name,
+        j.id,
+        j.status,
+        j.service_provider,
+        j.notification_medium,
+        j.user_name,
+        j.user_email,
+        j.created_by,
+        j.date_str,
+        j.url,
+        j.last_result,
+        j.notification_config?.webhook_url,
+        j.notification_config?.recipient_email,
+        ...(j.theatres || []),
+      ]
+        .filter(Boolean)
+        .some((v: any) => String(v).toLowerCase().includes(q));
+    })
+    .sort((a, b) => {
+      const aRunning = a.status?.toLowerCase() === 'running' ? 0 : 1;
+      const bRunning = b.status?.toLowerCase() === 'running' ? 0 : 1;
+      return aRunning - bRunning;
+    });
+
   return (
     <main className="w-full max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 overflow-x-hidden">
       {/* Header */}
@@ -230,29 +261,52 @@ export function AdminDashboard() {
           </Button>
         </div>
 
-        {/* View Switcher for Jobs */}
+        {/* View Switcher + Search for Jobs */}
         {activeTab === 'jobs' && (
-          <div className="flex items-center gap-1 bg-black/40 border border-border/60 p-1 rounded-lg self-start sm:self-auto">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-md text-xs flex items-center gap-1 transition-all ${
-                viewMode === 'grid' ? 'bg-rose-500/20 text-rose-400 font-semibold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Card Grid View"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              <span>Grid</span>
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-md text-xs flex items-center gap-1 transition-all ${
-                viewMode === 'table' ? 'bg-rose-500/20 text-rose-400 font-semibold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Table View"
-            >
-              <TableIcon className="h-3.5 w-3.5" />
-              <span>Table</span>
-            </button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={jobSearch}
+                onChange={e => setJobSearch(e.target.value)}
+                placeholder="Search jobs…"
+                className="bg-black/40 border border-border/60 rounded-lg pl-7 pr-7 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-rose-500/50 w-48"
+              />
+              {jobSearch && (
+                <button
+                  onClick={() => setJobSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Grid / Table toggle */}
+            <div className="flex items-center gap-1 bg-black/40 border border-border/60 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-md text-xs flex items-center gap-1 transition-all ${
+                  viewMode === 'grid' ? 'bg-rose-500/20 text-rose-400 font-semibold' : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Card Grid View"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span>Grid</span>
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-md text-xs flex items-center gap-1 transition-all ${
+                  viewMode === 'table' ? 'bg-rose-500/20 text-rose-400 font-semibold' : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Table View"
+              >
+                <TableIcon className="h-3.5 w-3.5" />
+                <span>Table</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -465,10 +519,14 @@ export function AdminDashboard() {
                 <Card className="border-border/60 bg-black/20 backdrop-blur-md p-12 text-center text-muted-foreground">
                   No active monitor tasks found.
                 </Card>
+              ) : filteredJobs.length === 0 ? (
+                <Card className="border-border/60 bg-black/20 backdrop-blur-md p-12 text-center text-muted-foreground">
+                  No jobs match your search.
+                </Card>
               ) : viewMode === 'grid' ? (
                 /* RESPONSIVE GRID CARD VIEW */
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                  {jobs.map(j => {
+                  {filteredJobs.map(j => {
                     const notifConfStr = j.notification_config?.webhook_url
                       ? j.notification_config.webhook_url
                       : j.notification_config?.recipient_email
@@ -621,7 +679,7 @@ export function AdminDashboard() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/30">
-                          {jobs.map(j => {
+                          {filteredJobs.map(j => {
                             const notifConfStr = j.notification_config?.webhook_url
                               ? j.notification_config.webhook_url
                               : j.notification_config?.recipient_email
