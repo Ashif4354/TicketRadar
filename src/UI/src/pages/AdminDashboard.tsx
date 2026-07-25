@@ -188,6 +188,10 @@ export function AdminDashboard() {
       return aRunning - bRunning;
     });
 
+  // Derived request buckets
+  const pendingRequests = requests.filter((r: any) => r.status !== 'denied');
+  const deniedRequests = requests.filter((r: any) => r.status === 'denied');
+
   return (
     <main className="w-full max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 overflow-x-hidden">
       {/* Header */}
@@ -239,7 +243,12 @@ export function AdminDashboard() {
             className="text-xs font-semibold gap-1.5"
           >
             <UserIcon className="h-3.5 w-3.5" />
-            Pending Requests ({requests.length > 0 ? requests.length : (counts ? counts.requests : 0)})
+            Requests
+            {pendingRequests.length > 0 && (
+              <span className="ml-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                {pendingRequests.length}
+              </span>
+            )}
           </Button>
           <Button
             onClick={() => setActiveTab('users')}
@@ -318,90 +327,157 @@ export function AdminDashboard() {
         </div>
       ) : (
         <>
-          {/* TAB 1: PENDING / DENIED ACCESS REQUESTS */}
           {activeTab === 'requests' && (
-            <Card className="border-border/60 bg-black/20 backdrop-blur-md overflow-hidden">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto w-full">
-                  <table className="w-full text-left text-xs border-collapse min-w-[550px]">
-                    <thead>
-                      <tr className="border-b border-border/50 text-muted-foreground font-bold bg-muted/20">
-                        <th className="py-3 px-4">User Details</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4">Requested At</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/30">
-                      {requests.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="py-12 text-center text-muted-foreground">
-                            No pending or denied access requests found.
-                          </td>
-                        </tr>
-                      ) : (
-                        requests.map(r => {
-                          const isDenied = r.status === 'denied';
-                          const userName = r.name || r.displayName || (r.email ? r.email.split('@')[0] : 'User');
+            <div className="space-y-4">
 
-                          return (
-                            <tr key={r.uid} className="hover:bg-muted/10 transition-colors">
-                              <td className="py-3.5 px-4">
-                                <div className="flex items-center gap-2.5">
-                                  {r.photoUrl ? (
-                                    <img src={r.photoUrl} className="h-8 w-8 rounded-full border border-border" alt="" />
-                                  ) : (
-                                    <div className="h-8 w-8 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center font-bold text-xs">
-                                      {userName.charAt(0).toUpperCase()}
-                                    </div>
-                                  )}
-                                  <div>
-                                    <div className="font-semibold text-foreground">{userName}</div>
-                                    <div className="text-[11px] text-muted-foreground">{r.email}</div>
-                                    <div className="text-[10px] text-muted-foreground/60 font-mono">UID: {r.uid}</div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="py-3.5 px-4">
-                                {isDenied ? (
-                                  <Badge className="w-32 inline-flex justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Denied</Badge>
-                                ) : (
-                                  <Badge className="w-32 inline-flex justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Pending</Badge>
-                                )}
-                              </td>
-                              <td className="py-3.5 px-4 text-muted-foreground text-[11px]">
-                                {r.requested_at ? formatTimestamp(r.requested_at) : 'N/A'}
-                              </td>
-                              <td className="py-3.5 px-4 text-right space-x-2">
-                                <Button
-                                  onClick={() => handleApproveRequest(r.uid)}
-                                  disabled={actionLoading !== null}
-                                  size="sm"
-                                  className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1 w-24 justify-center"
-                                >
-                                  <CheckCircle className="h-3 w-3" /> Approve
-                                </Button>
-                                {!isDenied && (
-                                  <Button
-                                    onClick={() => handleDenyRequest(r.uid)}
-                                    disabled={actionLoading !== null}
-                                    variant="destructive"
-                                    size="sm"
-                                    className="h-7 text-[11px] font-bold gap-1 w-24 justify-center"
-                                  >
-                                    <XCircle className="h-3 w-3" /> Deny
-                                  </Button>
-                                )}
+              {/* --- PENDING --- */}
+              <div>
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Pending</span>
+                  <span className="text-[10px] text-muted-foreground">({pendingRequests.length})</span>
+                </div>
+                <Card className="border-border/60 bg-black/20 backdrop-blur-md overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto w-full">
+                      <table className="w-full text-left text-xs border-collapse min-w-[550px]">
+                        <thead>
+                          <tr className="border-b border-border/50 text-muted-foreground font-bold bg-muted/20">
+                            <th className="py-3 px-4">User Details</th>
+                            <th className="py-3 px-4">Requested At</th>
+                            <th className="py-3 px-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {pendingRequests.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className="py-10 text-center text-muted-foreground">
+                                No pending access requests.
                               </td>
                             </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                          ) : (
+                            pendingRequests.map(r => {
+                              const userName = r.name || r.displayName || (r.email ? r.email.split('@')[0] : 'User');
+                              return (
+                                <tr key={r.uid} className="hover:bg-muted/10 transition-colors">
+                                  <td className="py-3.5 px-4">
+                                    <div className="flex items-center gap-2.5">
+                                      {r.photoUrl ? (
+                                        <img src={r.photoUrl} className="h-8 w-8 rounded-full border border-border" alt="" />
+                                      ) : (
+                                        <div className="h-8 w-8 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-xs">
+                                          {userName.charAt(0).toUpperCase()}
+                                        </div>
+                                      )}
+                                      <div>
+                                        <div className="font-semibold text-foreground">{userName}</div>
+                                        <div className="text-[11px] text-muted-foreground">{r.email}</div>
+                                        <div className="text-[10px] text-muted-foreground/60 font-mono">UID: {r.uid}</div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-3.5 px-4 text-muted-foreground text-[11px]">
+                                    {r.requested_at ? formatTimestamp(r.requested_at) : 'N/A'}
+                                  </td>
+                                  <td className="py-3.5 px-4 text-right space-x-2">
+                                    <Button
+                                      onClick={() => handleApproveRequest(r.uid)}
+                                      disabled={actionLoading !== null}
+                                      size="sm"
+                                      className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1 w-24 justify-center"
+                                    >
+                                      <CheckCircle className="h-3 w-3" /> Approve
+                                    </Button>
+                                    <Button
+                                      onClick={() => handleDenyRequest(r.uid)}
+                                      disabled={actionLoading !== null}
+                                      variant="destructive"
+                                      size="sm"
+                                      className="h-7 text-[11px] font-bold gap-1 w-24 justify-center"
+                                    >
+                                      <XCircle className="h-3 w-3" /> Deny
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* --- DENIED --- */}
+              <div>
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400">Denied</span>
+                  <span className="text-[10px] text-muted-foreground">({deniedRequests.length})</span>
                 </div>
-              </CardContent>
-            </Card>
+                <Card className="border-border/60 bg-black/20 backdrop-blur-md overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto w-full">
+                      <table className="w-full text-left text-xs border-collapse min-w-[550px]">
+                        <thead>
+                          <tr className="border-b border-border/50 text-muted-foreground font-bold bg-muted/20">
+                            <th className="py-3 px-4">User Details</th>
+                            <th className="py-3 px-4">Requested At</th>
+                            <th className="py-3 px-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {deniedRequests.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className="py-10 text-center text-muted-foreground">
+                                No denied access requests.
+                              </td>
+                            </tr>
+                          ) : (
+                            deniedRequests.map(r => {
+                              const userName = r.name || r.displayName || (r.email ? r.email.split('@')[0] : 'User');
+                              return (
+                                <tr key={r.uid} className="hover:bg-rose-500/5 transition-colors">
+                                  <td className="py-3.5 px-4">
+                                    <div className="flex items-center gap-2.5">
+                                      {r.photoUrl ? (
+                                        <img src={r.photoUrl} className="h-8 w-8 rounded-full border border-rose-500/20 opacity-60" alt="" />
+                                      ) : (
+                                        <div className="h-8 w-8 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center font-bold text-xs opacity-60">
+                                          {userName.charAt(0).toUpperCase()}
+                                        </div>
+                                      )}
+                                      <div>
+                                        <div className="font-semibold text-foreground/70">{userName}</div>
+                                        <div className="text-[11px] text-muted-foreground/70">{r.email}</div>
+                                        <div className="text-[10px] text-muted-foreground/50 font-mono">UID: {r.uid}</div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-3.5 px-4 text-muted-foreground/70 text-[11px]">
+                                    {r.requested_at ? formatTimestamp(r.requested_at) : 'N/A'}
+                                  </td>
+                                  <td className="py-3.5 px-4 text-right">
+                                    <Button
+                                      onClick={() => handleApproveRequest(r.uid)}
+                                      disabled={actionLoading !== null}
+                                      size="sm"
+                                      className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1 w-24 justify-center"
+                                    >
+                                      <CheckCircle className="h-3 w-3" /> Approve
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+            </div>
           )}
 
           {/* TAB 2: USER MANAGEMENT */}
