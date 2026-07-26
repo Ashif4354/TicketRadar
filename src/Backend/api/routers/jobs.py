@@ -50,13 +50,14 @@ def validate_job_url(service_provider: str, raw_url: str) -> str:
 
     sp_lower = service_provider.lower().replace(" ", "").replace("-", "")
     if "bookmyshow" in sp_lower:
-        pattern = r'^https://(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com/movies/[^/]+/[^/]+/buytickets/[^/]+'
+        pattern = r'^https://(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com/(?:movies/[^/]+/[^/]+|buytickets/[^/]+)'
         if not re.match(pattern, url, re.IGNORECASE):
             raise HTTPException(
                 status_code=400,
                 detail="Enter a valid BookMyShow movie link."
             )
     return url
+
 
 
 def verify_job_access(job_id: str, claims: dict) -> MonitorJob:

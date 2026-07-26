@@ -8,6 +8,8 @@ class BookingChecker(ABC):
     Abstract base class representing an asynchronous ticket booking scraper service (Service Layer).
     Supports dynamic metadata mapping for customized service fields.
     """
+    has_search: bool = False
+
 
     @classmethod
     @abstractmethod

@@ -19,9 +19,25 @@ import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp, formatInterval } from '../utils/formatters';
 import { isSecurityDisabled } from '../utils/security';
-import type { Job, AppConfig } from '../types';
+import type { Job, AppConfig, UserClaims } from '../types';
+import { auth } from '../lib/firebase';
+import { hasProviderSearch } from '../utils/providerSearch';
+import { MoviePicker, type CityEntry } from '../components/ui/movie-picker';
+
+import { TheatreSearch } from '../components/ui/theatre-search';
 
 export function AppDashboard() {
+  const [claims, setClaims] = useState<UserClaims | null>(null);
+  const [selectedCity, setSelectedCity] = useState<CityEntry | null>(null);
+  const [smartMovieUrl, setSmartMovieUrl] = useState("");
+  const [smartTheatres, setSmartTheatres] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (auth.currentUser) {
+      auth.currentUser.getIdTokenResult().then(res => setClaims(res.claims as UserClaims)).catch(console.error);
+    }
+  }, []);
+
   // App Config and Jobs state
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -280,12 +296,18 @@ export function AppDashboard() {
       errors.push("Complete the reCAPTCHA challenge first.");
     }
 
-    const bmsPattern = /^https:\/\/(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com\/movies\/[^/]+\/[^/]+\/buytickets\/[^/]+/;
-    if (!url.trim()) {
-      errors.push("Movie Page URL is required.");
-    } else if (!url.trim().startsWith("https://")) {
+    const isSmartActive = hasProviderSearch(serviceProvider, claims);
+    const effectiveUrl = isSmartActive ? smartMovieUrl : url;
+    const effectiveTheatres = isSmartActive
+      ? smartTheatres
+      : theatres.split('\n').map(t => t.trim()).filter(t => t.length > 0);
+
+    const bmsPattern = /^https:\/\/(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com\/(?:movies\/[^/]+\/[^/]+|buytickets\/[^/]+)/;
+    if (!effectiveUrl.trim()) {
+      errors.push(isSmartActive ? "Please select a movie from the movie list above." : "Movie Page URL is required.");
+    } else if (!effectiveUrl.trim().startsWith("https://")) {
       errors.push("Enter a valid HTTPS URL.");
-    } else if (serviceProvider.toLowerCase().includes("bookmyshow") && !bmsPattern.test(url.trim())) {
+    } else if (serviceProvider.toLowerCase().includes("bookmyshow") && !bmsPattern.test(effectiveUrl.trim())) {
       errors.push("Enter a valid BookMyShow movie link.");
     }
 
@@ -293,13 +315,8 @@ export function AppDashboard() {
       errors.push("Target date is required.");
     }
 
-    const parsedTheatres = theatres
-      .split('\n')
-      .map(t => t.trim())
-      .filter(t => t.length > 0);
-
-    if (parsedTheatres.length === 0) {
-      errors.push("At least one theatre name is required.");
+    if (effectiveTheatres.length === 0) {
+      errors.push(isSmartActive ? "Please search and add at least one theatre." : "At least one theatre name is required.");
     }
 
     if (medium === "Email" && !email.trim()) {
@@ -330,9 +347,9 @@ export function AppDashboard() {
       check_interval: intervalSec,
       recaptcha_token: token,
       params: {
-        url: url.trim(),
+        url: effectiveUrl.trim(),
         date_str: dateFormatted,
-        theatres: parsedTheatres
+        theatres: effectiveTheatres
       }
     };
 
@@ -347,6 +364,8 @@ export function AppDashboard() {
         setFormSuccess(`Successfully registered monitor #${data.id}! Ticket tracker started.`);
         setUrl("");
         setTheatres("");
+        setSmartMovieUrl("");
+        setSmartTheatres([]);
         fetchJobs();
       } else {
         setFormErrors([data.detail || "Failed to create monitoring job."]);
@@ -524,46 +543,78 @@ export function AppDashboard() {
                   </div>
                 </div>
 
-                {/* Movie url page input */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Movie Ticket Page Link</label>
-                  <Input 
-                    type="text" 
-                    placeholder="https://in.bookmyshow.com/buytickets/..." 
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    className="h-9.5 text-xs bg-muted/10 border-border/80 placeholder:text-muted-foreground/50 focus:border-rose-500/40"
-                  />
-                  <p className="text-[10px] text-muted-foreground leading-normal">
-                    Paste the BookMyShow ticket booking page link for your movie.
-                  </p>
-                </div>
+                {hasProviderSearch(serviceProvider, claims) ? (
+                  <>
+                    <MoviePicker
+                      selectedCity={selectedCity}
+                      onCityChange={setSelectedCity}
+                      selectedMovieUrl={smartMovieUrl}
+                      onSelectMovie={(ctaUrl) => setSmartMovieUrl(ctaUrl)}
+                    />
 
-                {/* Target Date selection with Shadcn DatePicker */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Show Date</label>
-                  <DatePicker 
-                    value={targetDate}
-                    onChange={(dateStr) => setTargetDate(dateStr)}
-                    placeholder="Select show date"
-                  />
-                </div>
+                    {/* Target Date selection with Shadcn DatePicker */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Show Date 📅</label>
+                      <DatePicker 
+                        value={targetDate}
+                        onChange={(dateStr) => setTargetDate(dateStr)}
+                        placeholder="Select show date"
+                      />
+                    </div>
 
-                {/* Target Theatre name filters */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Preferred Theatres/Cinemas</label>
-                  <Textarea 
-                    placeholder="PVR Director's Cut
-Cinepolis Nexus
-Inox Forum Mall" 
-                    value={theatres}
-                    onChange={(e) => setTheatres(e.target.value)}
-                    className="min-h-[90px] max-h-[140px] text-xs bg-muted/10 border-border/80 placeholder:text-muted-foreground/40 focus:border-rose-500/40 leading-relaxed"
-                  />
-                  <p className="text-[10px] text-muted-foreground leading-normal">
-                    Type the names of your preferred theatres/cinemas (one per line). Example: PVR Forum, INOX Nexus.
-                  </p>
-                </div>
+                    <TheatreSearch
+                      regionCode={selectedCity?.RegionCode}
+                      regionSlug={selectedCity?.RegionSlug}
+                      lat={selectedCity?.Lat}
+                      lon={selectedCity?.Long}
+                      geohash={selectedCity?.GeoHash}
+                      selectedTheatres={smartTheatres}
+                      onChangeTheatres={setSmartTheatres}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {/* Movie url page input */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Movie Ticket Page Link</label>
+                      <Input 
+                        type="text" 
+                        placeholder="https://in.bookmyshow.com/buytickets/..." 
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        className="h-9.5 text-xs bg-muted/10 border-border/80 placeholder:text-muted-foreground/50 focus:border-rose-500/40"
+                      />
+                      <p className="text-[10px] text-muted-foreground leading-normal">
+                        Paste the BookMyShow ticket booking page link for your movie.
+                      </p>
+                    </div>
+
+                    {/* Target Date selection with Shadcn DatePicker */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Show Date</label>
+                      <DatePicker 
+                        value={targetDate}
+                        onChange={(dateStr) => setTargetDate(dateStr)}
+                        placeholder="Select show date"
+                      />
+                    </div>
+
+                    {/* Target Theatre name filters */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Preferred Theatres/Cinemas</label>
+                      <Textarea 
+                        placeholder="PVR Director's Cut&#10;Cinepolis Nexus&#10;Inox Forum Mall" 
+                        value={theatres}
+                        onChange={(e) => setTheatres(e.target.value)}
+                        className="min-h-[90px] max-h-[140px] text-xs bg-muted/10 border-border/80 placeholder:text-muted-foreground/40 focus:border-rose-500/40 leading-relaxed"
+                      />
+                      <p className="text-[10px] text-muted-foreground leading-normal">
+                        Type the names of your preferred theatres/cinemas (one per line). Example: PVR Forum, INOX Nexus.
+                      </p>
+                    </div>
+                  </>
+                )}
+
 
                 {/* Notification configuration */}
                 <div className="space-y-3.5 border-t border-border/30 pt-4 mt-2">

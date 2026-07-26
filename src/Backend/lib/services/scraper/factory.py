@@ -42,3 +42,20 @@ class ScraperFactory:
         """
         scraper_cls = ScraperFactory.get_scraper_class(provider_name)
         return scraper_cls()
+
+    @staticmethod
+    def get_search_capable_providers() -> list[str]:
+        """
+        Returns a list of provider keys that have search capabilities enabled (has_search = True).
+        """
+        capable = []
+        providers = ["bookmyshow"]
+        for p in providers:
+            try:
+                cls = ScraperFactory.get_scraper_class(p)
+                if getattr(cls, "has_search", False):
+                    capable.append(p)
+            except Exception:
+                pass
+        return capable
+

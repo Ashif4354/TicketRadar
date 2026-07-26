@@ -11,6 +11,7 @@ from lib.services.notification import (
     send_user_access_granted_email,
 )
 from lib.services.gcp_logger import gcp_logger
+from lib.services.scraper.factory import ScraperFactory
 from api.schemas import UpdateRoleRequest
 from api.dependencies import get_user_details
 
@@ -205,6 +206,55 @@ async def admin_unblock_user(
     except Exception as e:
         logger.error(f"Error unblocking user: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/users/{uid}/toggle-search-access")
+async def admin_toggle_search_access(
+    uid: str,
+    provider: str = "bookmyshow",
+    admin_claims: dict = Depends(get_admin_user)
+):
+    """Toggles user's search permission for a search-capable service provider."""
+    capable_providers = ScraperFactory.get_search_capable_providers()
+    provider_clean = provider.strip().lower()
+    if provider_clean not in capable_providers:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Provider '{provider}' is not currently search-capable. Capable providers: {capable_providers}"
+        )
+
+    try:
+        user = firebase_auth.get_user(uid)
+        claims = user.custom_claims or {}
+        if claims.get("role") == "admin":
+            raise HTTPException(status_code=400, detail="Admin users implicitly have all search permissions; custom search claims cannot be toggled for admins.")
+
+        claim_key = f"search_{provider_clean}"
+        current_val = claims.get(claim_key, False)
+        new_val = not current_val
+        claims[claim_key] = new_val
+        firebase_auth.set_custom_user_claims(uid, claims)
+
+        name, email, _ = get_user_details(uid)
+        gcp_logger.log_event(
+            "User Search Access Toggled",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_claims.get("email"),
+                "target_uid": uid,
+                "target_email": email,
+                "provider": provider_clean,
+                "enabled": new_val
+            }
+        )
+
+        return {"success": True, "provider": provider_clean, "enabled": new_val, "message": f"Search access for {provider_clean} set to {new_val}."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling search access: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.get("/requests")

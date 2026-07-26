@@ -40,8 +40,10 @@ export interface UserClaims {
   authorized?: boolean;
   role?: string;
   blocked?: boolean;
+  search_bookmyshow?: boolean; // Per-provider search access custom claim (pattern: search_{provider_key})
   [key: string]: any;
 }
+
 
 export interface HeaderProps {
   user: User | null;

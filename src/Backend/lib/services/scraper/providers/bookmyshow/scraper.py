@@ -120,6 +120,8 @@ class BookMyShowBookingChecker(BookingChecker):
     Concrete scraper implementing the BookingChecker interface for BookMyShow
     using curl_cffi (browser TLS impersonation) + BeautifulSoup (HTML parsing).
     """
+    has_search: bool = True
+
 
     @classmethod
     def get_required_fields(cls) -> Dict[str, Dict[str, Any]]:
