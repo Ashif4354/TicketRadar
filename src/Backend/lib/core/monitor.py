@@ -214,7 +214,11 @@ class JobManager:
 
     async def _run_job_loop(self, job: MonitorJob, stop_event: asyncio.Event) -> None:
         """
-        The main async coroutine executing the check loop.
+        Run the monitoring cycle until it is stopped or a booking is found.
+        
+        Parameters:
+            job (MonitorJob): Job configuration and state to monitor.
+            stop_event (asyncio.Event): Event that signals the monitoring cycle to stop.
         """
         job_logger = get_job_logger(job.id)
         job_logger.info(
@@ -237,8 +241,11 @@ class JobManager:
                         job.params,
                         logger=job_logger
                     )
-                    if movie_name:
-                        job.movie_name = movie_name
+                    if movie_name and movie_name != "Fetching...":
+                        if job.movie_name != movie_name:
+                            job_logger.info(f"Movie name updated from page: '{job.movie_name}' -> '{movie_name}'")
+                            job.movie_name = movie_name
+                            self._save_job_to_firestore(job)
                 except Exception as e:
                     success = False
                     details = "An unexpected error occurred during the check."
@@ -264,7 +271,9 @@ class JobManager:
                             date_str=job.date_str,
                             available_theatres=available,
                             unavailable_theatres=unavailable,
-                            url=job.url
+                            url=job.url,
+                            language=job.language,
+                            format_name=job.format_name
                         )
 
                         if notif_success:

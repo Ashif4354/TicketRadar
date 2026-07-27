@@ -1,9 +1,49 @@
 # src/core/job.py
 
+import re
+import urllib.parse
 import uuid
 from datetime import datetime, timezone
 import threading
 from typing import Dict, List, Optional, Any
+
+def _parse_movie_name_from_url(url: str) -> str:
+    """
+    Extracts and formats a human-readable movie title from a BookMyShow URL.
+    Example: 'https://in.bookmyshow.com/movies/chennai/the-odyssey-imax-2d/buytickets/ET00480917/20260730' -> 'The Odyssey'
+    """
+    if not url:
+        return "BookMyShow Movie"
+
+    try:
+        # Match pattern: /movies/{city}/{movie_slug}/buytickets/...
+        match = re.search(r"/movies/[^/]+/([^/]+)/buytickets", url, re.IGNORECASE)
+        if not match:
+            # Fallback: match /movies/{movie_slug}/ or raw slug in path
+            match = re.search(r"/movies/([^/]+)", url, re.IGNORECASE)
+
+        if match:
+            slug = match.group(1).lower()
+            # Clean common format suffixes from slug
+            format_suffixes = [
+                "-imax-3d", "-imax-2d", "-imax",
+                "-4dx-3d", "-4dx", "-screenx", "-epiq",
+                "-3d", "-2d"
+            ]
+            for fmt in format_suffixes:
+                if slug.endswith(fmt):
+                    slug = slug[:-len(fmt)]
+                    break
+
+            # Replace hyphens with spaces and capitalize each word
+            words = slug.split("-")
+            clean_title = " ".join(w.capitalize() for w in words if w)
+            if clean_title:
+                return clean_title
+    except Exception:
+        pass
+
+    return "BookMyShow Movie"
 
 class MonitorJob:
     """
@@ -23,13 +63,29 @@ class MonitorJob:
         created_by: Optional[str] = None,
         creator_email: Optional[str] = None
     ):
+        """
+        Initialize a movie ticket monitoring job with its configuration, metadata, and initial state.
+        
+        Parameters:
+            params (Dict[str, Any]): Job parameters, including the movie URL.
+            notification_medium (str): Notification channel.
+            notification_config (Dict[str, Any]): Notification channel configuration.
+            service_provider (str): Ticket service provider.
+            check_interval (Optional[int]): Requested interval between checks, with a minimum of 60 seconds.
+            job_id (Optional[str]): Existing job identifier.
+            created_by (Optional[str]): Identifier of the job creator.
+            creator_email (Optional[str]): Email address of the job creator.
+        """
         self.id = job_id or str(uuid.uuid4())[:8]  # Short, readable ID
         self.params = params
         self.notification_medium = notification_medium.strip().lower()
         self.notification_config = notification_config
         self.service_provider = service_provider.strip().lower()
         self.check_interval = max(60, check_interval) if check_interval is not None else 60
-        self.movie_name = "Fetching..."
+        
+        parsed = _parse_movie_name_from_url(params.get("url", ""))
+        self.movie_name = parsed if parsed != "BookMyShow Movie" else "Fetching..."
+
         self.created_by = created_by
         self.creator_email = creator_email
         
@@ -59,6 +115,44 @@ class MonitorJob:
             return [t.strip() for t in raw_theatres.split("\n") if t.strip()]
         return [str(t).strip() for t in raw_theatres if str(t).strip()]
 
+    @property
+    def language(self) -> str:
+        """Helper to retrieve language from params or URL query."""
+        lang = self.params.get("language")
+        if lang:
+            return str(lang).capitalize()
+        match = re.search(r"language=([^&]+)", self.url, re.IGNORECASE)
+        if match:
+            return urllib.parse.unquote(match.group(1)).capitalize()
+        if self.service_provider.lower() == "bookmyshow":
+            return "English"
+        return ""
+
+    @property
+    def format_name(self) -> str:
+        """Helper to retrieve format (e.g. 2D, 3D, IMAX 2D) from params or URL slug."""
+        fmt = self.params.get("format")
+        if fmt:
+            return str(fmt)
+        url_lower = self.url.lower()
+        if "imax-3d" in url_lower or "imax 3d" in url_lower:
+            return "IMAX 3D"
+        if "imax-2d" in url_lower or "imax 2d" in url_lower or "imax" in url_lower:
+            return "IMAX 2D"
+        if "4dx-3d" in url_lower or "4dx 3d" in url_lower:
+            return "4DX 3D"
+        if "4dx" in url_lower:
+            return "4DX"
+        if "3d" in url_lower:
+            return "3D"
+        if "screenx" in url_lower:
+            return "ScreenX"
+        if "epiq" in url_lower:
+            return "EPIQ"
+        if self.service_provider.lower() == "bookmyshow":
+            return "2D"
+        return ""
+
     def update_state(self, status: str, last_result: str, movie_name: Optional[str] = None) -> None:
         """Thread-safely updates the state of the job in memory."""
         with self._lock:
@@ -83,7 +177,9 @@ class MonitorJob:
             self.notification_config = notification_config
             self.service_provider = service_provider.strip().lower()
             self.check_interval = max(60, check_interval) if check_interval is not None else 60
-            self.movie_name = "Fetching..."
+            parsed_name = _parse_movie_name_from_url(params.get("url", ""))
+            if parsed_name != "BookMyShow Movie":
+                self.movie_name = parsed_name
 
     def get_state(self) -> Dict[str, Any]:
         """Thread-safely returns a full snapshot of the job state for API responses."""
@@ -95,6 +191,8 @@ class MonitorJob:
                 "movie_name": self.movie_name,
                 "date_str": self.date_str,
                 "theatres": self.theatres,
+                "language": self.language,
+                "format": self.format_name,
                 "service_provider": self.service_provider,
                 "notification_medium": self.notification_medium,
                 "notification_config": self.notification_config,
@@ -121,6 +219,8 @@ class MonitorJob:
                 "notification_config": self.notification_config,
                 "check_interval": self.check_interval,
                 "movie_name": self.movie_name,
+                "language": self.language,
+                "format": self.format_name,
                 "created_by": self.created_by,
                 "creator_email": self.creator_email,
                 "status": self.status,

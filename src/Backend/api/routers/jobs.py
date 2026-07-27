@@ -43,14 +43,27 @@ def get_jobs_state_hash(jobs: List[MonitorJob]) -> str:
 import re
 
 def validate_job_url(service_provider: str, raw_url: str) -> str:
-    """Validates that the provided URL is a valid HTTPS URL and matches provider format rules."""
+    """
+    Validate and normalize a job URL for the specified service provider.
+    
+    Parameters:
+        service_provider (str): Provider whose URL format should be validated.
+        raw_url (str): URL to trim and validate.
+    
+    Returns:
+        str: The trimmed HTTPS URL.
+    
+    Raises:
+        HTTPException: If the URL is not HTTPS or does not match the required
+            BookMyShow format.
+    """
     url = raw_url.strip()
     if not url.startswith("https://"):
         raise HTTPException(status_code=400, detail="Enter a valid HTTPS URL.")
 
     sp_lower = service_provider.lower().replace(" ", "").replace("-", "")
     if "bookmyshow" in sp_lower:
-        pattern = r'^https://(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com/movies/[^/]+/[^/]+/buytickets/[^/]+'
+        pattern = r'^https://(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com/(?:movies/[^/]+/[^/]+|buytickets/[^/]+)'
         if not re.match(pattern, url, re.IGNORECASE):
             raise HTTPException(
                 status_code=400,
@@ -59,8 +72,21 @@ def validate_job_url(service_provider: str, raw_url: str) -> str:
     return url
 
 
+
 def verify_job_access(job_id: str, claims: dict) -> MonitorJob:
-    """Verifies that the user has access to the job (owner or admin)."""
+    """
+    Verify that the authenticated user can access the specified job.
+    
+    Parameters:
+        job_id (str): Identifier of the job to retrieve.
+        claims (dict): Authenticated user claims, including the user ID and role.
+    
+    Returns:
+        MonitorJob: The requested job.
+    
+    Raises:
+        HTTPException: If the job does not exist or the user lacks access.
+    """
     job = manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
@@ -122,7 +148,17 @@ async def create_job(
     background_tasks: BackgroundTasks,
     claims: dict = Depends(get_authorized_user)
 ):
-    """Create and start a new monitor job."""
+    """
+    Create and start a monitoring job for the authenticated user.
+    
+    Parameters:
+    	payload (CreateJobRequest): Job configuration, monitoring parameters, and notification settings.
+    	background_tasks (BackgroundTasks): Tasks used for post-creation notifications.
+    	claims (dict): Authenticated user claims.
+    
+    Returns:
+    	dict: The newly created job's current state.
+    """
     if config_error:
         raise HTTPException(status_code=400, detail=f"Configuration Error: {config_error}")
 
@@ -144,11 +180,7 @@ async def create_job(
     # Validate parameters
     url = validate_job_url(service_provider, payload.params.url)
 
-    params = {
-        "url": url,
-        "date_str": payload.params.date_str.strip(),
-        "theatres": payload.params.theatres
-    }
+    params = _extract_job_params(payload.params, url)
 
     medium = payload.notification_medium.strip().lower()
     notif_config = {}
@@ -315,7 +347,17 @@ async def update_job(
     payload: UpdateJobRequest,
     claims: dict = Depends(get_authorized_user)
 ):
-    """Updates an existing monitor job. Only the job creator is allowed to edit it."""
+    """
+    Update a monitor job owned by the authenticated user and apply its new monitoring configuration.
+    
+    Parameters:
+    	job_id (str): Identifier of the job to update.
+    	payload (UpdateJobRequest): Updated monitoring, provider, scheduling, and notification settings.
+    	claims (dict): Authenticated user claims used to verify job ownership.
+    
+    Returns:
+    	dict: A success response containing a confirmation message and the updated job state.
+    """
     job = manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
@@ -343,11 +385,7 @@ async def update_job(
     # Validate parameters
     url = validate_job_url(service_provider, payload.params.url)
 
-    params = {
-        "url": url,
-        "date_str": payload.params.date_str.strip(),
-        "theatres": payload.params.theatres
-    }
+    params = _extract_job_params(payload.params, url)
 
     medium = payload.notification_medium.strip().lower()
     if "email" in medium:

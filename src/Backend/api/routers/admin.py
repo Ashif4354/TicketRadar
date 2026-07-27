@@ -11,6 +11,7 @@ from lib.services.notification import (
     send_user_access_granted_email,
 )
 from lib.services.gcp_logger import gcp_logger
+from lib.services.scraper.factory import ScraperFactory
 from api.schemas import UpdateRoleRequest
 from api.dependencies import get_user_details
 
@@ -181,7 +182,16 @@ async def admin_unblock_user(
     background_tasks: BackgroundTasks,
     admin_claims: dict = Depends(get_admin_user)
 ):
-    """Sets the 'blocked' claim to False."""
+    """Unblocks a user by clearing the user's blocked status.
+    
+    Parameters:
+        uid (str): The Firebase user ID to unblock.
+        background_tasks (BackgroundTasks): Background task manager for the unblock notification.
+        admin_claims (dict): Claims for the administrator performing the action.
+    
+    Returns:
+        dict: A success response with a confirmation message.
+    """
     try:
         user = firebase_auth.get_user(uid)
         claims = user.custom_claims or {}
@@ -207,9 +217,72 @@ async def admin_unblock_user(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/users/{uid}/toggle-search-access")
+async def admin_toggle_search_access(
+    uid: str,
+    provider: str = "bookmyshow",
+    admin_claims: dict = Depends(get_admin_user)
+):
+    """
+    Toggle a user's search access for a supported provider.
+    
+    Parameters:
+        uid (str): Firebase user ID whose search access will be toggled.
+        provider (str): Search-capable provider whose access should be toggled.
+    
+    Returns:
+        dict: The provider and its updated search-access state.
+    """
+    capable_providers = ScraperFactory.get_search_capable_providers()
+    provider_clean = provider.strip().lower()
+    if provider_clean not in capable_providers:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Provider '{provider}' is not currently search-capable. Capable providers: {capable_providers}"
+        )
+
+    try:
+        user = firebase_auth.get_user(uid)
+        claims = user.custom_claims or {}
+        if claims.get("role") == "admin":
+            raise HTTPException(status_code=400, detail="Admin users implicitly have all search permissions; custom search claims cannot be toggled for admins.")
+
+        claim_key = f"search_{provider_clean}"
+        current_val = claims.get(claim_key, False)
+        new_val = not current_val
+        claims[claim_key] = new_val
+        firebase_auth.set_custom_user_claims(uid, claims)
+
+        name, email, _ = get_user_details(uid)
+        gcp_logger.log_event(
+            "User Search Access Toggled",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_claims.get("email"),
+                "target_uid": uid,
+                "target_email": email,
+                "provider": provider_clean,
+                "enabled": new_val
+            }
+        )
+
+        return {"success": True, "provider": provider_clean, "enabled": new_val, "message": f"Search access for {provider_clean} set to {new_val}."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling search access: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @router.get("/requests")
 async def admin_list_requests():
-    """Lists pending and denied access requests from Firestore (excluding approved requests), enriched with user details."""
+    """
+    List access requests that have not been approved, enriched with user details and ISO-formatted timestamps.
+    
+    Returns:
+    	list[dict]: Access request records excluding approved requests.
+    """
     if db is None:
         raise HTTPException(status_code=500, detail="Firestore is not available.")
     try:

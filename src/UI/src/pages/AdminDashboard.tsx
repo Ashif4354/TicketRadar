@@ -8,6 +8,9 @@ import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp } from '../utils/formatters';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 
+/**
+ * Provides an administrative interface for managing access requests, user accounts, and ticket-monitoring jobs.
+ */
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs'>('requests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -125,6 +128,30 @@ export function AdminDashboard() {
       setActionLoading(null);
     }
   };
+
+  const handleToggleSearchAccess = async (targetUid: string, provider: string) => {
+    setActionLoading(targetUid);
+    try {
+      const res = await authenticatedFetch(`/admin/users/${targetUid}/toggle-search-access?provider=${provider}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setUsers(prev => prev.map(u => {
+          if (u.uid === targetUid) {
+            const updatedClaims = { ...(u.custom_claims || {}), [`search_${provider.toLowerCase()}`]: data.enabled };
+            return { ...u, custom_claims: updatedClaims };
+          }
+          return u;
+        }));
+      } else {
+        alert(data.detail || "Failed to toggle search access.");
+      }
+    } catch (e: any) {
+      alert("Error toggling search access: " + e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
 
   const handleAdminStopJob = async (jobId: string) => {
     setActionLoading(jobId);
@@ -493,13 +520,14 @@ export function AdminDashboard() {
                         <th className="py-3 px-4">User</th>
                         <th className="py-3 px-4">Role</th>
                         <th className="py-3 px-4">Access Status</th>
+                        <th className="py-3 px-4">Search Access</th>
                         <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
                       {users.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-12 text-center text-muted-foreground">
+                          <td colSpan={5} className="py-12 text-center text-muted-foreground">
                             No registered users found.
                           </td>
                         </tr>
@@ -550,6 +578,29 @@ export function AdminDashboard() {
                                   <Badge className="w-32 inline-flex justify-center bg-slate-500/10 text-slate-400 border border-slate-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Not Yet Requested</Badge>
                                 )}
                               </td>
+                              <td className="py-3.5 px-4">
+                                {isAdmin ? (
+                                  <span className="text-[10px] font-bold text-rose-400/90 flex items-center gap-1" title="Admins implicitly have all search capabilities">
+                                    <Shield className="h-3 w-3 text-rose-400" /> Full Access
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={actionLoading !== null}
+                                    onClick={() => handleToggleSearchAccess(u.uid, 'bookmyshow')}
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                      claims.search_bookmyshow === true
+                                        ? 'bg-rose-500/15 border-rose-500/30 text-rose-400 hover:bg-rose-500/25'
+                                        : 'bg-muted/20 border-border/50 text-muted-foreground hover:text-foreground'
+                                    }`}
+                                    title="Toggle BookMyShow search feature for this user"
+                                  >
+                                    <Search className="h-3 w-3" />
+                                    <span>BMS Search: {claims.search_bookmyshow === true ? 'ON' : 'OFF'}</span>
+                                  </button>
+                                )}
+                              </td>
+
                               <td className="py-3.5 px-4 text-right space-x-2">
                                 {isAdmin ? (
                                   <span className="text-[10px] text-muted-foreground/60 font-medium flex items-center justify-end gap-1">
@@ -641,6 +692,20 @@ export function AdminDashboard() {
                                     <Clock className="h-3 w-3 text-muted-foreground/70" />
                                     {formatTimestamp(j.created_at, true)}
                                   </span>
+                                  {(j.language || j.params?.language || j.format || j.params?.format) && (
+                                    <div className="flex items-center gap-1">
+                                      {(j.language || j.params?.language) && (
+                                        <Badge variant="outline" className="text-[9px] font-bold border-rose-500/30 text-rose-400 bg-rose-500/10 px-1.5 py-0.5">
+                                          {j.language || j.params?.language}
+                                        </Badge>
+                                      )}
+                                      {(j.format || j.params?.format) && (
+                                        <Badge variant="outline" className="text-[9px] font-extrabold border-amber-500/30 text-amber-400 bg-amber-500/10 px-1.5 py-0.5">
+                                          {j.format || j.params?.format}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -784,7 +849,19 @@ export function AdminDashboard() {
                                       j.movie_name
                                     )}
                                   </div>
-                                  <div className="text-[10px] font-mono text-muted-foreground">Job #{j.id}</div>
+                                  <div className="text-[10px] font-mono text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                                    <span>Job #{j.id}</span>
+                                    {(j.language || j.params?.language) && (
+                                      <Badge variant="outline" className="text-[9px] font-bold border-rose-500/30 text-rose-400 bg-rose-500/10 px-1.5 py-0.5">
+                                        {j.language || j.params?.language}
+                                      </Badge>
+                                    )}
+                                    {(j.format || j.params?.format) && (
+                                      <Badge variant="outline" className="text-[9px] font-extrabold border-amber-500/30 text-amber-400 bg-amber-500/10 px-1.5 py-0.5">
+                                        {j.format || j.params?.format}
+                                      </Badge>
+                                    )}
+                                  </div>
                                   <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                                     <Clock className="h-3 w-3 shrink-0" />
                                     <span>{formatTimestamp(j.created_at, true)}</span>

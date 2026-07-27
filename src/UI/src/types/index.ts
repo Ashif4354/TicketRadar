@@ -6,9 +6,13 @@ export interface Job {
     url: string;
     date_str: string;
     theatres: string[];
+    language?: string;
+    format?: string;
   };
   url: string;
   movie_name: string;
+  language?: string;
+  format?: string;
   date_str: string;
   theatres: string[];
   service_provider: string;
@@ -40,8 +44,10 @@ export interface UserClaims {
   authorized?: boolean;
   role?: string;
   blocked?: boolean;
+  search_bookmyshow?: boolean; // Per-provider search access custom claim (pattern: search_{provider_key})
   [key: string]: any;
 }
+
 
 export interface HeaderProps {
   user: User | null;
