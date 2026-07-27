@@ -20,13 +20,14 @@ export interface MovieItem {
   genres: string[];
   languages: string;
   ctaUrl: string;
+  eventCode?: string;
 }
 
 interface MoviePickerProps {
   selectedCity: CityEntry | null;
   onCityChange: (city: CityEntry) => void;
   selectedMovieUrl: string;
-  onSelectMovie: (ctaUrl: string, title: string) => void;
+  onSelectMovie: (ctaUrl: string, title: string, eventCode?: string) => void;
 }
 
 export function MoviePicker({
@@ -243,7 +244,7 @@ export function MoviePicker({
               return (
                 <div
                   key={idx}
-                  onClick={() => onSelectMovie(movie.ctaUrl, movie.title)}
+                  onClick={() => onSelectMovie(movie.ctaUrl, movie.title, movie.eventCode)}
                   className={`group relative rounded-xl border p-2.5 flex flex-col justify-between transition-all cursor-pointer hover:shadow-lg ${
                     isSelected
                       ? 'border-rose-500 bg-rose-500/10 ring-2 ring-rose-500/30'

@@ -23,14 +23,29 @@ import type { Job, AppConfig, UserClaims } from '../types';
 import { auth } from '../lib/firebase';
 import { hasProviderSearch } from '../utils/providerSearch';
 import { MoviePicker, type CityEntry } from '../components/ui/movie-picker';
-
 import { TheatreSearch } from '../components/ui/theatre-search';
+import { FormatPicker, type FormatOption, type ShowDateOption } from '../components/ui/format-picker';
 
 export function AppDashboard() {
   const [claims, setClaims] = useState<UserClaims | null>(null);
   const [selectedCity, setSelectedCity] = useState<CityEntry | null>(null);
   const [smartMovieUrl, setSmartMovieUrl] = useState("");
   const [smartTheatres, setSmartTheatres] = useState<string[]>([]);
+  const [smartEventCode, setSmartEventCode] = useState("");
+  const [selectedFormat, setSelectedFormat] = useState<FormatOption | null>(null);
+  const [availableShowDates, setAvailableShowDates] = useState<ShowDateOption[]>([]);
+
+  const handleSelectSmartMovie = (ctaUrl: string, _title: string, eventCode?: string) => {
+    setSmartMovieUrl(ctaUrl);
+    setSelectedFormat(null);
+    setAvailableShowDates([]);
+    let code = eventCode || "";
+    if (!code && ctaUrl) {
+      const match = ctaUrl.match(/(ET\d{8})/i);
+      if (match) code = match[1].toUpperCase();
+    }
+    setSmartEventCode(code);
+  };
 
   useEffect(() => {
     if (auth.currentUser) {
@@ -297,14 +312,30 @@ export function AppDashboard() {
     }
 
     const isSmartActive = hasProviderSearch(serviceProvider, claims);
-    const effectiveUrl = isSmartActive ? smartMovieUrl : url;
+    let effectiveUrl = url.trim();
     const effectiveTheatres = isSmartActive
       ? smartTheatres
       : theatres.split('\n').map(t => t.trim()).filter(t => t.length > 0);
 
+    if (isSmartActive) {
+      if (!smartMovieUrl.trim()) {
+        errors.push("Please select a movie from the movie list above.");
+      } else if (!selectedFormat) {
+        errors.push("Please select a movie language and format (e.g. 2D, 3D).");
+      } else {
+        const citySlug = (selectedCity?.RegionSlug || "city").toLowerCase();
+        const eventUrl = selectedFormat.eventUrl || "movie";
+        const fCode = selectedFormat.eventCode || smartEventCode;
+        const dateFormatted = targetDate ? targetDate.replace(/-/g, '') : '';
+        const refCode = selectedFormat.refEventCode || fCode;
+
+        effectiveUrl = `https://in.bookmyshow.com/movies/${citySlug}/${eventUrl}/buytickets/${fCode}/${dateFormatted}?etCodes=${fCode}&language=${encodeURIComponent(selectedFormat.language.toLowerCase())}&refEventCode=${refCode}`;
+      }
+    }
+
     const bmsPattern = /^https:\/\/(?:[a-zA-Z0-9-]+\.)*bookmyshow\.com\/(?:movies\/[^/]+\/[^/]+|buytickets\/[^/]+)/;
     if (!effectiveUrl.trim()) {
-      errors.push(isSmartActive ? "Please select a movie from the movie list above." : "Movie Page URL is required.");
+      errors.push(isSmartActive ? "Please select a movie and format." : "Movie Page URL is required.");
     } else if (!effectiveUrl.trim().startsWith("https://")) {
       errors.push("Enter a valid HTTPS URL.");
     } else if (serviceProvider.toLowerCase().includes("bookmyshow") && !bmsPattern.test(effectiveUrl.trim())) {
@@ -366,6 +397,9 @@ export function AppDashboard() {
         setTheatres("");
         setSmartMovieUrl("");
         setSmartTheatres([]);
+        setSmartEventCode("");
+        setSelectedFormat(null);
+        setAvailableShowDates([]);
         fetchJobs();
       } else {
         setFormErrors([data.detail || "Failed to create monitoring job."]);
@@ -547,14 +581,42 @@ export function AppDashboard() {
                   <>
                     <MoviePicker
                       selectedCity={selectedCity}
-                      onCityChange={setSelectedCity}
+                      onCityChange={(c) => {
+                        setSelectedCity(c);
+                        setSmartMovieUrl("");
+                        setSmartEventCode("");
+                        setSelectedFormat(null);
+                        setAvailableShowDates([]);
+                      }}
                       selectedMovieUrl={smartMovieUrl}
-                      onSelectMovie={(ctaUrl) => setSmartMovieUrl(ctaUrl)}
+                      onSelectMovie={handleSelectSmartMovie}
                     />
+
+                    {smartEventCode && (
+                      <FormatPicker
+                        eventCode={smartEventCode}
+                        movieCtaUrl={smartMovieUrl}
+                        regionCode={selectedCity?.RegionCode}
+                        regionSlug={selectedCity?.RegionSlug}
+                        lat={selectedCity?.Lat}
+                        lon={selectedCity?.Long}
+                        geohash={selectedCity?.GeoHash}
+                        selectedFormat={selectedFormat}
+                        onSelectFormat={setSelectedFormat}
+                        onAvailableDatesFetched={setAvailableShowDates}
+                      />
+                    )}
 
                     {/* Target Date selection with Shadcn DatePicker */}
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Show Date 📅</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Show Date 📅</label>
+                        {availableShowDates.length > 0 && (
+                          <span className="text-[10px] font-semibold text-emerald-400">
+                            {availableShowDates.filter(d => !d.isDisabled).length} show dates available
+                          </span>
+                        )}
+                      </div>
                       <DatePicker 
                         value={targetDate}
                         onChange={(dateStr) => setTargetDate(dateStr)}

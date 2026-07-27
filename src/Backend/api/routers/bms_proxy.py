@@ -1,5 +1,6 @@
 # src/Backend/api/routers/bms_proxy.py
 
+import re
 import json
 import logging
 import time
@@ -238,6 +239,17 @@ async def search_theatres(
     return JSONResponse(content={"results": results, "total": len(results)})
 
 
+def _extract_event_code(cta_url: str, analytics: dict = None) -> str:
+    """Extracts BMS event code (e.g. ET00447840) from analytics or cta_url."""
+    if analytics and isinstance(analytics, dict) and analytics.get("event_code"):
+        return str(analytics.get("event_code")).upper()
+    if cta_url:
+        match = re.search(r"(ET\d{8})", cta_url, re.IGNORECASE)
+        if match:
+            return match.group(1).upper()
+    return ""
+
+
 @router.get("/movies")
 async def get_movies(
     region: str = Query("CHEN", description="Region Code"),
@@ -319,6 +331,7 @@ async def get_movies(
 
                 genre_str = analytics.get("genre", "")
                 genres = [g.strip() for g in genre_str.split("|") if g.strip()]
+                event_code = _extract_event_code(cta_url, analytics)
 
                 if title and title.lower() not in seen_titles:
                     seen_titles.add(title.lower())
@@ -328,11 +341,190 @@ async def get_movies(
                         "rating": rating,
                         "genres": genres,
                         "languages": languages,
-                        "ctaUrl": cta_url
+                        "ctaUrl": cta_url,
+                        "eventCode": event_code
                     })
 
     except Exception as ex:
         logger.warning(f"Error parsing BMS movies structure: {ex}")
 
     return JSONResponse(content={"movies": movies})
+
+
+@router.get("/movie-formats")
+async def get_movie_formats(
+    eventCode: str = Query(..., description="Event Code of the movie (e.g. ET00447840)"),
+    dateCode: str = Query("", description="Date in YYYYMMDD format"),
+    region: str = Query("CHEN", description="Region Code"),
+    regionSlug: str = Query("chennai", description="Region Slug"),
+    lat: str = Query("13.056", description="Latitude"),
+    lon: str = Query("80.206", description="Longitude"),
+    geohash: str = Query("tf3", description="GeoHash"),
+    claims: dict = Depends(get_authorized_user)
+):
+    """
+    Fetches available formats and languages for a given movie event code.
+    Tries primary dynamic showtimes endpoint first; falls back to synopsis init API if needed.
+    """
+    require_provider_search_access("bookmyshow", claims)
+
+    code = eventCode.strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="eventCode is required")
+
+    date_str = dateCode.strip() if dateCode.strip() else time.strftime("%Y%m%d")
+
+    headers = _build_bms_headers(region, regionSlug, lat, lon, geohash, is_movie=True)
+
+    # 1. Try Primary Showtimes API
+    primary_url = (
+        f"https://in.bookmyshow.com/api/movies-data/v5/showtimes-by-event/primary-dynamic"
+        f"?etCodes={code}&dateCode={date_str}&isDesktop=true&regionCode={region}"
+        f"&xLocationShared=false&memberId=&lsId=&subCode=&appCode=WEB"
+        f"&language=english&refEventCode={code}"
+    )
+
+    groups = []
+    show_dates = []
+    movie_info = {}
+
+    try:
+        raw_data = await asyncio.to_thread(_fetch_bms_api, primary_url, headers, logger)
+        data_obj = raw_data.get("data", {})
+        
+        # Header info
+        hdr = data_obj.get("header", {})
+        if hdr:
+            subtitle = hdr.get("subtitle", {}).get("text", "")
+            title = hdr.get("title", {}).get("text", "")
+            censor = hdr.get("additionalData", {}).get("eventCensor", "")
+            genre = hdr.get("additionalData", {}).get("genre", "")
+            movie_info = {
+                "title": title,
+                "runtime": subtitle,
+                "censor": censor,
+                "genre": genre
+            }
+
+        # Available show dates
+        sticky = data_obj.get("topStickyWidgets", [])
+        if sticky and isinstance(sticky, list):
+            date_widget = sticky[0]
+            if isinstance(date_widget, dict) and date_widget.get("type") == "horizontal-block-list":
+                for date_item in date_widget.get("data", []):
+                    if not isinstance(date_item, dict):
+                        continue
+                    d_id = date_item.get("id", "")
+                    style_id = date_item.get("styleId", "")
+                    d_texts = [t.get("text", "") for t in date_item.get("data", []) if isinstance(t, dict)]
+                    label = " ".join(d_texts)
+                    is_disabled = "disabled" in style_id.lower()
+                    if d_id and len(d_id) == 8:
+                        show_dates.append({
+                            "dateCode": d_id,
+                            "label": label,
+                            "isDisabled": is_disabled
+                        })
+
+        # Format selector bottomSheetData
+        bottom_sheet = data_obj.get("bottomSheetData", {}).get("format-selector", {})
+        widgets = bottom_sheet.get("widgets", [])
+        
+        for widget in widgets:
+            if not isinstance(widget, dict) or widget.get("type") != "chip-list":
+                continue
+            lang = widget.get("text", "")
+            chip_data = widget.get("data", [])
+            formats = []
+            for chip in chip_data:
+                if not isinstance(chip, dict):
+                    continue
+                c_title = chip.get("title", "")
+                if not c_title or c_title.lower() == "select all":
+                    continue
+                cta = chip.get("cta", {})
+                add_data = cta.get("additionalData", {})
+                analytics = cta.get("analytics", {})
+                
+                f_event_code = add_data.get("eventCode") or analytics.get("event_code") or code
+                if f_event_code == "*":
+                    continue
+                f_event_url = add_data.get("eventUrl") or ""
+                ref_code = add_data.get("refEventCode") or code
+                
+                formats.append({
+                    "label": c_title,
+                    "eventCode": f_event_code,
+                    "eventUrl": f_event_url,
+                    "refEventCode": ref_code,
+                    "language": lang
+                })
+            if formats:
+                groups.append({
+                    "language": lang,
+                    "formats": formats
+                })
+
+    except Exception as e:
+        logger.warning(f"Primary format search failed for {code}: {e}")
+
+    # 2. Fallback to Synopsis Init API if primary returns no format options
+    if not groups:
+        logger.info(f"Falling back to synopsis init API for format selection of {code}")
+        synopsis_url = (
+            f"https://in.bookmyshow.com/api/movies/v1/synopsis/init/dynamic"
+            f"?eventcode={code}&channel=web&isdesktop=true&isRnROnly=false&regionCode={region}"
+        )
+        try:
+            raw_syn = await asyncio.to_thread(_fetch_bms_api, synopsis_url, headers, logger)
+            data_syn = raw_syn.get("data", {}) if "data" in raw_syn else raw_syn
+            banner = data_syn.get("bannerWidget", {})
+            if banner:
+                movie_info = {
+                    "title": banner.get("heading", ""),
+                    "runtime": banner.get("duration", ""),
+                    "censor": banner.get("censor", ""),
+                    "releaseDate": banner.get("releaseDate", "")
+                }
+                page_cta = data_syn.get("pageCta", []) or banner.get("pageCta", [])
+                if page_cta and isinstance(page_cta, list):
+                    meta_options = page_cta[0].get("meta", {}).get("options", [])
+                    for opt in meta_options:
+                        if not isinstance(opt, dict):
+                            continue
+                        lang = opt.get("language", "")
+                        f_list = opt.get("formats", [])
+                        formats = []
+                        for fmt in f_list:
+                            if not isinstance(fmt, dict):
+                                continue
+                            dim = fmt.get("dimension", "")
+                            if not dim or dim.lower() == "select all":
+                                continue
+                            f_code = fmt.get("eventCode")
+                            if not f_code or f_code == "*":
+                                continue
+                            ref_code = fmt.get("refEventCode") or f_code
+                            formats.append({
+                                "label": dim,
+                                "eventCode": f_code,
+                                "eventUrl": "",
+                                "refEventCode": ref_code,
+                                "language": lang
+                            })
+                        if formats:
+                            groups.append({
+                                "language": lang,
+                                "formats": formats
+                            })
+        except Exception as syn_err:
+            logger.warning(f"Synopsis format fallback failed for {code}: {syn_err}")
+
+    return JSONResponse(content={
+        "eventCode": code,
+        "movieInfo": movie_info,
+        "groups": groups,
+        "showDates": show_dates
+    })
+
 
