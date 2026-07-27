@@ -10,7 +10,13 @@ from typing import Dict, List, Optional, Any
 def _parse_movie_name_from_url(url: str, params: Optional[Dict[str, Any]] = None) -> str:
     """
     Extracts and formats a human-readable movie title from a BookMyShow URL.
-    Example: 'https://in.bookmyshow.com/movies/chennai/the-odyssey-imax-2d/buytickets/ET00480917/20260730' -> 'The Odyssey'
+    
+    Parameters:
+        url (str): BookMyShow URL containing the movie path.
+        params (Optional[Dict[str, Any]]): Additional parameters reserved for compatibility.
+    
+    Returns:
+        str: The formatted movie title, or "BookMyShow Movie" if no title can be extracted.
     """
     if not url:
         return "BookMyShow Movie"
@@ -63,6 +69,19 @@ class MonitorJob:
         created_by: Optional[str] = None,
         creator_email: Optional[str] = None
     ):
+        """
+        Initialize a movie ticket monitoring job with its configuration, metadata, and initial state.
+        
+        Parameters:
+            params (Dict[str, Any]): Job parameters, including the movie URL.
+            notification_medium (str): Notification channel.
+            notification_config (Dict[str, Any]): Notification channel configuration.
+            service_provider (str): Ticket service provider.
+            check_interval (Optional[int]): Requested interval between checks, with a minimum of 60 seconds.
+            job_id (Optional[str]): Existing job identifier.
+            created_by (Optional[str]): Identifier of the job creator.
+            creator_email (Optional[str]): Email address of the job creator.
+        """
         self.id = job_id or str(uuid.uuid4())[:8]  # Short, readable ID
         self.params = params
         self.notification_medium = notification_medium.strip().lower()
@@ -96,7 +115,12 @@ class MonitorJob:
 
     @property
     def theatres(self) -> List[str]:
-        """Compatibility helper to retrieve theatres list from params."""
+        """
+        Return the configured theatre names as a cleaned list.
+        
+        Returns:
+        	List[str]: Theatre names with surrounding whitespace removed.
+        """
         raw_theatres = self.params.get("theatres", [])
         if isinstance(raw_theatres, str):
             return [t.strip() for t in raw_theatres.split("\n") if t.strip()]
@@ -104,7 +128,13 @@ class MonitorJob:
 
     @property
     def language(self) -> str:
-        """Helper to retrieve language from params or URL query."""
+        """
+        Determine the job's language from its parameters or URL.
+        
+        Returns:
+            str: The capitalized language, ``"English"`` for BookMyShow jobs without
+                an explicit language, or an empty string when unavailable.
+        """
         lang = self.params.get("language")
         if lang:
             return str(lang).capitalize()
@@ -117,7 +147,11 @@ class MonitorJob:
 
     @property
     def format_name(self) -> str:
-        """Helper to retrieve format (e.g. 2D, 3D, IMAX 2D) from params or URL slug."""
+        """Determine the movie format from the job parameters or URL.
+        
+        Returns:
+            str: The configured or detected format, or an empty string when no format is available.
+        """
         fmt = self.params.get("format")
         if fmt:
             return str(fmt)
@@ -157,7 +191,17 @@ class MonitorJob:
         service_provider: str = "bookmyshow",
         check_interval: Optional[int] = None
     ) -> None:
-        """Thread-safely updates the job configuration and parameters."""
+        """
+        Update the job's monitoring parameters and notification configuration.
+        
+        Parameters:
+            params (Dict[str, Any]): Monitoring parameters, including the movie URL.
+            notification_medium (str): Medium used for notifications.
+            notification_config (Dict[str, Any]): Configuration for the notification medium.
+            service_provider (str): Ticket service provider.
+            check_interval (Optional[int]): Requested check interval in seconds; values below 60 are set to 60.
+        
+        """
         with self._lock:
             self.params = params
             self.notification_medium = notification_medium.strip().lower()

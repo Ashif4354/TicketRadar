@@ -26,6 +26,11 @@ import { MoviePicker, type CityEntry } from '../components/ui/movie-picker';
 import { TheatreSearch } from '../components/ui/theatre-search';
 import { FormatPicker, type FormatOption, type ShowDateOption } from '../components/ui/format-picker';
 
+/**
+ * Renders the ticket-tracker dashboard for creating, editing, and managing notification jobs.
+ *
+ * @returns The ticket-tracker dashboard interface
+ */
 export function AppDashboard() {
   const [claims, setClaims] = useState<UserClaims | null>(null);
   const [selectedCity, setSelectedCity] = useState<CityEntry | null>(null);

@@ -182,7 +182,16 @@ async def admin_unblock_user(
     background_tasks: BackgroundTasks,
     admin_claims: dict = Depends(get_admin_user)
 ):
-    """Sets the 'blocked' claim to False."""
+    """Unblocks a user by clearing the user's blocked status.
+    
+    Parameters:
+        uid (str): The Firebase user ID to unblock.
+        background_tasks (BackgroundTasks): Background task manager for the unblock notification.
+        admin_claims (dict): Claims for the administrator performing the action.
+    
+    Returns:
+        dict: A success response with a confirmation message.
+    """
     try:
         user = firebase_auth.get_user(uid)
         claims = user.custom_claims or {}
@@ -214,7 +223,16 @@ async def admin_toggle_search_access(
     provider: str = "bookmyshow",
     admin_claims: dict = Depends(get_admin_user)
 ):
-    """Toggles user's search permission for a search-capable service provider."""
+    """
+    Toggle a user's search access for a supported provider.
+    
+    Parameters:
+        uid (str): Firebase user ID whose search access will be toggled.
+        provider (str): Search-capable provider whose access should be toggled.
+    
+    Returns:
+        dict: The provider and its updated search-access state.
+    """
     capable_providers = ScraperFactory.get_search_capable_providers()
     provider_clean = provider.strip().lower()
     if provider_clean not in capable_providers:
@@ -259,7 +277,12 @@ async def admin_toggle_search_access(
 
 @router.get("/requests")
 async def admin_list_requests():
-    """Lists pending and denied access requests from Firestore (excluding approved requests), enriched with user details."""
+    """
+    List access requests that have not been approved, enriched with user details and ISO-formatted timestamps.
+    
+    Returns:
+    	list[dict]: Access request records excluding approved requests.
+    """
     if db is None:
         raise HTTPException(status_code=500, detail="Firestore is not available.")
     try:

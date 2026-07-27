@@ -8,6 +8,9 @@ import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp } from '../utils/formatters';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 
+/**
+ * Provides an administrative interface for managing access requests, user accounts, and ticket-monitoring jobs.
+ */
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs'>('requests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');

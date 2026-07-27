@@ -126,7 +126,11 @@ class BookMyShowBookingChecker(BookingChecker):
     @classmethod
     def get_required_fields(cls) -> Dict[str, Dict[str, Any]]:
         """
-        Declares metadata about BookMyShow required inputs.
+        Describe the user inputs required to monitor a BookMyShow movie booking page.
+        
+        Returns:
+            Dict[str, Dict[str, Any]]: Metadata for the booking page URL, target date,
+            and theatre names to monitor.
         """
         return {
             "url": {

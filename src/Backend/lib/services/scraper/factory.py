@@ -46,7 +46,10 @@ class ScraperFactory:
     @staticmethod
     def get_search_capable_providers() -> list[str]:
         """
-        Returns a list of provider keys that have search capabilities enabled (has_search = True).
+        Identify providers whose scraper classes support search.
+        
+        Returns:
+            list[str]: Provider keys with search capability enabled.
         """
         capable = []
         providers = ["bookmyshow"]

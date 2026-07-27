@@ -18,7 +18,19 @@ router = APIRouter(prefix="/api/bms", tags=["BookMyShow Proxy"])
 
 
 def require_provider_search_access(provider_key: str, claims: dict):
-    """Verifies that the user has search access for the given provider (or is admin)."""
+    """
+    Verify that a user may search the specified provider.
+    
+    Parameters:
+        provider_key (str): Provider identifier used to determine the required search claim.
+        claims (dict): User claims containing the role and provider permissions.
+    
+    Returns:
+        bool: `True` when the user is an administrator or has the provider's search permission.
+    
+    Raises:
+        HTTPException: If the user lacks permission to search the provider.
+    """
     if claims.get("role") == "admin":
         return True
     claim_key = f"search_{provider_key.lower()}"
@@ -31,7 +43,15 @@ def require_provider_search_access(provider_key: str, claims: dict):
 
 
 def _is_valid_bms_json(text: str) -> bool:
-    """Validates that response text is not a Cloudflare challenge page and is valid JSON."""
+    """
+    Determine whether response text appears to contain valid, unblocked JSON.
+    
+    Parameters:
+        text (str): Response body to validate.
+    
+    Returns:
+        bool: `true` if the text is sufficiently long, does not contain known Cloudflare challenge markers, and begins with a JSON object or array; `false` otherwise.
+    """
     if not text or len(text) < 10:
         return False
     text_lower = text.lower()
@@ -43,9 +63,17 @@ def _is_valid_bms_json(text: str) -> bool:
 
 def _fetch_bms_api(url: str, api_headers: dict, log) -> dict:
     """
-    Synchronous HTTP GET using browser impersonation (curl_cffi / system curl / httpx)
-    with Cloudflare challenge validation and automatic retry rotation.
-    Runs in a worker thread via asyncio.to_thread.
+    Fetch and parse a BookMyShow API response using multiple HTTP strategies.
+    
+    Parameters:
+        url (str): The BookMyShow API URL.
+        api_headers (dict): HTTP headers required by the request.
+    
+    Returns:
+        dict: The decoded JSON response.
+    
+    Raises:
+        RuntimeError: If all request strategies fail or the response is blocked or invalid.
     """
     log.debug(f"GET BMS API: {url}")
 
@@ -103,7 +131,20 @@ def _fetch_bms_api(url: str, api_headers: dict, log) -> dict:
 
 
 def _build_bms_headers(region_code: str, region_slug: str, lat: str, lon: str, geohash: str, is_movie: bool = False) -> dict:
-    """Builds standard BMS anti-bot API headers."""
+    """
+    Build request headers for BookMyShow API calls using region and location context.
+    
+    Parameters:
+    	region_code (str): BookMyShow region code.
+    	region_slug (str): URL-friendly region identifier used in the request context.
+    	lat (str): Latitude for the request location.
+    	lon (str): Longitude for the request location.
+    	geohash (str): Geohash for the request location.
+    	is_movie (bool): Whether to use the desktop movie platform code.
+    
+    Returns:
+    	dict: Headers configured for a BookMyShow API request.
+    """
     platform_code = "DESKTOP-WEB" if is_movie else "WEB"
     return {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
@@ -141,7 +182,17 @@ async def search_theatres(
     geohash: str = Query("tf3", description="GeoHash"),
     claims: dict = Depends(get_authorized_user)
 ):
-    """Searches BookMyShow theatres dynamically."""
+    """
+    Searches BookMyShow for theatres matching the supplied query and region.
+    
+    Parameters:
+    	q (str): Theatre search term.
+    	region (str): BookMyShow region code.
+    	regionSlug (str): BookMyShow region slug.
+    	lat (str): Search latitude.
+    	lon (str): Search longitude.
+    	geohash (str): Search location geohash.
+    """
     require_provider_search_access("bookmyshow", claims)
 
     if not q.strip():
@@ -259,7 +310,19 @@ async def get_movies(
     geohash: str = Query("tf3", description="GeoHash"),
     claims: dict = Depends(get_authorized_user)
 ):
-    """Fetches currently listed movies for a given region from BookMyShow."""
+    """
+    Fetches currently listed movies for a region from BookMyShow.
+    
+    Parameters:
+    	region (str): BookMyShow region code.
+    	regionSlug (str): BookMyShow region slug.
+    	lat (str): Latitude used for the regional request.
+    	lon (str): Longitude used for the regional request.
+    	geohash (str): Geohash used for the regional request.
+    
+    Returns:
+    	JSONResponse: A response containing normalized movie listings.
+    """
     require_provider_search_access("bookmyshow", claims)
 
     target_url = f"https://in.bookmyshow.com/api/explore/v1/discover/movies-{regionSlug}"
@@ -363,8 +426,22 @@ async def get_movie_formats(
     claims: dict = Depends(get_authorized_user)
 ):
     """
-    Fetches available formats and languages for a given movie event code.
-    Tries primary dynamic showtimes endpoint first; falls back to synopsis init API if needed.
+    Fetch available movie formats, languages, metadata, and show dates for an event code.
+    
+    Parameters:
+    	eventCode (str): BookMyShow event code identifying the movie.
+    	dateCode (str): Show date in YYYYMMDD format; defaults to the current date.
+    	region (str): BookMyShow region code.
+    	regionSlug (str): BookMyShow region slug.
+    	lat (str): Latitude for the selected region.
+    	lon (str): Longitude for the selected region.
+    	geohash (str): Geohash for the selected location.
+    
+    Returns:
+    	JSONResponse: Movie event code, metadata, format groups, and available show dates.
+    
+    Raises:
+    	HTTPException: If eventCode is empty after trimming.
     """
     require_provider_search_access("bookmyshow", claims)
 

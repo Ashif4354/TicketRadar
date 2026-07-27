@@ -48,6 +48,22 @@ class DiscordWebhookNotificationStrategy(NotificationStrategy):
         language: str = "",
         format_name: str = ""
     ) -> tuple[bool, str]:
+        """
+        Send a Discord webhook notification containing movie and theatre availability details.
+        
+        Parameters:
+            subject (str): Notification title.
+            movie_name (str): Name of the movie.
+            date_str (str): Screening date or date description.
+            available_theatres (List[str]): Theatres where tickets are available.
+            unavailable_theatres (List[str]): Theatres where tickets are unavailable.
+            url (str): Booking URL.
+            language (str): Optional movie language.
+            format_name (str): Optional screening format.
+        
+        Returns:
+            tuple[bool, str]: A success flag and status message describing the result.
+        """
         if not self.webhook_url:
             return False, "Discord Webhook URL is missing."
 

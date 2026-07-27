@@ -30,6 +30,14 @@ interface MoviePickerProps {
   onSelectMovie: (ctaUrl: string, title: string, eventCode?: string) => void;
 }
 
+/**
+ * Provides city selection and movie browsing for the selected region.
+ *
+ * @param selectedCity - The currently selected city, or `null` when none is selected.
+ * @param onCityChange - Called when a city is selected or the default city is assigned.
+ * @param selectedMovieUrl - URL of the movie currently selected.
+ * @param onSelectMovie - Called when a movie is selected.
+ */
 export function MoviePicker({
   selectedCity,
   onCityChange,

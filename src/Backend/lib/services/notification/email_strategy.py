@@ -27,6 +27,22 @@ class EmailNotificationStrategy(NotificationStrategy):
         language: str = "",
         format_name: str = ""
     ) -> tuple[bool, str]:
+        """
+        Send a booking availability notification email for a movie.
+        
+        Parameters:
+        	subject (str): Email subject.
+        	movie_name (str): Name of the movie.
+        	date_str (str): Date associated with the booking.
+        	available_theatres (List[str]): Theatres where booking is available.
+        	unavailable_theatres (List[str]): Theatres where booking remains unavailable.
+        	url (str): Link to book tickets.
+        	language (str): Optional movie language detail.
+        	format_name (str): Optional movie format detail.
+        
+        Returns:
+        	tuple[bool, str]: A success flag and status message.
+        """
         if not self.recipient_email:
             return False, "Recipient email is missing."
 

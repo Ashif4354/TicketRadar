@@ -214,7 +214,11 @@ class JobManager:
 
     async def _run_job_loop(self, job: MonitorJob, stop_event: asyncio.Event) -> None:
         """
-        The main async coroutine executing the check loop.
+        Run the monitoring cycle until it is stopped or a booking is found.
+        
+        Parameters:
+            job (MonitorJob): Job configuration and state to monitor.
+            stop_event (asyncio.Event): Event that signals the monitoring cycle to stop.
         """
         job_logger = get_job_logger(job.id)
         job_logger.info(

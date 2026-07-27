@@ -43,6 +43,18 @@ interface FormatPickerProps {
   onAvailableDatesFetched?: (dates: ShowDateOption[]) => void;
 }
 
+/**
+ * Fetches and displays selectable movie language and format options.
+ *
+ * Automatically selects the first available format and forwards fetched show dates when provided.
+ *
+ * @param eventCode - The movie event code used to load format options.
+ * @param movieCtaUrl - URL used to derive a missing format event URL.
+ * @param selectedFormat - The currently selected format.
+ * @param onSelectFormat - Called when a format is selected.
+ * @param onAvailableDatesFetched - Called when show dates are available.
+ * @returns The format picker interface, or `null` when no event code is provided.
+ */
 export function FormatPicker({
   eventCode,
   movieTitle: _movieTitle,

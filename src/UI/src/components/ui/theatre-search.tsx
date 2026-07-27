@@ -21,6 +21,17 @@ interface TheatreSearchProps {
   onChangeTheatres: (theatres: string[]) => void;
 }
 
+/**
+ * Provides a searchable interface for adding and removing theatres for a region.
+ *
+ * @param selectedTheatres - The currently selected theatre names.
+ * @param onChangeTheatres - Callback invoked with the updated theatre selection.
+ * @param regionCode - Region code used for theatre searches.
+ * @param regionSlug - Region slug used for theatre searches.
+ * @param lat - Latitude used for theatre searches.
+ * @param lon - Longitude used for theatre searches.
+ * @param geohash - Geohash used for theatre searches.
+ */
 export function TheatreSearch({
   regionCode = 'CHEN',
   regionSlug = 'chennai',
