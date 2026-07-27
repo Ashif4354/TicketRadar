@@ -3,7 +3,7 @@
 import json
 import hashlib
 import logging
-from typing import List
+from typing import List, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
@@ -15,7 +15,7 @@ from lib.services.scraper.factory import ScraperFactory
 from lib.services.notification import admin_notifier
 from lib.services.gcp_logger import gcp_logger
 from lib.core.auth import get_authorized_user
-from api.schemas import CreateJobRequest, UpdateJobRequest
+from api.schemas import CreateJobRequest, UpdateJobRequest, JobParams
 from api.dependencies import verify_recaptcha, get_user_details
 
 logger = logging.getLogger("ticketradar.api")
@@ -70,6 +70,25 @@ def validate_job_url(service_provider: str, raw_url: str) -> str:
                 detail="Enter a valid BookMyShow movie link."
             )
     return url
+
+
+def _extract_job_params(job_params: JobParams | Any, url: str) -> dict:
+    """
+    Extract and structure job parameters dictionary from a JobParams object or dict,
+    ensuring the validated URL is included.
+    """
+    if isinstance(job_params, dict):
+        params_dict = dict(job_params)
+    elif hasattr(job_params, "model_dump"):
+        params_dict = job_params.model_dump()
+    elif hasattr(job_params, "dict"):
+        params_dict = job_params.dict()
+    else:
+        params_dict = dict(job_params)
+
+    params_dict["url"] = url
+    return params_dict
+
 
 
 

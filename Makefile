@@ -51,9 +51,10 @@ run:
 
 # ── Clean ──────────────────────────────────────────────────────────────────────
 
-# Clean all build artifacts portably using Python
+# Clean all build artifacts, virtual environments, node_modules, dist, and pycache
 clean:
-	cd src/Backend && uv run python -c "import shutil, glob, os; \
-	[shutil.rmtree(d, ignore_errors=True) for d in ['../../build', '../../dist'] if os.path.exists(d)]; \
-	shutil.rmtree('../../src/UI/dist', ignore_errors=True); \
-	[os.remove(f) for f in glob.glob('../../*.exe')]"
+	@echo Cleaning build artifacts, venv, node_modules, dist, and pycache...
+	@python -c "import os, shutil; \
+	[shutil.rmtree(os.path.join(r, d), ignore_errors=True) for r, ds, fs in os.walk('.', topdown=True) for d in list(ds) if d in ('build', 'dist', 'node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.ruff_cache', '.mypy_cache') or d.endswith(('.build', '.dist', '.onefile-build', '.egg-info'))]; \
+	[os.remove(os.path.join(r, f)) for r, ds, fs in os.walk('.') for f in fs if f.endswith(('.pyc', '.pyo', '.pyd', '.exe'))]"
+
