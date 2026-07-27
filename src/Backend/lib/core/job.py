@@ -1,5 +1,7 @@
 # src/core/job.py
 
+import re
+import urllib
 import uuid
 from datetime import datetime, timezone
 import threading
@@ -59,6 +61,44 @@ class MonitorJob:
             return [t.strip() for t in raw_theatres.split("\n") if t.strip()]
         return [str(t).strip() for t in raw_theatres if str(t).strip()]
 
+    @property
+    def language(self) -> str:
+        """Helper to retrieve language from params or URL query."""
+        lang = self.params.get("language")
+        if lang:
+            return str(lang).capitalize()
+        match = re.search(r"language=([^&]+)", self.url, re.IGNORECASE)
+        if match:
+            return urllib.parse.unquote(match.group(1)).capitalize()
+        if self.service_provider.lower() == "bookmyshow":
+            return "English"
+        return ""
+
+    @property
+    def format_name(self) -> str:
+        """Helper to retrieve format (e.g. 2D, 3D, IMAX 2D) from params or URL slug."""
+        fmt = self.params.get("format")
+        if fmt:
+            return str(fmt)
+        url_lower = self.url.lower()
+        if "imax-3d" in url_lower or "imax 3d" in url_lower:
+            return "IMAX 3D"
+        if "imax-2d" in url_lower or "imax 2d" in url_lower or "imax" in url_lower:
+            return "IMAX 2D"
+        if "4dx-3d" in url_lower or "4dx 3d" in url_lower:
+            return "4DX 3D"
+        if "4dx" in url_lower:
+            return "4DX"
+        if "3d" in url_lower:
+            return "3D"
+        if "screenx" in url_lower:
+            return "ScreenX"
+        if "epiq" in url_lower:
+            return "EPIQ"
+        if self.service_provider.lower() == "bookmyshow":
+            return "2D"
+        return ""
+
     def update_state(self, status: str, last_result: str, movie_name: Optional[str] = None) -> None:
         """Thread-safely updates the state of the job in memory."""
         with self._lock:
@@ -83,7 +123,11 @@ class MonitorJob:
             self.notification_config = notification_config
             self.service_provider = service_provider.strip().lower()
             self.check_interval = max(60, check_interval) if check_interval is not None else 60
-            self.movie_name = "Fetching..."
+            parsed_name = _parse_movie_name_from_url(params.get("url", ""), params)
+            if parsed_name != "BookMyShow Movie":
+                self.movie_name = parsed_name
+            elif self.movie_name == "Fetching...":
+                self.movie_name = "Fetching..."
 
     def get_state(self) -> Dict[str, Any]:
         """Thread-safely returns a full snapshot of the job state for API responses."""
@@ -95,6 +139,8 @@ class MonitorJob:
                 "movie_name": self.movie_name,
                 "date_str": self.date_str,
                 "theatres": self.theatres,
+                "language": self.language,
+                "format": self.format_name,
                 "service_provider": self.service_provider,
                 "notification_medium": self.notification_medium,
                 "notification_config": self.notification_config,
@@ -121,6 +167,8 @@ class MonitorJob:
                 "notification_config": self.notification_config,
                 "check_interval": self.check_interval,
                 "movie_name": self.movie_name,
+                "language": self.language,
+                "format": self.format_name,
                 "created_by": self.created_by,
                 "creator_email": self.creator_email,
                 "status": self.status,

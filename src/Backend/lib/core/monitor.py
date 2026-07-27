@@ -237,8 +237,11 @@ class JobManager:
                         job.params,
                         logger=job_logger
                     )
-                    if movie_name:
-                        job.movie_name = movie_name
+                    if movie_name and movie_name != "Fetching...":
+                        if job.movie_name != movie_name:
+                            job_logger.info(f"Movie name updated from page: '{job.movie_name}' -> '{movie_name}'")
+                            job.movie_name = movie_name
+                            self._save_job_to_firestore(job)
                 except Exception as e:
                     success = False
                     details = "An unexpected error occurred during the check."

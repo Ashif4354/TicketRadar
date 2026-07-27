@@ -689,6 +689,20 @@ export function AdminDashboard() {
                                     <Clock className="h-3 w-3 text-muted-foreground/70" />
                                     {formatTimestamp(j.created_at, true)}
                                   </span>
+                                  {(j.language || j.params?.language || j.format || j.params?.format) && (
+                                    <div className="flex items-center gap-1">
+                                      {(j.language || j.params?.language) && (
+                                        <Badge variant="outline" className="text-[9px] font-bold border-rose-500/30 text-rose-400 bg-rose-500/10 px-1.5 py-0.2">
+                                          {j.language || j.params?.language}
+                                        </Badge>
+                                      )}
+                                      {(j.format || j.params?.format) && (
+                                        <Badge variant="outline" className="text-[9px] font-extrabold border-amber-500/30 text-amber-400 bg-amber-500/10 px-1.5 py-0.2">
+                                          {j.format || j.params?.format}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -832,7 +846,19 @@ export function AdminDashboard() {
                                       j.movie_name
                                     )}
                                   </div>
-                                  <div className="text-[10px] font-mono text-muted-foreground">Job #{j.id}</div>
+                                  <div className="text-[10px] font-mono text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                                    <span>Job #{j.id}</span>
+                                    {(j.language || j.params?.language) && (
+                                      <Badge variant="outline" className="text-[9px] font-bold border-rose-500/30 text-rose-400 bg-rose-500/10 px-1.5 py-0.5">
+                                        {j.language || j.params?.language}
+                                      </Badge>
+                                    )}
+                                    {(j.format || j.params?.format) && (
+                                      <Badge variant="outline" className="text-[9px] font-extrabold border-amber-500/30 text-amber-400 bg-amber-500/10 px-1.5 py-0.5">
+                                        {j.format || j.params?.format}
+                                      </Badge>
+                                    )}
+                                  </div>
                                   <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                                     <Clock className="h-3 w-3 shrink-0" />
                                     <span>{formatTimestamp(j.created_at, true)}</span>

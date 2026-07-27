@@ -148,7 +148,9 @@ async def create_job(
     params = {
         "url": url,
         "date_str": payload.params.date_str.strip(),
-        "theatres": payload.params.theatres
+        "theatres": payload.params.theatres,
+        "language": getattr(payload.params, "language", "") or (payload.params.dict().get("language") if hasattr(payload.params, "dict") else ""),
+        "format": getattr(payload.params, "format", "") or (payload.params.dict().get("format") if hasattr(payload.params, "dict") else "")
     }
 
     medium = payload.notification_medium.strip().lower()
@@ -347,7 +349,9 @@ async def update_job(
     params = {
         "url": url,
         "date_str": payload.params.date_str.strip(),
-        "theatres": payload.params.theatres
+        "theatres": payload.params.theatres,
+        "language": getattr(payload.params, "language", "") or (payload.params.dict().get("language") if hasattr(payload.params, "dict") else ""),
+        "format": getattr(payload.params, "format", "") or (payload.params.dict().get("format") if hasattr(payload.params, "dict") else "")
     }
 
     medium = payload.notification_medium.strip().lower()
