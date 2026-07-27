@@ -7,6 +7,44 @@ from datetime import datetime, timezone
 import threading
 from typing import Dict, List, Optional, Any
 
+def _parse_movie_name_from_url(url: str, params: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Extracts and formats a human-readable movie title from a BookMyShow URL.
+    Example: 'https://in.bookmyshow.com/movies/chennai/the-odyssey-imax-2d/buytickets/ET00480917/20260730' -> 'The Odyssey'
+    """
+    if not url:
+        return "BookMyShow Movie"
+
+    try:
+        # Match pattern: /movies/{city}/{movie_slug}/buytickets/...
+        match = re.search(r"/movies/[^/]+/([^/]+)/buytickets", url, re.IGNORECASE)
+        if not match:
+            # Fallback: match /movies/{movie_slug}/ or raw slug in path
+            match = re.search(r"/movies/([^/]+)", url, re.IGNORECASE)
+
+        if match:
+            slug = match.group(1).lower()
+            # Clean common format suffixes from slug
+            format_suffixes = [
+                "-imax-3d", "-imax-2d", "-imax",
+                "-4dx-3d", "-4dx", "-screenx", "-epiq",
+                "-3d", "-2d"
+            ]
+            for fmt in format_suffixes:
+                if slug.endswith(fmt):
+                    slug = slug[:-len(fmt)]
+                    break
+
+            # Replace hyphens with spaces and capitalize each word
+            words = slug.split("-")
+            clean_title = " ".join(w.capitalize() for w in words if w)
+            if clean_title:
+                return clean_title
+    except Exception:
+        pass
+
+    return "BookMyShow Movie"
+
 class MonitorJob:
     """
     Domain model representing a single movie ticket monitoring job.
@@ -31,7 +69,10 @@ class MonitorJob:
         self.notification_config = notification_config
         self.service_provider = service_provider.strip().lower()
         self.check_interval = max(60, check_interval) if check_interval is not None else 60
-        self.movie_name = "Fetching..."
+        
+        parsed = _parse_movie_name_from_url(params.get("url", ""), params)
+        self.movie_name = parsed if parsed != "BookMyShow Movie" else "Fetching..."
+
         self.created_by = created_by
         self.creator_email = creator_email
         
