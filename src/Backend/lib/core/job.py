@@ -1,22 +1,16 @@
 # src/core/job.py
 
 import re
-import urllib
+import urllib.parse
 import uuid
 from datetime import datetime, timezone
 import threading
 from typing import Dict, List, Optional, Any
 
-def _parse_movie_name_from_url(url: str, params: Optional[Dict[str, Any]] = None) -> str:
+def _parse_movie_name_from_url(url: str) -> str:
     """
     Extracts and formats a human-readable movie title from a BookMyShow URL.
-    
-    Parameters:
-        url (str): BookMyShow URL containing the movie path.
-        params (Optional[Dict[str, Any]]): Additional parameters reserved for compatibility.
-    
-    Returns:
-        str: The formatted movie title, or "BookMyShow Movie" if no title can be extracted.
+    Example: 'https://in.bookmyshow.com/movies/chennai/the-odyssey-imax-2d/buytickets/ET00480917/20260730' -> 'The Odyssey'
     """
     if not url:
         return "BookMyShow Movie"
@@ -89,7 +83,7 @@ class MonitorJob:
         self.service_provider = service_provider.strip().lower()
         self.check_interval = max(60, check_interval) if check_interval is not None else 60
         
-        parsed = _parse_movie_name_from_url(params.get("url", ""), params)
+        parsed = _parse_movie_name_from_url(params.get("url", ""))
         self.movie_name = parsed if parsed != "BookMyShow Movie" else "Fetching..."
 
         self.created_by = created_by
@@ -115,12 +109,7 @@ class MonitorJob:
 
     @property
     def theatres(self) -> List[str]:
-        """
-        Return the configured theatre names as a cleaned list.
-        
-        Returns:
-        	List[str]: Theatre names with surrounding whitespace removed.
-        """
+        """Compatibility helper to retrieve theatres list from params."""
         raw_theatres = self.params.get("theatres", [])
         if isinstance(raw_theatres, str):
             return [t.strip() for t in raw_theatres.split("\n") if t.strip()]
@@ -128,13 +117,7 @@ class MonitorJob:
 
     @property
     def language(self) -> str:
-        """
-        Determine the job's language from its parameters or URL.
-        
-        Returns:
-            str: The capitalized language, ``"English"`` for BookMyShow jobs without
-                an explicit language, or an empty string when unavailable.
-        """
+        """Helper to retrieve language from params or URL query."""
         lang = self.params.get("language")
         if lang:
             return str(lang).capitalize()
@@ -147,11 +130,7 @@ class MonitorJob:
 
     @property
     def format_name(self) -> str:
-        """Determine the movie format from the job parameters or URL.
-        
-        Returns:
-            str: The configured or detected format, or an empty string when no format is available.
-        """
+        """Helper to retrieve format (e.g. 2D, 3D, IMAX 2D) from params or URL slug."""
         fmt = self.params.get("format")
         if fmt:
             return str(fmt)
@@ -191,28 +170,16 @@ class MonitorJob:
         service_provider: str = "bookmyshow",
         check_interval: Optional[int] = None
     ) -> None:
-        """
-        Update the job's monitoring parameters and notification configuration.
-        
-        Parameters:
-            params (Dict[str, Any]): Monitoring parameters, including the movie URL.
-            notification_medium (str): Medium used for notifications.
-            notification_config (Dict[str, Any]): Configuration for the notification medium.
-            service_provider (str): Ticket service provider.
-            check_interval (Optional[int]): Requested check interval in seconds; values below 60 are set to 60.
-        
-        """
+        """Thread-safely updates the job configuration and parameters."""
         with self._lock:
             self.params = params
             self.notification_medium = notification_medium.strip().lower()
             self.notification_config = notification_config
             self.service_provider = service_provider.strip().lower()
             self.check_interval = max(60, check_interval) if check_interval is not None else 60
-            parsed_name = _parse_movie_name_from_url(params.get("url", ""), params)
+            parsed_name = _parse_movie_name_from_url(params.get("url", ""))
             if parsed_name != "BookMyShow Movie":
                 self.movie_name = parsed_name
-            elif self.movie_name == "Fetching...":
-                self.movie_name = "Fetching..."
 
     def get_state(self) -> Dict[str, Any]:
         """Thread-safely returns a full snapshot of the job state for API responses."""

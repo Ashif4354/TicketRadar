@@ -73,6 +73,7 @@ export function TheatreSearch({
       return;
     }
 
+    let isSubscribed = true;
     setLoading(true);
     const handler = setTimeout(() => {
       const queryParams = new URLSearchParams({
@@ -85,19 +86,33 @@ export function TheatreSearch({
       });
 
       authenticatedFetch(`/api/bms/search/theatres?${queryParams.toString()}`)
-        .then((res) => res.json())
+        .then(async (res) => {
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `Search failed with status ${res.status}`);
+          }
+          return res.json();
+        })
         .then((data) => {
-          setResults(data.results || []);
-          setLoading(false);
-          setIsOpen(true);
+          if (isSubscribed) {
+            setResults(data.results || []);
+            setLoading(false);
+            setIsOpen(true);
+          }
         })
         .catch((err) => {
-          console.error("Theatre search error:", err);
-          setLoading(false);
+          if (isSubscribed) {
+            console.error("Theatre search error:", err);
+            setResults([]);
+            setLoading(false);
+          }
         });
     }, 300);
 
-    return () => clearTimeout(handler);
+    return () => {
+      isSubscribed = false;
+      clearTimeout(handler);
+    };
   }, [query, regionCode, regionSlug, lat, lon, geohash]);
 
   const handleAddTheatre = (name: string) => {
@@ -167,13 +182,15 @@ export function TheatreSearch({
               results.map((item, idx) => {
                 const isAlreadyAdded = selectedTheatres.some(t => t.toLowerCase() === item.name.toLowerCase());
                 return (
-                  <div
+                  <button
                     key={idx}
+                    type="button"
+                    disabled={isAlreadyAdded}
                     onClick={() => !isAlreadyAdded && handleAddTheatre(item.name)}
-                    className={`p-2 rounded-lg flex items-center justify-between gap-3 text-xs transition-colors cursor-pointer ${
+                    className={`w-full text-left p-2 rounded-lg flex items-center justify-between gap-3 text-xs transition-colors ${
                       isAlreadyAdded
                         ? 'bg-muted/20 opacity-50 cursor-not-allowed'
-                        : 'hover:bg-rose-500/10 hover:text-rose-400'
+                        : 'hover:bg-rose-500/10 hover:text-rose-400 cursor-pointer'
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -198,28 +215,28 @@ export function TheatreSearch({
                     {isAlreadyAdded ? (
                       <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full shrink-0">Added</span>
                     ) : (
-                      <button
-                        type="button"
+                      <span
                         className="text-[10px] font-bold bg-rose-500/20 text-rose-400 px-2.5 py-1 rounded-md hover:bg-rose-500/30 transition-colors shrink-0 flex items-center gap-1"
                       >
                         <Plus className="h-3 w-3" />
                         Add
-                      </button>
+                      </span>
                     )}
-                  </div>
+                  </button>
                 );
               })
             ) : !loading && query.trim().length >= 2 ? (
-              <div
+              <button
+                type="button"
                 onClick={() => handleAddTheatre(query)}
-                className="p-3 rounded-lg text-xs text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-between"
+                className="w-full text-left p-3 rounded-lg text-xs text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-between"
               >
                 <div className="space-y-0.5">
                   <p className="font-bold">Add "{query.trim()}" as custom cinema</p>
                   <p className="text-[10px] text-muted-foreground">Not found in BookMyShow index — click to add custom name</p>
                 </div>
                 <Plus className="h-4 w-4 shrink-0" />
-              </div>
+              </button>
             ) : null}
           </div>
         )}

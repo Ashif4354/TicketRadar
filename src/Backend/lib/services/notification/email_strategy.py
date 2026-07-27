@@ -1,5 +1,6 @@
 # src/services/notification/email_strategy.py
 
+import html
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
@@ -28,10 +29,10 @@ class EmailNotificationStrategy(NotificationStrategy):
         format_name: str = ""
     ) -> tuple[bool, str]:
         """
-        Send a booking availability notification email for a movie.
-        
+        Asynchronously send a detailed email notification listing theatre availability.
+
         Parameters:
-        	subject (str): Email subject.
+        	subject (str): Email subject line.
         	movie_name (str): Name of the movie.
         	date_str (str): Date associated with the booking.
         	available_theatres (List[str]): Theatres where booking is available.
@@ -52,9 +53,15 @@ class EmailNotificationStrategy(NotificationStrategy):
         msg["From"] = formataddr(("TicketRadar", settings.smtp_email))
         msg["To"] = self.recipient_email
 
-        # Format details string
+        # Format details string for plain-text email path
         fmt_details = " | ".join(filter(None, [language, format_name]))
         fmt_sub = f" ({fmt_details})" if fmt_details else ""
+
+        # HTML-escaped values for HTML email path
+        escaped_lang = html.escape(language)
+        escaped_fmt = html.escape(format_name)
+        fmt_details_html = " | ".join(filter(None, [escaped_lang, escaped_fmt]))
+        fmt_sub_html = f" ({fmt_details_html})" if fmt_details_html else ""
 
         # Build table rows for HTML and text output
         rows_html = ""
@@ -63,7 +70,7 @@ class EmailNotificationStrategy(NotificationStrategy):
         for t in available_theatres:
             rows_html += f"""
             <tr style="background-color: rgba(16, 185, 129, 0.05);">
-              <td style="padding: 12px; border: 1px solid #374151; font-weight: 600; color: #f3f4f6;">{t}</td>
+              <td style="padding: 12px; border: 1px solid #374151; font-weight: 600; color: #f3f4f6;">{html.escape(t)}</td>
               <td style="padding: 12px; border: 1px solid #374151; text-align: center; color: #34d399; font-weight: 700;">🟢 Available</td>
             </tr>
             """
@@ -72,20 +79,20 @@ class EmailNotificationStrategy(NotificationStrategy):
         for t in unavailable_theatres:
             rows_html += f"""
             <tr style="background-color: rgba(239, 68, 68, 0.02);">
-              <td style="padding: 12px; border: 1px solid #374151; color: #9ca3af; text-decoration: line-through;">{t}</td>
+              <td style="padding: 12px; border: 1px solid #374151; color: #9ca3af; text-decoration: line-through;">{html.escape(t)}</td>
               <td style="padding: 12px; border: 1px solid #374151; text-align: center; color: #f87171;">🔴 Unavailable</td>
             </tr>
             """
             rows_text += f"{t: <40} | UNAVAILABLE\n"
 
-        # Format badges for HTML
+        # Format badges for HTML using escaped content
         format_badge_html = ""
         if language or format_name:
             fmt_parts = []
             if language:
-                fmt_parts.append(f'<span style="background-color: rgba(244, 114, 182, 0.15); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.3); padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; margin-right: 6px;">🌐 {language}</span>')
+                fmt_parts.append(f'<span style="background-color: rgba(244, 114, 182, 0.15); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.3); padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; margin-right: 6px;">🌐 {escaped_lang}</span>')
             if format_name:
-                fmt_parts.append(f'<span style="background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700;">🎬 {format_name}</span>')
+                fmt_parts.append(f'<span style="background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700;">🎬 {escaped_fmt}</span>')
             format_badge_html = f'<div style="margin-top: 8px;">{"".join(fmt_parts)}</div>'
 
         # Add resume note if there are remaining unavailable theatres
@@ -122,11 +129,11 @@ class EmailNotificationStrategy(NotificationStrategy):
             <div style="max-width: 650px; margin: 0 auto; background-color: #1f2937; border: 1px solid #374151; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
               <div style="background: linear-gradient(135deg, #ec4899, #ef4444); padding: 20px; text-align: center;">
                 <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700;">🍿 Booking Open!</h1>
-                <p style="margin: 5px 0 0 0; color: #f3f4f6; font-size: 16px; font-weight: 600;">{movie_name}</p>
+                <p style="margin: 5px 0 0 0; color: #f3f4f6; font-size: 16px; font-weight: 600;">{html.escape(movie_name)}</p>
                 {format_badge_html}
               </div>
               <div style="padding: 24px; line-height: 1.6; font-size: 16px; color: #d1d5db;">
-                <p style="margin-top: 0;">Booking is now open for <strong>{movie_name}</strong>{fmt_sub} on the target date <strong>{date_str}</strong>.</p>
+                <p style="margin-top: 0;">Booking is now open for <strong>{html.escape(movie_name)}</strong>{fmt_sub_html} on the target date <strong>{html.escape(date_str)}</strong>.</p>
                 
                 <h3 style="color: #ffffff; margin-top: 20px; margin-bottom: 10px;">🏢 Theatre Availability</h3>
                 <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px;">

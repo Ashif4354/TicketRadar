@@ -131,7 +131,7 @@ export function FormatPicker({
     return () => {
       isMounted = false;
     };
-  }, [eventCode, regionCode, regionSlug]);
+  }, [eventCode, movieCtaUrl, regionCode, regionSlug, lat, lon, geohash, onSelectFormat, onAvailableDatesFetched]);
 
   const enrichFormatUrl = (fmt: FormatOption, ctaUrl?: string): FormatOption => {
     if (fmt.eventUrl) return fmt;

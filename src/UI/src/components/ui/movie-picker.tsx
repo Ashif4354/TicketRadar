@@ -250,10 +250,12 @@ export function MoviePicker({
             {movies.map((movie, idx) => {
               const isSelected = selectedMovieUrl === movie.ctaUrl;
               return (
-                <div
+                <button
                   key={idx}
+                  type="button"
+                  aria-pressed={isSelected}
                   onClick={() => onSelectMovie(movie.ctaUrl, movie.title, movie.eventCode)}
-                  className={`group relative rounded-xl border p-2.5 flex flex-col justify-between transition-all cursor-pointer hover:shadow-lg ${
+                  className={`group relative rounded-xl border p-2.5 flex flex-col justify-between text-left transition-all cursor-pointer hover:shadow-lg ${
                     isSelected
                       ? 'border-rose-500 bg-rose-500/10 ring-2 ring-rose-500/30'
                       : 'border-border/60 bg-muted/10 hover:border-rose-500/40 hover:bg-muted/20'
@@ -298,7 +300,7 @@ export function MoviePicker({
                       </p>
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

@@ -1,7 +1,12 @@
 # src/services/scraper/factory.py
 
+import logging
 from typing import Type
 from .providers.base import BookingChecker
+
+logger = logging.getLogger("ticketradar.scraper")
+
+_PROVIDER_REGISTRY = ["bookmyshow"]
 
 class ScraperFactory:
     """
@@ -23,11 +28,11 @@ class ScraperFactory:
             ValueError: If the provider name is not supported.
         """
         provider_clean = provider_name.strip().lower()
-        if provider_clean == "bookmyshow":
-            from .providers.bookmyshow import BookMyShowBookingChecker
-            return BookMyShowBookingChecker
-        else:
-            raise ValueError(f"Unknown service provider: {provider_name}")
+        if provider_clean in _PROVIDER_REGISTRY:
+            if provider_clean == "bookmyshow":
+                from .providers.bookmyshow import BookMyShowBookingChecker
+                return BookMyShowBookingChecker
+        raise ValueError(f"Unknown service provider: {provider_name}")
 
     @staticmethod
     def create_scraper(provider_name: str) -> BookingChecker:
@@ -52,13 +57,12 @@ class ScraperFactory:
             list[str]: Provider keys with search capability enabled.
         """
         capable = []
-        providers = ["bookmyshow"]
-        for p in providers:
+        for p in _PROVIDER_REGISTRY:
             try:
                 cls = ScraperFactory.get_scraper_class(p)
                 if getattr(cls, "has_search", False):
                     capable.append(p)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"Error checking search capability for provider '{p}': {exc}")
         return capable
 

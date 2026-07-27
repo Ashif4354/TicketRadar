@@ -695,12 +695,12 @@ export function AdminDashboard() {
                                   {(j.language || j.params?.language || j.format || j.params?.format) && (
                                     <div className="flex items-center gap-1">
                                       {(j.language || j.params?.language) && (
-                                        <Badge variant="outline" className="text-[9px] font-bold border-rose-500/30 text-rose-400 bg-rose-500/10 px-1.5 py-0.2">
+                                        <Badge variant="outline" className="text-[9px] font-bold border-rose-500/30 text-rose-400 bg-rose-500/10 px-1.5 py-0.5">
                                           {j.language || j.params?.language}
                                         </Badge>
                                       )}
                                       {(j.format || j.params?.format) && (
-                                        <Badge variant="outline" className="text-[9px] font-extrabold border-amber-500/30 text-amber-400 bg-amber-500/10 px-1.5 py-0.2">
+                                        <Badge variant="outline" className="text-[9px] font-extrabold border-amber-500/30 text-amber-400 bg-amber-500/10 px-1.5 py-0.5">
                                           {j.format || j.params?.format}
                                         </Badge>
                                       )}

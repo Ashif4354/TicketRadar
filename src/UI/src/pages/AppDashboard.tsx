@@ -53,9 +53,20 @@ export function AppDashboard() {
   };
 
   useEffect(() => {
-    if (auth.currentUser) {
-      auth.currentUser.getIdTokenResult().then(res => setClaims(res.claims as UserClaims)).catch(console.error);
-    }
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          const res = await user.getIdTokenResult();
+          setClaims(res.claims as UserClaims);
+        } catch (err) {
+          console.error("Error fetching claims:", err);
+          setClaims(null);
+        }
+      } else {
+        setClaims(null);
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   // App Config and Jobs state
@@ -118,7 +129,20 @@ export function AppDashboard() {
     const match = rawUrl.match(/(ET\d{8})/i);
     if (match) code = match[1].toUpperCase();
     setEditSmartEventCode(code);
-    setEditSelectedFormat(null);
+
+    const savedLang = job.language || job.params?.language || "";
+    const savedFmt = job.format || job.params?.format || "";
+    if (savedFmt || savedLang) {
+      setEditSelectedFormat({
+        label: savedFmt || "2D",
+        eventCode: code,
+        eventUrl: "",
+        refEventCode: code,
+        language: savedLang || "English",
+      });
+    } else {
+      setEditSelectedFormat(null);
+    }
 
     const dateStr = job.date_str || job.params?.date_str || "";
     if (dateStr.length === 8) {
@@ -163,7 +187,13 @@ export function AppDashboard() {
         setEditError("Please select a movie language and format.");
         return;
       }
-      const citySlug = (selectedCity?.RegionSlug || "city").toLowerCase();
+      let citySlug = "city";
+      const urlCityMatch = editSmartMovieUrl.match(/\/movies\/([^/]+)\//i);
+      if (urlCityMatch) {
+        citySlug = urlCityMatch[1].toLowerCase();
+      } else if (selectedCity?.RegionSlug) {
+        citySlug = selectedCity.RegionSlug.toLowerCase();
+      }
       const eventUrl = editSelectedFormat.eventUrl || "movie";
       const fCode = editSelectedFormat.eventCode || editSmartEventCode;
       const dateFormatted = editDate.replace(/-/g, '');
@@ -1057,10 +1087,10 @@ export function AppDashboard() {
                             <span>Format & Language:</span>
                             <span className="font-semibold text-foreground/80 flex items-center gap-1.5">
                               <Badge variant="outline" className="text-[10px] font-bold border-rose-500/30 text-rose-400 bg-rose-500/10 px-2 py-0.5">
-                                {job.language || job.params?.language || 'English'}
+                                {job.language || job.params?.language || '—'}
                               </Badge>
                               <Badge variant="outline" className="text-[10px] font-extrabold border-amber-500/30 text-amber-400 bg-amber-500/10 px-2 py-0.5">
-                                {job.format || job.params?.format || '2D'}
+                                {job.format || job.params?.format || '—'}
                               </Badge>
                             </span>
                           </div>

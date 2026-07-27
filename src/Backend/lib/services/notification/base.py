@@ -21,19 +21,19 @@ class NotificationStrategy(ABC):
         format_name: str = ""
     ) -> tuple[bool, str]:
         """
-        Send a notification containing movie details and theatre availability.
+        Asynchronously sends a notification with structured theatre availability.
         
-        Parameters:
-            subject (str): The notification subject.
-            movie_name (str): The movie name.
-            date_str (str): The target date in YYYYMMDD format.
-            available_theatres (List[str]): Theatres where booking is open.
-            unavailable_theatres (List[str]): Theatres where booking is unavailable.
+        Args:
+            subject (str): The subject of the notification.
+            movie_name (str): The name of the movie.
+            date_str (str): The target date (YYYYMMDD).
+            available_theatres (List[str]): List of theatres where booking is open.
+            unavailable_theatres (List[str]): List of theatres where booking is not yet open.
             url (str): The movie booking URL.
-            language (str): The notification language.
-            format_name (str): The movie format.
-        
+            language (str): Optional movie language (e.g. "English", "Hindi").
+            format_name (str): Optional movie format (e.g. "2D", "3D", "IMAX 2D").
+            
         Returns:
-            tuple[bool, str]: A tuple containing the delivery result and status message.
+            tuple[bool, str]: A tuple of (success_boolean, status_message).
         """
         pass

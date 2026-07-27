@@ -6,6 +6,7 @@ import logging
 import time
 import asyncio
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
@@ -15,6 +16,21 @@ from lib.core.auth import get_authorized_user
 logger = logging.getLogger("ticketradar.api.bms")
 
 router = APIRouter(prefix="/api/bms", tags=["BookMyShow Proxy"])
+
+_bms_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="bms_fetch")
+
+REGION_CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,20}$")
+REGION_SLUG_PATTERN = re.compile(r"^[a-z0-9_-]{1,50}$")
+LAT_LON_PATTERN = re.compile(r"^-?\d{1,3}\.\d{1,8}$")
+GEOHASH_PATTERN = re.compile(r"^[a-z0-9]{1,12}$")
+EVENT_CODE_PATTERN = re.compile(r"^ET\d{8}$", re.IGNORECASE)
+
+
+def _validate_param(value: str, pattern: re.Pattern, name: str) -> str:
+    cleaned = value.strip()
+    if not pattern.match(cleaned):
+        raise HTTPException(status_code=400, detail=f"Invalid parameter format for '{name}'.")
+    return cleaned
 
 
 def require_provider_search_access(provider_key: str, claims: dict):
@@ -61,6 +77,10 @@ def _is_valid_bms_json(text: str) -> bool:
     return stripped.startswith("{") or stripped.startswith("[")
 
 
+def _sanitize_header_value(val: str) -> str:
+    return re.sub(r"[\r\n]+", "", str(val))
+
+
 def _fetch_bms_api(url: str, api_headers: dict, log) -> dict:
     """
     Fetch and parse a BookMyShow API response using multiple HTTP strategies.
@@ -76,20 +96,27 @@ def _fetch_bms_api(url: str, api_headers: dict, log) -> dict:
         RuntimeError: If all request strategies fail or the response is blocked or invalid.
     """
     log.debug(f"GET BMS API: {url}")
+    start_time = time.time()
+    overall_deadline = 15.0
 
     # 1. Try curl_cffi with fresh impersonation per attempt
     try:
         from curl_cffi import requests as curl_requests
-        impersonate_targets = ["chrome120", "chrome110", "chrome", "edge101", "safari15_5"]
+        impersonate_targets = ["chrome120", "chrome110", "chrome"]
         for attempt, imp in enumerate(impersonate_targets):
+            elapsed = time.time() - start_time
+            remaining = overall_deadline - elapsed
+            if remaining <= 0:
+                break
             if attempt > 0:
-                time.sleep(0.3)
+                time.sleep(min(0.2, remaining))
             try:
+                attempt_timeout = min(5.0, remaining)
                 res = curl_requests.get(
                     url,
                     headers=api_headers,
                     impersonate=imp,
-                    timeout=12.0,
+                    timeout=attempt_timeout,
                     allow_redirects=True,
                 )
                 if res.status_code == 200 and _is_valid_bms_json(res.text):
@@ -101,33 +128,41 @@ def _fetch_bms_api(url: str, api_headers: dict, log) -> dict:
         log.debug("curl_cffi not available, falling back to system curl...")
 
     # 2. Try system curl subprocess
-    import subprocess
-    try:
-        cmd = [
-            "curl.exe" if subprocess.os.name == "nt" else "curl",
-            "-s", "-L",
-            url
-        ]
-        for k, v in api_headers.items():
-            cmd.extend(["-H", f"{k}: {v}"])
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=20)
-        if proc.stdout and _is_valid_bms_json(proc.stdout):
-            log.debug(f"HTTP 200 (via system curl) — {len(proc.stdout):,} bytes")
-            return json.loads(proc.stdout)
-    except Exception as exc:
-        log.debug(f"System curl failed ({exc}), trying httpx...")
+    remaining = overall_deadline - (time.time() - start_time)
+    if remaining > 1.0:
+        import subprocess
+        try:
+            cmd = [
+                "curl.exe" if subprocess.os.name == "nt" else "curl",
+                "-s", "-L",
+                url
+            ]
+            for k, v in api_headers.items():
+                cmd.extend(["-H", f"{k}: {v}"])
+            curl_timeout = max(1, int(min(8.0, remaining)))
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=curl_timeout)
+            if proc.stdout and _is_valid_bms_json(proc.stdout):
+                log.debug(f"HTTP 200 (via system curl) — {len(proc.stdout):,} bytes")
+                return json.loads(proc.stdout)
+        except Exception as exc:
+            log.debug(f"System curl failed ({exc}), trying httpx...")
 
     # 3. Fallback to httpx
-    import httpx
-    try:
-        with httpx.Client(headers=api_headers, follow_redirects=True, timeout=20.0) as client:
-            res = client.get(url)
-            if res.status_code == 200 and _is_valid_bms_json(res.text):
-                log.debug(f"HTTP 200 (via httpx) — {len(res.text):,} bytes")
-                return json.loads(res.text)
-            raise RuntimeError(f"HTTP {res.status_code} returned by BookMyShow API")
-    except Exception as exc:
-        raise RuntimeError(f"BookMyShow security check active. ({exc})") from exc
+    remaining = overall_deadline - (time.time() - start_time)
+    if remaining > 1.0:
+        import httpx
+        try:
+            httpx_timeout = min(6.0, remaining)
+            with httpx.Client(headers=api_headers, follow_redirects=True, timeout=httpx_timeout) as client:
+                res = client.get(url)
+                if res.status_code == 200 and _is_valid_bms_json(res.text):
+                    log.debug(f"HTTP 200 (via httpx) — {len(res.text):,} bytes")
+                    return json.loads(res.text)
+                raise RuntimeError(f"HTTP {res.status_code} returned by BookMyShow API")
+        except Exception as exc:
+            raise RuntimeError(f"BookMyShow security check active. ({exc})") from exc
+
+    raise RuntimeError("BookMyShow fetch request exceeded overall execution deadline.")
 
 
 def _build_bms_headers(region_code: str, region_slug: str, lat: str, lon: str, geohash: str, is_movie: bool = False) -> dict:
@@ -146,6 +181,11 @@ def _build_bms_headers(region_code: str, region_slug: str, lat: str, lon: str, g
     	dict: Headers configured for a BookMyShow API request.
     """
     platform_code = "DESKTOP-WEB" if is_movie else "WEB"
+    clean_slug = urllib.parse.quote(_sanitize_header_value(region_slug))
+    clean_region = urllib.parse.quote(_sanitize_header_value(region_code))
+    clean_geohash = _sanitize_header_value(geohash)
+    clean_lat = _sanitize_header_value(lat)
+    clean_lon = _sanitize_header_value(lon)
     return {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
         "Sec-Ch-Ua": '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
@@ -156,17 +196,17 @@ def _build_bms_headers(region_code: str, region_slug: str, lat: str, lon: str, g
         "x-app-code": "WEB",
         "x-platform-code": platform_code,
         "x-platform": "WEB",
-        "x-region-slug": region_slug,
-        "x-region-code": region_code,
-        "x-geohash": geohash,
-        "x-latitude": lat,
-        "x-longitude": lon,
+        "x-region-slug": clean_slug,
+        "x-region-code": clean_region,
+        "x-geohash": clean_geohash,
+        "x-latitude": clean_lat,
+        "x-longitude": clean_lon,
         "x-location-selection": "manual",
         "true-client-ip": "117.206.171.62",
         "x-bms-id": "1.753478738.1785071518301",
         "x-advertiser-id": "1532623275951006886",
         "x-segments": "",
-        "Referer": f"https://in.bookmyshow.com/explore/home/{region_slug}",
+        "Referer": f"https://in.bookmyshow.com/explore/home/{clean_slug}",
         "sentry-trace": "9a102aa3dbb3407aba2dc6dc64202968-96dd7e6f9b88f466-0",
         "baggage": "sentry-environment=production,sentry-release=release_543,sentry-public_key=4d17a59c2597410e714ab31d421148d9",
     }
@@ -195,18 +235,25 @@ async def search_theatres(
     """
     require_provider_search_access("bookmyshow", claims)
 
+    v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
+    v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
+    v_lat = _validate_param(lat, LAT_LON_PATTERN, "lat")
+    v_lon = _validate_param(lon, LAT_LON_PATTERN, "lon")
+    v_geohash = _validate_param(geohash, GEOHASH_PATTERN, "geohash")
+
     if not q.strip():
         return JSONResponse(content={"results": [], "total": 0})
 
     encoded_q = urllib.parse.quote(q.strip())
     target_url = f"https://in.bookmyshow.com/api/v1/search/dynamic?q={encoded_q}&instant=true&firstLoad=false"
-    headers = _build_bms_headers(region, regionSlug, lat, lon, geohash, is_movie=False)
+    headers = _build_bms_headers(v_region, v_region_slug, v_lat, v_lon, v_geohash, is_movie=False)
 
     try:
-        raw_data = await asyncio.to_thread(_fetch_bms_api, target_url, headers, logger)
+        loop = asyncio.get_running_loop()
+        raw_data = await loop.run_in_executor(_bms_executor, _fetch_bms_api, target_url, headers, logger)
     except Exception as e:
         logger.error(f"Error fetching BMS theatre search: {e}")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch theatre data from BookMyShow: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch theatre data from BookMyShow.") from e
 
     results = []
 
@@ -325,14 +372,22 @@ async def get_movies(
     """
     require_provider_search_access("bookmyshow", claims)
 
-    target_url = f"https://in.bookmyshow.com/api/explore/v1/discover/movies-{regionSlug}"
-    headers = _build_bms_headers(region, regionSlug, lat, lon, geohash, is_movie=True)
+    v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
+    v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
+    v_lat = _validate_param(lat, LAT_LON_PATTERN, "lat")
+    v_lon = _validate_param(lon, LAT_LON_PATTERN, "lon")
+    v_geohash = _validate_param(geohash, GEOHASH_PATTERN, "geohash")
+
+    encoded_slug = urllib.parse.quote(v_region_slug)
+    target_url = f"https://in.bookmyshow.com/api/explore/v1/discover/movies-{encoded_slug}"
+    headers = _build_bms_headers(v_region, v_region_slug, v_lat, v_lon, v_geohash, is_movie=True)
 
     try:
-        raw_data = await asyncio.to_thread(_fetch_bms_api, target_url, headers, logger)
+        loop = asyncio.get_running_loop()
+        raw_data = await loop.run_in_executor(_bms_executor, _fetch_bms_api, target_url, headers, logger)
     except Exception as e:
         logger.error(f"Error fetching BMS movies listing: {e}")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch movies data from BookMyShow: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch movies data from BookMyShow.") from e
 
     movies = []
     seen_titles = set()
@@ -445,20 +500,26 @@ async def get_movie_formats(
     """
     require_provider_search_access("bookmyshow", claims)
 
-    code = eventCode.strip().upper()
-    if not code:
-        raise HTTPException(status_code=400, detail="eventCode is required")
+    v_code = _validate_param(eventCode, EVENT_CODE_PATTERN, "eventCode").upper()
+    v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
+    v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
+    v_lat = _validate_param(lat, LAT_LON_PATTERN, "lat")
+    v_lon = _validate_param(lon, LAT_LON_PATTERN, "lon")
+    v_geohash = _validate_param(geohash, GEOHASH_PATTERN, "geohash")
 
-    date_str = dateCode.strip() if dateCode.strip() else time.strftime("%Y%m%d")
+    date_str = dateCode.strip() if dateCode.strip() and dateCode.strip().isdigit() else time.strftime("%Y%m%d")
 
-    headers = _build_bms_headers(region, regionSlug, lat, lon, geohash, is_movie=True)
+    headers = _build_bms_headers(v_region, v_region_slug, v_lat, v_lon, v_geohash, is_movie=True)
+
+    encoded_code = urllib.parse.quote(v_code)
+    encoded_region = urllib.parse.quote(v_region)
 
     # 1. Try Primary Showtimes API
     primary_url = (
         f"https://in.bookmyshow.com/api/movies-data/v5/showtimes-by-event/primary-dynamic"
-        f"?etCodes={code}&dateCode={date_str}&isDesktop=true&regionCode={region}"
+        f"?etCodes={encoded_code}&dateCode={date_str}&isDesktop=true&regionCode={encoded_region}"
         f"&xLocationShared=false&memberId=&lsId=&subCode=&appCode=WEB"
-        f"&language=english&refEventCode={code}"
+        f"&language=english&refEventCode={encoded_code}"
     )
 
     groups = []
@@ -466,7 +527,8 @@ async def get_movie_formats(
     movie_info = {}
 
     try:
-        raw_data = await asyncio.to_thread(_fetch_bms_api, primary_url, headers, logger)
+        loop = asyncio.get_running_loop()
+        raw_data = await loop.run_in_executor(_bms_executor, _fetch_bms_api, primary_url, headers, logger)
         data_obj = raw_data.get("data", {})
         
         # Header info
@@ -523,11 +585,11 @@ async def get_movie_formats(
                 add_data = cta.get("additionalData", {})
                 analytics = cta.get("analytics", {})
                 
-                f_event_code = add_data.get("eventCode") or analytics.get("event_code") or code
+                f_event_code = add_data.get("eventCode") or analytics.get("event_code") or v_code
                 if f_event_code == "*":
                     continue
                 f_event_url = add_data.get("eventUrl") or ""
-                ref_code = add_data.get("refEventCode") or code
+                ref_code = add_data.get("refEventCode") or v_code
                 
                 formats.append({
                     "label": c_title,
@@ -543,17 +605,18 @@ async def get_movie_formats(
                 })
 
     except Exception as e:
-        logger.warning(f"Primary format search failed for {code}: {e}")
+        logger.warning(f"Primary format search failed for {v_code}: {e}")
 
     # 2. Fallback to Synopsis Init API if primary returns no format options
     if not groups:
-        logger.info(f"Falling back to synopsis init API for format selection of {code}")
+        logger.info(f"Falling back to synopsis init API for format selection of {v_code}")
         synopsis_url = (
             f"https://in.bookmyshow.com/api/movies/v1/synopsis/init/dynamic"
-            f"?eventcode={code}&channel=web&isdesktop=true&isRnROnly=false&regionCode={region}"
+            f"?eventcode={encoded_code}&channel=web&isdesktop=true&isRnROnly=false&regionCode={encoded_region}"
         )
         try:
-            raw_syn = await asyncio.to_thread(_fetch_bms_api, synopsis_url, headers, logger)
+            loop = asyncio.get_running_loop()
+            raw_syn = await loop.run_in_executor(_bms_executor, _fetch_bms_api, synopsis_url, headers, logger)
             data_syn = raw_syn.get("data", {}) if "data" in raw_syn else raw_syn
             banner = data_syn.get("bannerWidget", {})
             if banner:
@@ -595,13 +658,11 @@ async def get_movie_formats(
                                 "formats": formats
                             })
         except Exception as syn_err:
-            logger.warning(f"Synopsis format fallback failed for {code}: {syn_err}")
+            logger.warning(f"Synopsis format fallback failed for {v_code}: {syn_err}")
 
     return JSONResponse(content={
-        "eventCode": code,
+        "eventCode": v_code,
         "movieInfo": movie_info,
         "groups": groups,
         "showDates": show_dates
     })
-
-

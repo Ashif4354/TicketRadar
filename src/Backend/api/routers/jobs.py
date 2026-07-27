@@ -180,13 +180,7 @@ async def create_job(
     # Validate parameters
     url = validate_job_url(service_provider, payload.params.url)
 
-    params = {
-        "url": url,
-        "date_str": payload.params.date_str.strip(),
-        "theatres": payload.params.theatres,
-        "language": getattr(payload.params, "language", "") or (payload.params.dict().get("language") if hasattr(payload.params, "dict") else ""),
-        "format": getattr(payload.params, "format", "") or (payload.params.dict().get("format") if hasattr(payload.params, "dict") else "")
-    }
+    params = _extract_job_params(payload.params, url)
 
     medium = payload.notification_medium.strip().lower()
     notif_config = {}
@@ -391,13 +385,7 @@ async def update_job(
     # Validate parameters
     url = validate_job_url(service_provider, payload.params.url)
 
-    params = {
-        "url": url,
-        "date_str": payload.params.date_str.strip(),
-        "theatres": payload.params.theatres,
-        "language": getattr(payload.params, "language", "") or (payload.params.dict().get("language") if hasattr(payload.params, "dict") else ""),
-        "format": getattr(payload.params, "format", "") or (payload.params.dict().get("format") if hasattr(payload.params, "dict") else "")
-    }
+    params = _extract_job_params(payload.params, url)
 
     medium = payload.notification_medium.strip().lower()
     if "email" in medium:
