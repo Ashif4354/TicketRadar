@@ -16,7 +16,9 @@ class NotificationStrategy(ABC):
         date_str: str,
         available_theatres: List[str],
         unavailable_theatres: List[str],
-        url: str
+        url: str,
+        language: str = "",
+        format_name: str = ""
     ) -> tuple[bool, str]:
         """
         Asynchronously sends a notification with structured theatre availability.

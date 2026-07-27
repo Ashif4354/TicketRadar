@@ -44,7 +44,9 @@ class DiscordWebhookNotificationStrategy(NotificationStrategy):
         date_str: str,
         available_theatres: List[str],
         unavailable_theatres: List[str],
-        url: str
+        url: str,
+        language: str = "",
+        format_name: str = ""
     ) -> tuple[bool, str]:
         if not self.webhook_url:
             return False, "Discord Webhook URL is missing."
@@ -57,9 +59,13 @@ class DiscordWebhookNotificationStrategy(NotificationStrategy):
         if unavailable_theatres:
             resume_note = "\nℹ️ **Note:** Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, resume your tracker from the dashboard.\n"
 
+        fmt_details = " | ".join(filter(None, [language, format_name]))
+        format_line = f"**Format & Language:** {fmt_details}\n" if fmt_details else ""
+
         # Build embed description text
         description = (
             f"**Movie:** {movie_name}\n"
+            f"{format_line}"
             f"**Date:** {date_str}\n"
             f"**Booking Link:** [Click here to book]({url})\n\n"
             f"**Theatre Availability Table:**\n"

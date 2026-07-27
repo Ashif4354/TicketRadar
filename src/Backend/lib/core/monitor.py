@@ -267,7 +267,9 @@ class JobManager:
                             date_str=job.date_str,
                             available_theatres=available,
                             unavailable_theatres=unavailable,
-                            url=job.url
+                            url=job.url,
+                            language=job.language,
+                            format_name=job.format_name
                         )
 
                         if notif_success:

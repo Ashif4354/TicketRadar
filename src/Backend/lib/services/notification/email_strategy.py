@@ -23,7 +23,9 @@ class EmailNotificationStrategy(NotificationStrategy):
         date_str: str,
         available_theatres: List[str],
         unavailable_theatres: List[str],
-        url: str
+        url: str,
+        language: str = "",
+        format_name: str = ""
     ) -> tuple[bool, str]:
         if not self.recipient_email:
             return False, "Recipient email is missing."
@@ -33,6 +35,10 @@ class EmailNotificationStrategy(NotificationStrategy):
         msg["Subject"] = subject
         msg["From"] = formataddr(("TicketRadar", settings.smtp_email))
         msg["To"] = self.recipient_email
+
+        # Format details string
+        fmt_details = " | ".join(filter(None, [language, format_name]))
+        fmt_sub = f" ({fmt_details})" if fmt_details else ""
 
         # Build table rows for HTML and text output
         rows_html = ""
@@ -56,6 +62,16 @@ class EmailNotificationStrategy(NotificationStrategy):
             """
             rows_text += f"{t: <40} | UNAVAILABLE\n"
 
+        # Format badges for HTML
+        format_badge_html = ""
+        if language or format_name:
+            fmt_parts = []
+            if language:
+                fmt_parts.append(f'<span style="background-color: rgba(244, 114, 182, 0.15); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.3); padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; margin-right: 6px;">🌐 {language}</span>')
+            if format_name:
+                fmt_parts.append(f'<span style="background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700;">🎬 {format_name}</span>')
+            format_badge_html = f'<div style="margin-top: 8px;">{"".join(fmt_parts)}</div>'
+
         # Add resume note if there are remaining unavailable theatres
         resume_note_text = ""
         resume_note_html = ""
@@ -70,7 +86,7 @@ class EmailNotificationStrategy(NotificationStrategy):
         # Text body template
         text_body = (
             f"TicketRadar: Booking Open!\n\n"
-            f"Movie: {movie_name}\n"
+            f"Movie: {movie_name}{fmt_sub}\n"
             f"Date: {date_str}\n"
             f"Link: {url}\n\n"
             f"Theatre Availability:\n"
@@ -91,9 +107,10 @@ class EmailNotificationStrategy(NotificationStrategy):
               <div style="background: linear-gradient(135deg, #ec4899, #ef4444); padding: 20px; text-align: center;">
                 <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700;">🍿 Booking Open!</h1>
                 <p style="margin: 5px 0 0 0; color: #f3f4f6; font-size: 16px; font-weight: 600;">{movie_name}</p>
+                {format_badge_html}
               </div>
               <div style="padding: 24px; line-height: 1.6; font-size: 16px; color: #d1d5db;">
-                <p style="margin-top: 0;">Booking is now open for <strong>{movie_name}</strong> on the target date <strong>{date_str}</strong>.</p>
+                <p style="margin-top: 0;">Booking is now open for <strong>{movie_name}</strong>{fmt_sub} on the target date <strong>{date_str}</strong>.</p>
                 
                 <h3 style="color: #ffffff; margin-top: 20px; margin-bottom: 10px;">🏢 Theatre Availability</h3>
                 <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px;">
