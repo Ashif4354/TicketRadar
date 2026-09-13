@@ -8,14 +8,14 @@ export const PROVIDER_SEARCH_CAPABLE: Record<string, boolean> = {
 
 /**
  * Determines whether a user can search through a provider.
+ * Provider search is rolled out to all users for all search-capable providers.
  *
  * @param providerKey - The provider identifier.
- * @param claims - The user's claims, or `null` when unavailable.
- * @returns `true` if the provider supports search and the user is an administrator or has the provider-specific search claim, `false` otherwise.
+ * @param _claims - The user's claims (optional, retained for backwards compatibility).
+ * @returns `true` if the provider supports search, `false` otherwise.
  */
-export function hasProviderSearch(providerKey: string, claims: UserClaims | null): boolean {
+export function hasProviderSearch(providerKey: string, _claims?: UserClaims | null): boolean {
   const pKey = providerKey.toLowerCase();
-  if (!PROVIDER_SEARCH_CAPABLE[pKey]) return false;
-  if (claims?.role === 'admin') return true;
-  return claims?.[`search_${pKey}`] === true;
+  return Boolean(PROVIDER_SEARCH_CAPABLE[pKey]);
 }
+

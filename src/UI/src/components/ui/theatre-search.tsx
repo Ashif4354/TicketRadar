@@ -1,43 +1,50 @@
 import { useState, useEffect, useRef } from 'react';
-import { Building2, Search, Plus, X, Loader2, MapPin } from 'lucide-react';
+import { Building2, Search, Plus, X, Loader2, MapPin, Check } from 'lucide-react';
 import { authenticatedFetch } from '../../utils/api';
 
 export interface TheatreItem {
   name: string;
   thumbnail: string;
   location: string;
+  city?: string;
   category: string;
   entity_code: string;
   bms_url: string;
 }
 
 interface TheatreSearchProps {
+  cityName?: string;
   regionCode?: string;
   regionSlug?: string;
   lat?: string;
   lon?: string;
   geohash?: string;
+  availableTheatres?: { name: string; code?: string }[];
   selectedTheatres: string[];
   onChangeTheatres: (theatres: string[]) => void;
 }
 
 /**
- * Provides a searchable interface for adding and removing theatres for a region.
+ * Provides a searchable and browseable interface for cinemas filtered by the selected city.
  *
  * @param selectedTheatres - The currently selected theatre names.
  * @param onChangeTheatres - Callback invoked with the updated theatre selection.
+ * @param cityName - Name of the selected city used for filtering.
  * @param regionCode - Region code used for theatre searches.
  * @param regionSlug - Region slug used for theatre searches.
  * @param lat - Latitude used for theatre searches.
  * @param lon - Longitude used for theatre searches.
  * @param geohash - Geohash used for theatre searches.
+ * @param availableTheatres - Theatres currently screening the chosen movie in this city.
  */
 export function TheatreSearch({
+  cityName,
   regionCode = 'CHEN',
   regionSlug = 'chennai',
   lat = '13.056',
   lon = '80.206',
   geohash = 'tf3',
+  availableTheatres,
   selectedTheatres,
   onChangeTheatres,
 }: TheatreSearchProps) {
@@ -65,7 +72,7 @@ export function TheatreSearch({
     setIsOpen(false);
   }, [regionCode]);
 
-  // Debounced search API call
+  // Debounced search API call with city filter
   useEffect(() => {
     if (!query.trim() || query.trim().length < 2) {
       setResults([]);
@@ -83,6 +90,7 @@ export function TheatreSearch({
         lat: lat,
         lon: lon,
         geohash: geohash,
+        city: cityName || '',
       });
 
       authenticatedFetch(`/api/bms/search/theatres?${queryParams.toString()}`)
@@ -113,7 +121,7 @@ export function TheatreSearch({
       isSubscribed = false;
       clearTimeout(handler);
     };
-  }, [query, regionCode, regionSlug, lat, lon, geohash]);
+  }, [query, regionCode, regionSlug, lat, lon, geohash, cityName]);
 
   const handleAddTheatre = (name: string) => {
     const cleanName = name.trim();
@@ -127,6 +135,20 @@ export function TheatreSearch({
 
   const handleRemoveTheatre = (indexToRemove: number) => {
     onChangeTheatres(selectedTheatres.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleRemoveByName = (name: string) => {
+    onChangeTheatres(selectedTheatres.filter(t => t.toLowerCase() !== name.toLowerCase()));
+  };
+
+  const handleAddAllTheatres = () => {
+    if (!availableTheatres || availableTheatres.length === 0) return;
+    const toAdd = availableTheatres
+      .map(t => t.name.trim())
+      .filter(name => name && !selectedTheatres.some(st => st.toLowerCase() === name.toLowerCase()));
+    if (toAdd.length > 0) {
+      onChangeTheatres([...selectedTheatres, ...toAdd]);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -150,6 +172,54 @@ export function TheatreSearch({
         </span>
       </label>
 
+      {/* Available Theatres for this movie in the city */}
+      {availableTheatres && availableTheatres.length > 0 && (
+        <div className="space-y-2 p-3 bg-muted/20 border border-border/70 rounded-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Building2 className="h-3.5 w-3.5 text-rose-500" />
+              <span>Available in {cityName || 'Selected City'}</span>
+              <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px]">
+                {availableTheatres.length} cinemas
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={handleAddAllTheatres}
+              className="text-[10px] font-bold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <Plus className="h-3 w-3" />
+              Add All
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto custom-scrollbar pt-0.5">
+            {availableTheatres.map((th, idx) => {
+              const isSelected = selectedTheatres.some(t => t.toLowerCase() === th.name.toLowerCase());
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => isSelected ? handleRemoveByName(th.name) : handleAddTheatre(th.name)}
+                  className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 cursor-pointer ${
+                    isSelected
+                      ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 font-medium'
+                      : 'bg-muted/40 border-border/60 text-foreground/80 hover:border-rose-500/40 hover:text-rose-300'
+                  }`}
+                  title={th.name}
+                >
+                  {isSelected ? (
+                    <Check className="h-3 w-3 text-rose-400 shrink-0" />
+                  ) : (
+                    <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="truncate max-w-[210px]">{th.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Search Input Box */}
       <div className="relative">
         <Search className="h-4 w-4 absolute left-3.5 top-3 text-muted-foreground pointer-events-none" />
@@ -159,7 +229,7 @@ export function TheatreSearch({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => { if (query.trim().length >= 2) setIsOpen(true); }}
-          placeholder="Search and add cinema (e.g. Nexus, PVR ECX)..."
+          placeholder={cityName ? `Search cinema in ${cityName} (e.g. PVR, INOX)...` : "Search and add cinema (e.g. Nexus, PVR ECX)..."}
           className="w-full h-10 pl-10 pr-10 bg-muted/20 border border-border/80 rounded-xl text-xs focus:outline-none focus:border-rose-500/40 font-medium"
         />
         {loading ? (
@@ -202,7 +272,14 @@ export function TheatreSearch({
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="font-bold truncate text-foreground/90">{item.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-bold truncate text-foreground/90">{item.name}</p>
+                          {item.city && (
+                            <span className="text-[9px] font-semibold text-rose-400/90 bg-rose-500/10 px-1.5 py-0.5 rounded shrink-0">
+                              {item.city}
+                            </span>
+                          )}
+                        </div>
                         {item.location && (
                           <p className="text-[10px] text-muted-foreground truncate flex items-center gap-0.5">
                             <MapPin className="h-2.5 w-2.5 shrink-0" />

@@ -6,8 +6,9 @@ import logging
 import time
 import asyncio
 import urllib.parse
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Set
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 
@@ -25,6 +26,123 @@ LAT_LON_PATTERN = re.compile(r"^-?\d{1,3}\.\d{1,8}$")
 GEOHASH_PATTERN = re.compile(r"^[a-z0-9]{1,12}$")
 EVENT_CODE_PATTERN = re.compile(r"^ET\d{8}$", re.IGNORECASE)
 
+_CITY_ALIASES_CACHE: Dict[str, Set[str]] = {}
+_LOCATION_TAIL_RE = re.compile(r',\s*([^,]+),\s*([A-Z]{2}),\s*(\d{6})\s*$')
+
+
+def _get_city_aliases(region_code: str, region_slug: str, city_name: str = "") -> Set[str]:
+    """
+    Returns a set of normalized name aliases and satellite names for a given city region.
+    """
+    global _CITY_ALIASES_CACHE
+    if not _CITY_ALIASES_CACHE:
+        try:
+            p = Path(__file__).resolve().parents[3] / "UI" / "src" / "assets" / "cities.json"
+            if p.exists():
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                bms = data.get("BookMyShow", {})
+                for c in bms.get("TopCities", []) + bms.get("OtherCities", []):
+                    code = (c.get("RegionCode") or c.get("SubRegionCode") or "").upper()
+                    if not code:
+                        continue
+                    s = _CITY_ALIASES_CACHE.setdefault(code, set())
+                    if c.get("RegionName"):
+                        s.add(c["RegionName"].lower().strip())
+                    if c.get("RegionSlug"):
+                        s.add(c["RegionSlug"].lower().replace("-", " ").strip())
+                    if c.get("Alias"):
+                        for a in c["Alias"]:
+                            if isinstance(a, str):
+                                s.add(a.lower().replace("-", " ").strip())
+                    for sub in c.get("SubRegions", []):
+                        if sub.get("SubRegionName"):
+                            s.add(sub["SubRegionName"].lower().strip())
+                        if sub.get("SubRegionSlug"):
+                            s.add(sub["SubRegionSlug"].lower().replace("-", " ").strip())
+        except Exception as e:
+            logger.warning(f"Could not load cities.json for aliases: {e}")
+
+    r_code = (region_code or "").strip().upper()
+    aliases = set(_CITY_ALIASES_CACHE.get(r_code, set()))
+    if region_slug:
+        aliases.add(region_slug.lower().replace("-", " ").strip())
+    if city_name:
+        aliases.add(city_name.lower().replace("-", " ").strip())
+
+    # Well-known city synonyms and satellite hubs
+    if r_code == "BANG":
+        aliases.add("bangalore")
+    elif r_code == "MUMBAI":
+        aliases.update({"bombay", "navi mumbai", "thane", "kalyan", "ulhasnagar"})
+    elif r_code == "NCR":
+        aliases.update({"delhi", "new delhi", "noida", "greater noida", "gurugram", "gurgaon", "ghaziabad", "faridabad"})
+    elif r_code == "CHEN":
+        aliases.update({"chennai", "madras"})
+    elif r_code == "KOLK":
+        aliases.update({"kolkata", "calcutta", "howrah"})
+    elif r_code == "PUNE":
+        aliases.update({"pune", "pcmc", "pimpri", "chinchwad"})
+    elif r_code == "HYD":
+        aliases.update({"hyderabad", "secunderabad"})
+    elif r_code in ("AHD", "AHMED"):
+        aliases.update({"ahmedabad", "gandhinagar"})
+    elif r_code in ("KOCH", "KOCHI"):
+        aliases.update({"kochi", "cochin", "ernakulam"})
+
+    return aliases
+
+
+def _parse_venue_location(location: str):
+    """
+    Parses BMS venue location string:
+    '...India, Chennai, TN, 600027' -> (city: 'Chennai', state: 'TN', pin: '600027')
+    """
+    if not location:
+        return "", "", ""
+    m = _LOCATION_TAIL_RE.search(location)
+    if m:
+        return m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+    return "", "", ""
+
+
+def _is_venue_in_city(
+    title: str,
+    location: str,
+    bms_url: str,
+    region_code: str,
+    region_slug: str,
+    city_name: str = ""
+) -> bool:
+    """
+    Determines whether a theatre belongs to the target city/region.
+    """
+    aliases = _get_city_aliases(region_code, region_slug, city_name)
+    if not aliases:
+        return True
+
+    parsed_city, _, _ = _parse_venue_location(location)
+    parsed_city_lower = parsed_city.lower()
+
+    # 1. Match against parsed city from location tail
+    if parsed_city_lower:
+        for a in aliases:
+            if a == parsed_city_lower or a in parsed_city_lower or parsed_city_lower in a:
+                return True
+
+    # 2. Match against full location text or title
+    loc_lower = location.lower()
+    title_lower = title.lower()
+    for a in aliases:
+        if len(a) >= 3 and (a in loc_lower or a in title_lower):
+            return True
+
+    clean_region = region_code.upper()
+    if f"/cinemas/{clean_region}/" in bms_url.upper() or f"-{clean_region.lower()}/" in bms_url.lower():
+        return True
+
+    return False
+
 
 def _validate_param(value: str, pattern: re.Pattern, name: str) -> str:
     cleaned = value.strip()
@@ -32,30 +150,6 @@ def _validate_param(value: str, pattern: re.Pattern, name: str) -> str:
         raise HTTPException(status_code=400, detail=f"Invalid parameter format for '{name}'.")
     return cleaned
 
-
-def require_provider_search_access(provider_key: str, claims: dict):
-    """
-    Verify that a user may search the specified provider.
-    
-    Parameters:
-        provider_key (str): Provider identifier used to determine the required search claim.
-        claims (dict): User claims containing the role and provider permissions.
-    
-    Returns:
-        bool: `True` when the user is an administrator or has the provider's search permission.
-    
-    Raises:
-        HTTPException: If the user lacks permission to search the provider.
-    """
-    if claims.get("role") == "admin":
-        return True
-    claim_key = f"search_{provider_key.lower()}"
-    if claims.get(claim_key) is True:
-        return True
-    raise HTTPException(
-        status_code=403,
-        detail=f"User does not have search permission for provider '{provider_key}'."
-    )
 
 
 def _is_valid_bms_json(text: str) -> bool:
@@ -220,10 +314,11 @@ async def search_theatres(
     lat: str = Query("13.056", description="Latitude"),
     lon: str = Query("80.206", description="Longitude"),
     geohash: str = Query("tf3", description="GeoHash"),
+    city: str = Query("", description="City / Region Name"),
     claims: dict = Depends(get_authorized_user)
 ):
     """
-    Searches BookMyShow for theatres matching the supplied query and region.
+    Searches BookMyShow for theatres matching the supplied query and filtered by the selected city/region.
     
     Parameters:
     	q (str): Theatre search term.
@@ -232,9 +327,8 @@ async def search_theatres(
     	lat (str): Search latitude.
     	lon (str): Search longitude.
     	geohash (str): Search location geohash.
+    	city (str): City/region display name.
     """
-    require_provider_search_access("bookmyshow", claims)
-
     v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
     v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
     v_lat = _validate_param(lat, LAT_LON_PATTERN, "lat")
@@ -321,15 +415,21 @@ async def search_theatres(
                 location = c_data.get("result-location") or c_data.get("subtitle") or ""
                 thumbnail = c_data.get("result-icon") or c_data.get("result-poster-url") or ""
 
+                # Filter out theatres from other cities
+                if not _is_venue_in_city(title, location, bms_url, v_region, v_region_slug, city):
+                    continue
+
+                parsed_city, _, _ = _parse_venue_location(location)
+
                 results.append({
                     "name": title,
                     "thumbnail": thumbnail,
                     "location": location,
+                    "city": parsed_city or city or v_region_slug.title(),
                     "category": context,
                     "entity_code": entity_code,
                     "bms_url": bms_url
                 })
-
 
     except Exception as ex:
         logger.warning(f"Error parsing BMS theatre search structure: {ex}")
@@ -370,8 +470,6 @@ async def get_movies(
     Returns:
     	JSONResponse: A response containing normalized movie listings.
     """
-    require_provider_search_access("bookmyshow", claims)
-
     v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
     v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
     v_lat = _validate_param(lat, LAT_LON_PATTERN, "lat")
@@ -498,8 +596,6 @@ async def get_movie_formats(
     Raises:
     	HTTPException: If eventCode is empty after trimming.
     """
-    require_provider_search_access("bookmyshow", claims)
-
     v_code = _validate_param(eventCode, EVENT_CODE_PATTERN, "eventCode").upper()
     v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
     v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
@@ -525,11 +621,30 @@ async def get_movie_formats(
     groups = []
     show_dates = []
     movie_info = {}
+    theatres = []
 
     try:
         loop = asyncio.get_running_loop()
         raw_data = await loop.run_in_executor(_bms_executor, _fetch_bms_api, primary_url, headers, logger)
         data_obj = raw_data.get("data", {})
+
+        # Venues / Theatres screening the movie in this city
+        for widget in data_obj.get("showtimeWidgets", []):
+            if isinstance(widget, dict) and widget.get("type") == "groupList":
+                for group in widget.get("data", []):
+                    if not isinstance(group, dict):
+                        continue
+                    for v in group.get("data", []):
+                        if not isinstance(v, dict):
+                            continue
+                        add_data = v.get("additionalData", {})
+                        v_name = add_data.get("venueName") or ""
+                        v_code = add_data.get("venueCode") or ""
+                        if v_name and not any(x["name"].lower() == v_name.lower() for x in theatres):
+                            theatres.append({
+                                "name": v_name,
+                                "code": v_code
+                            })
         
         # Header info
         hdr = data_obj.get("header", {})
@@ -664,5 +779,6 @@ async def get_movie_formats(
         "eventCode": v_code,
         "movieInfo": movie_info,
         "groups": groups,
-        "showDates": show_dates
+        "showDates": show_dates,
+        "theatres": theatres
     })
