@@ -18,7 +18,10 @@ TicketRadar is a fully asynchronous movie ticket booking monitor and alert syste
 - **🪶 Lightweight Browserless Scraper**: Uses **HTTPX**, **BeautifulSoup4**, and **curl-cffi** (TLS fingerprint impersonation) for fast, lightweight HTML parsing without heavy headless browser overhead.
 - **🖥️ Modern Real-Time Dashboard**: Responsive dark-mode frontend built with **React 19**, **Vite**, and **Tailwind CSS**. Streams live logs and status updates from the FastAPI backend via long-polling.
 - **🔒 Secure Authentication & Role Management**: Secured with **Firebase Authentication**, **App Check**, and Google **reCAPTCHA v2**, featuring an access-request approval workflow and an **Admin Control Panel**.
-- **🎯 Smart Theatre & Movie Matching**: Auto-extracts movie titles, handles URL date segment rewriting, and performs case-insensitive substring matching on theatre names.
+- **🎯 Smart City-Filtered Theatre & Movie Matching**:
+  - **2,000+ Supported Cities**: Scoped by city/region with automatic out-of-city venue elimination.
+  - **Quick-Select Screening Cinemas**: Instant display of cinemas currently showing the movie in your city with one-click **+ Add All**.
+  - **Add as Custom Cinema**: Support for local/single-screen cinemas or shorthand keywords (e.g. *"Sathyam"*, *"Luxe"*, *"Rohini"*) matched via case-insensitive substring search.
 - **📊 Rich Side-by-Side Availability Alerts**:
   - **SMTP Email**: Renders a formatted HTML table displaying available vs. unavailable theatres side-by-side.
   - **Discord Webhook**: Sends a clean monospace ASCII-art grid table showing theatre availability.
@@ -146,11 +149,15 @@ make run
 1. **Sign In & Access Request**: Open the dashboard at `http://localhost:5173`. Create an account or sign in via Firebase Auth. New users submit an access request which notifies admins.
 2. **Verify Alert Configuration**: Expand the **📬 Test Alerts Connection** section to send a test email or Discord notification before launching a radar.
 3. **Register a Radar Monitor**:
-   - **Booking URL**: Paste the BookMyShow movie showtimes URL (e.g. `https://in.bookmyshow.com/buytickets/...`).
-   - **Target Date**: Pick your intended movie date.
-   - **Target Theatres**: List theatre names (one per line). Substring matching is case-insensitive.
-   - **Check Frequency**: Set interval between checks (1–30 minutes).
-   - **Alert Channels**: Select Email or Discord Webhook.
+   - **Interactive Mode (Recommended)**:
+     - **Select City / Region**: Choose from 2,000+ Indian cities and regions.
+     - **Select Movie & Format**: Browse live movies for that city and select language/format (e.g. IMAX 2D, Tamil 2D).
+     - **Show Date**: Pick your intended show date.
+     - **Select Theatres**: Click any screening cinema from **Available in [City]** (or use **+ Add All**), search with city-level filtering, or use **Add as custom cinema** for local/single-screen theatres or shorthand keywords.
+   - **Manual URL Mode**:
+     - **Booking URL**: Paste any BookMyShow movie showtimes URL (e.g. `https://in.bookmyshow.com/buytickets/...`).
+     - **Target Date & Theatres**: Pick your date and specify theatre names (one per line, case-insensitive substring matching).
+   - **Check Frequency & Alerts**: Set interval between checks (1–30 minutes) and select Email or Discord Webhook.
    - Click **Start Radar**.
 4. **Manage Monitors & View Live Logs**: Pause, resume, restart, or delete active monitors. Click **View logs** on any monitor card to stream real-time log output via backend long-polling.
 5. **Detailed Instructions**: Visit the **Instructions (`/instruction`)** page in the dashboard for step-by-step guidance on capturing URLs and formatting theatre lists for BookMyShow.

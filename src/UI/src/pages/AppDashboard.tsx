@@ -24,7 +24,7 @@ import { auth } from '../lib/firebase';
 import { hasProviderSearch } from '../utils/providerSearch';
 import { MoviePicker, type CityEntry } from '../components/ui/movie-picker';
 import { TheatreSearch } from '../components/ui/theatre-search';
-import { FormatPicker, type FormatOption, type ShowDateOption } from '../components/ui/format-picker';
+import { FormatPicker, type FormatOption, type ShowDateOption, type AvailableTheatre } from '../components/ui/format-picker';
 
 /**
  * Renders the ticket-tracker dashboard for creating, editing, and managing notification jobs.
@@ -39,11 +39,14 @@ export function AppDashboard() {
   const [smartEventCode, setSmartEventCode] = useState("");
   const [selectedFormat, setSelectedFormat] = useState<FormatOption | null>(null);
   const [availableShowDates, setAvailableShowDates] = useState<ShowDateOption[]>([]);
+  const [availableTheatres, setAvailableTheatres] = useState<AvailableTheatre[]>([]);
 
   const handleSelectSmartMovie = (ctaUrl: string, _title: string, eventCode?: string) => {
     setSmartMovieUrl(ctaUrl);
     setSelectedFormat(null);
     setAvailableShowDates([]);
+    setAvailableTheatres([]);
+    setSmartTheatres([]);
     let code = eventCode || "";
     if (!code && ctaUrl) {
       const match = ctaUrl.match(/(ET\d{8})/i);
@@ -118,12 +121,15 @@ export function AppDashboard() {
   const [editSelectedFormat, setEditSelectedFormat] = useState<FormatOption | null>(null);
   const [editSmartTheatres, setEditSmartTheatres] = useState<string[]>([]);
   const [editAvailableShowDates, setEditAvailableShowDates] = useState<ShowDateOption[]>([]);
+  const [editAvailableTheatres, setEditAvailableTheatres] = useState<AvailableTheatre[]>([]);
 
   const handleOpenEdit = (job: Job) => {
     setEditingJob(job);
     const rawUrl = job.url || job.params?.url || "";
     setEditUrl(rawUrl);
     setEditSmartMovieUrl(rawUrl);
+    setEditAvailableTheatres([]);
+    setEditAvailableShowDates([]);
 
     let code = "";
     const match = rawUrl.match(/(ET\d{8})/i);
@@ -664,6 +670,8 @@ export function AppDashboard() {
                         setSmartEventCode("");
                         setSelectedFormat(null);
                         setAvailableShowDates([]);
+                        setAvailableTheatres([]);
+                        setSmartTheatres([]);
                       }}
                       selectedMovieUrl={smartMovieUrl}
                       onSelectMovie={handleSelectSmartMovie}
@@ -681,6 +689,7 @@ export function AppDashboard() {
                         selectedFormat={selectedFormat}
                         onSelectFormat={setSelectedFormat}
                         onAvailableDatesFetched={setAvailableShowDates}
+                        onTheatresFetched={setAvailableTheatres}
                       />
                     )}
 
@@ -702,11 +711,13 @@ export function AppDashboard() {
                     </div>
 
                     <TheatreSearch
+                      cityName={selectedCity?.RegionName}
                       regionCode={selectedCity?.RegionCode}
                       regionSlug={selectedCity?.RegionSlug}
                       lat={selectedCity?.Lat}
                       lon={selectedCity?.Long}
                       geohash={selectedCity?.GeoHash}
+                      availableTheatres={availableTheatres}
                       selectedTheatres={smartTheatres}
                       onChangeTheatres={setSmartTheatres}
                     />
@@ -1264,6 +1275,7 @@ export function AppDashboard() {
                       selectedFormat={editSelectedFormat}
                       onSelectFormat={setEditSelectedFormat}
                       onAvailableDatesFetched={setEditAvailableShowDates}
+                      onTheatresFetched={setEditAvailableTheatres}
                     />
                   )}
 
@@ -1285,11 +1297,13 @@ export function AppDashboard() {
                   </div>
 
                   <TheatreSearch
+                    cityName={selectedCity?.RegionName}
                     regionCode={selectedCity?.RegionCode}
                     regionSlug={selectedCity?.RegionSlug}
                     lat={selectedCity?.Lat}
                     lon={selectedCity?.Long}
                     geohash={selectedCity?.GeoHash}
+                    availableTheatres={editAvailableTheatres}
                     selectedTheatres={editSmartTheatres}
                     onChangeTheatres={setEditSmartTheatres}
                   />

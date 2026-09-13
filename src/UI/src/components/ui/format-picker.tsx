@@ -29,6 +29,11 @@ export interface ShowDateOption {
   isDisabled: boolean;
 }
 
+export interface AvailableTheatre {
+  name: string;
+  code?: string;
+}
+
 interface FormatPickerProps {
   eventCode: string;
   movieTitle?: string;
@@ -41,6 +46,7 @@ interface FormatPickerProps {
   selectedFormat: FormatOption | null;
   onSelectFormat: (format: FormatOption) => void;
   onAvailableDatesFetched?: (dates: ShowDateOption[]) => void;
+  onTheatresFetched?: (theatres: AvailableTheatre[]) => void;
 }
 
 /**
@@ -67,6 +73,7 @@ export function FormatPicker({
   selectedFormat,
   onSelectFormat,
   onAvailableDatesFetched,
+  onTheatresFetched,
 }: FormatPickerProps) {
   const [groups, setGroups] = useState<FormatGroup[]>([]);
   const [movieInfo, setMovieInfo] = useState<MovieFormatInfo | null>(null);
@@ -110,6 +117,10 @@ export function FormatPicker({
           onAvailableDatesFetched(data.showDates);
         }
 
+        if (data.theatres && Array.isArray(data.theatres) && onTheatresFetched) {
+          onTheatresFetched(data.theatres);
+        }
+
         // Auto-select first format if none currently selected
         if (fetchedGroups.length > 0) {
           const firstFormat = fetchedGroups[0].formats[0];
@@ -131,7 +142,7 @@ export function FormatPicker({
     return () => {
       isMounted = false;
     };
-  }, [eventCode, movieCtaUrl, regionCode, regionSlug, lat, lon, geohash, onSelectFormat, onAvailableDatesFetched]);
+  }, [eventCode, movieCtaUrl, regionCode, regionSlug, lat, lon, geohash, onSelectFormat, onAvailableDatesFetched, onTheatresFetched]);
 
   const enrichFormatUrl = (fmt: FormatOption, ctaUrl?: string): FormatOption => {
     if (fmt.eventUrl) return fmt;

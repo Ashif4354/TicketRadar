@@ -11,9 +11,13 @@ import {
   Bell, 
   Clock, 
   Sparkles,
-  AlertCircle,
   ChevronRight,
-  MousePointerClick
+  MousePointerClick,
+  MapPin,
+  Search,
+  PlusCircle,
+  CheckCircle2,
+  Sliders
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -184,10 +188,10 @@ export function InstructionsPage() {
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-                    BMS (BookMyShow) Instructions
+                    BookMyShow (BMS) Setup Guide
                   </h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    How to capture the correct URL and theatre names from BookMyShow
+                    How to configure radar alerts using interactive city search or direct booking URLs
                   </p>
                 </div>
               </div>
@@ -203,6 +207,39 @@ export function InstructionsPage() {
               </a>
             </div>
 
+            {/* Mode Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold uppercase">
+                    Interactive Mode • Recommended
+                  </Badge>
+                </div>
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4 text-rose-400" />
+                  City & Movie Search
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Select your city, pick a movie from live posters, choose your format and screening theatres directly. Zero manual URL copy-pasting required!
+                </p>
+              </div>
+
+              <div className="bg-card/60 border border-border/70 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] font-medium border-border/80 text-muted-foreground uppercase">
+                    Manual Mode • Advanced
+                  </Badge>
+                </div>
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <Globe className="h-4 w-4 text-rose-400" />
+                  Direct Showtimes URL
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Already have the BookMyShow buy-tickets URL open in your browser? Switch to manual mode and paste the link directly.
+                </p>
+              </div>
+            </div>
+
             {/* Step-by-Step Instructions */}
             <div className="space-y-4">
               
@@ -211,14 +248,23 @@ export function InstructionsPage() {
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 font-bold text-sm border border-rose-500/20">
                   1
                 </div>
-                <div className="space-y-1.5 flex-1">
+                <div className="space-y-2 flex-1">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-rose-400" />
-                    Open BookMyShow & Pick Movie
+                    <MapPin className="h-4 w-4 text-rose-400" />
+                    Select Your City & Movie (Interactive Mode)
                   </h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    First, visit the official BookMyShow website (<a href="https://in.bookmyshow.com" target="_blank" rel="noopener noreferrer" className="text-rose-400 hover:underline">in.bookmyshow.com</a>). Search for and click on the movie you want to watch, then click on the <strong className="text-foreground font-semibold">"Book Now"</strong> button.
+                    Choose your target city from over <strong className="text-foreground font-semibold">2,000+ Indian cities and regions</strong>. TicketRadar will immediately fetch currently screening and upcoming movies with live posters.
                   </p>
+                  <div className="bg-muted/20 border border-border/60 rounded-lg p-3 text-xs space-y-1.5 text-muted-foreground">
+                    <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                      <Ticket className="h-3.5 w-3.5 text-rose-400" />
+                      Pick Format / Language
+                    </div>
+                    <p className="text-[11px] leading-relaxed">
+                      Select your desired screening format (e.g. <strong className="text-foreground font-semibold">IMAX 2D</strong>, <strong className="text-foreground font-semibold">Tamil 2D</strong>, <strong className="text-foreground font-semibold">Hindi 3D</strong>, <strong className="text-foreground font-semibold">4DX</strong>, or <strong className="text-foreground font-semibold">EPIQ</strong>). TicketRadar automatically maps the correct BookMyShow event code.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -229,32 +275,102 @@ export function InstructionsPage() {
                 </div>
                 <div className="space-y-1.5 flex-1">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-rose-400" />
-                    Proceed to Theatres Listing Page
+                    <Calendar className="h-4 w-4 text-rose-400" />
+                    Select Target Date
                   </h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Proceed to the theatres/cinemas listing page where available showtimes and theatre lists are displayed.
+                    Pick the exact date you want TicketRadar to monitor for ticket openings.
                   </p>
                 </div>
               </div>
 
-              {/* Step 3 */}
+              {/* Step 3 - THEATRES DEEP DIVE */}
               <div className="bg-card border border-border/70 rounded-xl p-4 sm:p-5 flex gap-4 transition-all hover:border-border">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 font-bold text-sm border border-rose-500/20">
                   3
                 </div>
-                <div className="space-y-1.5 flex-1">
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Ticket className="h-4 w-4 text-rose-400" />
-                    Select Booking Format / Type
-                  </h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    On the theatre listing page, select the specific type/format of booking you need like (<strong className="text-foreground font-semibold">English 2D</strong>, <strong className="text-foreground font-semibold">English 3D</strong>, <strong className="text-foreground font-semibold">Tamil 2D</strong>, <strong className="text-foreground font-semibold">IMAX</strong>, <strong className="text-foreground font-semibold">EPIQ</strong>, etc.).
-                  </p>
+                <div className="space-y-3.5 flex-1">
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-rose-400" />
+                      Select Preferred Theatres (Smart City-Filtered Matching)
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      TicketRadar provides three intuitive ways to pick your cinemas without cross-city confusion:
+                    </p>
+                  </div>
+
+                  {/* Feature 1: Available in City Quick-Select */}
+                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3.5 space-y-2 text-xs">
+                    <div className="font-semibold flex items-center gap-2 text-rose-300">
+                      <CheckCircle2 className="h-4 w-4 text-rose-400 shrink-0" />
+                      <span>1. "Available in [City]" Quick-Select & "+ Add All"</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      When a movie has active showtimes in your selected city, TicketRadar automatically loads all screening venues as interactive badges.
+                    </p>
+                    <ul className="text-[11px] text-muted-foreground list-disc list-inside space-y-1 pl-1">
+                      <li>Click individual cinema badges to instantly add or remove them from your alert.</li>
+                      <li>Click the <strong className="text-foreground font-semibold">+ Add All</strong> button to monitor every screening theatre in that city simultaneously.</li>
+                    </ul>
+                  </div>
+
+                  {/* Feature 2: City-Filtered Autocomplete */}
+                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3.5 space-y-2 text-xs">
+                    <div className="font-semibold flex items-center gap-2 text-blue-300">
+                      <Search className="h-4 w-4 text-blue-400 shrink-0" />
+                      <span>2. City-Filtered Theatre Search</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Searching for popular chains like <strong className="text-foreground font-semibold">PVR</strong>, <strong className="text-foreground font-semibold">INOX</strong>, or <strong className="text-foreground font-semibold">Cinepolis</strong>? Start typing in the search bar. Autocomplete results are <strong className="text-foreground font-semibold">strictly filtered to your selected city</strong>—cross-city cinemas in other states or metros are automatically excluded to prevent accidental false alerts.
+                    </p>
+                  </div>
+
+                  {/* Feature 3: Add as Custom Cinema */}
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 space-y-2 text-xs">
+                    <div className="font-semibold flex items-center gap-2 text-amber-300">
+                      <PlusCircle className="h-4 w-4 text-amber-400 shrink-0" />
+                      <span>3. "Add as custom cinema"</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      If your cinema is an independent single screen, a newly opened venue, or hasn't been indexed by BookMyShow's dynamic search yet:
+                    </p>
+                    <ul className="text-[11px] text-muted-foreground list-disc list-inside space-y-1 pl-1">
+                      <li>Type the cinema name or shorthand keyword into the search bar.</li>
+                      <li>Click <strong className="text-foreground font-semibold">"Add as custom cinema"</strong> (or hit <kbd className="bg-black/40 px-1 py-0.5 rounded text-[10px] text-amber-200">Enter</kbd>).</li>
+                      <li>You don't need the full address—concise keywords like <code className="bg-black/30 px-1 py-0.5 rounded text-amber-200">Sathyam</code>, <code className="bg-black/30 px-1 py-0.5 rounded text-amber-200">Luxe</code>, or <code className="bg-black/30 px-1 py-0.5 rounded text-amber-200">Rohini</code> work reliably.</li>
+                    </ul>
+                  </div>
+
+                  {/* Substring Matching Explained */}
+                  <div className="rounded-xl border border-border/80 bg-muted/30 p-3.5 space-y-2 text-xs">
+                    <div className="font-semibold flex items-center gap-2 text-foreground">
+                      <Sliders className="h-4 w-4 text-rose-400 shrink-0" />
+                      <span>How Matching Works (Case-Insensitive Substring)</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      When BookMyShow opens bookings for your date, TicketRadar scans the candidate venue names on the page using <strong>case-insensitive substring matching</strong>:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                      <div className="bg-black/40 p-2 rounded-lg border border-border/40">
+                        <span className="text-muted-foreground block text-[10px] uppercase font-sans">Your Keyword:</span>
+                        <span className="text-rose-300">Sathyam</span>
+                        <span className="text-emerald-400 block text-[10px] mt-1 font-sans">✓ Matches "SPI: Sathyam Cinemas, Royapettah"</span>
+                      </div>
+                      <div className="bg-black/40 p-2 rounded-lg border border-border/40">
+                        <span className="text-muted-foreground block text-[10px] uppercase font-sans">Your Keyword:</span>
+                        <span className="text-rose-300">pvr forum</span>
+                        <span className="text-emerald-400 block text-[10px] mt-1 font-sans">✓ Matches "PVR: Forum Mall, Koramangala"</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Note: You can add multiple theatres to a single alert. TicketRadar will trigger as soon as <strong>any</strong> of your selected cinemas open bookings!
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Step 4 */}
+              {/* Step 4: Manual URL Fallback */}
               <div className="bg-card border border-border/70 rounded-xl p-4 sm:p-5 flex gap-4 transition-all hover:border-border">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 font-bold text-sm border border-rose-500/20">
                   4
@@ -262,13 +378,19 @@ export function InstructionsPage() {
                 <div className="space-y-2 flex-1">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Globe className="h-4 w-4 text-rose-400" />
-                    Copy the URL from Address Bar
+                    Alternative: Manual URL Mode
                   </h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Now copy the full URL directly from your browser's address bar. This is the exact URL you will provide to TicketRadar in the <strong className="text-foreground font-semibold">Movie Ticket Page Link</strong> input field.
+                    If you prefer browsing BookMyShow directly in your browser:
                   </p>
-                  <div className="bg-muted/30 border border-border/60 rounded-lg p-2.5 text-[11px] font-mono text-rose-300 break-all select-all flex items-center justify-between">
-                    <span>Example: https://in.bookmyshow.com/buytickets/avatar-fire-and-ash-chennai/movie-chen-ET00392811-MT/20260724</span>
+                  <ol className="text-[11px] text-muted-foreground list-decimal list-inside space-y-1 pl-1">
+                    <li>Visit <a href="https://in.bookmyshow.com" target="_blank" rel="noopener noreferrer" className="text-rose-400 hover:underline">in.bookmyshow.com</a>, search for your movie, and click <strong className="text-foreground font-semibold">Book Tickets</strong>.</li>
+                    <li>Select your format (e.g. IMAX 2D, Tamil 3D) to reach the showtimes listing page.</li>
+                    <li>Copy the full URL from your browser's address bar.</li>
+                    <li>Switch to the <strong className="text-foreground font-semibold">Manual URL</strong> tab in TicketRadar and paste the link into the <strong className="text-foreground font-semibold">Movie Ticket Page Link</strong> field.</li>
+                  </ol>
+                  <div className="bg-muted/30 border border-border/60 rounded-lg p-2.5 text-[11px] font-mono text-rose-300 break-all select-all">
+                    https://in.bookmyshow.com/buytickets/avatar-fire-and-ash-chennai/movie-chen-ET00392811-MT/20260724
                   </div>
                 </div>
               </div>
@@ -280,11 +402,11 @@ export function InstructionsPage() {
                 </div>
                 <div className="space-y-1.5 flex-1">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-rose-400" />
-                    Select Target Date
+                    <Bell className="h-4 w-4 text-rose-400" />
+                    Choose Notification Method
                   </h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    In TicketRadar, select the target show date you want us to monitor.
+                    Select how you want us to notify you: either by <strong className="text-foreground font-semibold">Email</strong> (HTML alerts with direct booking buttons) or by <strong className="text-foreground font-semibold">Discord Webhook</strong> (rich embeds with movie poster, showtimes, and direct links).
                   </p>
                 </div>
               </div>
@@ -294,23 +416,14 @@ export function InstructionsPage() {
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 font-bold text-sm border border-rose-500/20">
                   6
                 </div>
-                <div className="space-y-2 flex-1">
+                <div className="space-y-1.5 flex-1">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-rose-400" />
-                    Provide Preferred Theatre Names (Case-Sensitive)
+                    <Clock className="h-4 w-4 text-rose-400" />
+                    Choose Check Frequency
                   </h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Provide the list of theatres/cinemas you want to look for.
+                    Choose how often TicketRadar checks for ticket updates (from <strong className="text-foreground font-semibold">1 minute</strong> to <strong className="text-foreground font-semibold">30 minutes</strong>).
                   </p>
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 space-y-1">
-                    <div className="font-semibold flex items-center gap-1.5 text-amber-300">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span>Case Sensitivity Warning</span>
-                    </div>
-                    <p className="text-[11px] leading-relaxed opacity-90">
-                      This field is <strong>case-sensitive</strong>! Enter the exact name of the theatre as it appears on the BookMyShow site (e.g. <code className="bg-black/30 px-1 py-0.5 rounded text-amber-100">PVR Forum Mall</code> or <code className="bg-black/30 px-1 py-0.5 rounded text-amber-100">Cinepolis Nexus</code>).
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -321,43 +434,11 @@ export function InstructionsPage() {
                 </div>
                 <div className="space-y-1.5 flex-1">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Bell className="h-4 w-4 text-rose-400" />
-                    Choose Notification Method
-                  </h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Select how you want us to notify you, either by <strong className="text-foreground font-semibold">Email</strong> or by <strong className="text-foreground font-semibold">Discord Webhook</strong>, and provide your email address or Discord webhook URL accordingly.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 8 */}
-              <div className="bg-card border border-border/70 rounded-xl p-4 sm:p-5 flex gap-4 transition-all hover:border-border">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 font-bold text-sm border border-rose-500/20">
-                  8
-                </div>
-                <div className="space-y-1.5 flex-1">
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-rose-400" />
-                    Choose Check Frequency
-                  </h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Choose how often TicketRadar checks for updates. Minimum is <strong className="text-foreground font-semibold">1 minute</strong>.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 9 */}
-              <div className="bg-card border border-border/70 rounded-xl p-4 sm:p-5 flex gap-4 transition-all hover:border-border">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 font-bold text-sm border border-rose-500/20">
-                  9
-                </div>
-                <div className="space-y-1.5 flex-1">
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <MousePointerClick className="h-4 w-4 text-rose-400" />
-                    Complete CAPTCHA & Start Alert
+                    Complete Verification & Start Radar
                   </h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Then click the <strong className="text-foreground font-semibold">"I am not a robot"</strong> reCAPTCHA button and click on the <strong className="text-foreground font-semibold">"Start Alert"</strong> button — and you are done!
+                    Complete the human verification reCAPTCHA (automatically bypassed when running locally with security disabled) and click <strong className="text-foreground font-semibold">"Start Radar"</strong>. You can pause, edit, restart, or stream live scraping logs from the dashboard at any time!
                   </p>
                 </div>
               </div>
