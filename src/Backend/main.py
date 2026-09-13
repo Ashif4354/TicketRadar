@@ -68,6 +68,14 @@ async def root():
     )
 
 
+@app.get("/health")
+async def health():
+    return JSONResponse(
+        status_code=200,
+        content={"status": "ok", "service": "TicketRadar API", "version": "0.1.0"}
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     is_frozen = getattr(sys, "frozen", False) or "__compiled__" in globals()
