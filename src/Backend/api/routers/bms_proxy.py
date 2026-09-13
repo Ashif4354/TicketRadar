@@ -151,30 +151,6 @@ def _validate_param(value: str, pattern: re.Pattern, name: str) -> str:
     return cleaned
 
 
-def require_provider_search_access(provider_key: str, claims: dict):
-    """
-    Verify that a user may search the specified provider.
-    
-    Parameters:
-        provider_key (str): Provider identifier used to determine the required search claim.
-        claims (dict): User claims containing the role and provider permissions.
-    
-    Returns:
-        bool: `True` when the user is an administrator or has the provider's search permission.
-    
-    Raises:
-        HTTPException: If the user lacks permission to search the provider.
-    """
-    if claims.get("role") == "admin":
-        return True
-    claim_key = f"search_{provider_key.lower()}"
-    if claims.get(claim_key) is True:
-        return True
-    raise HTTPException(
-        status_code=403,
-        detail=f"User does not have search permission for provider '{provider_key}'."
-    )
-
 
 def _is_valid_bms_json(text: str) -> bool:
     """
@@ -353,8 +329,6 @@ async def search_theatres(
     	geohash (str): Search location geohash.
     	city (str): City/region display name.
     """
-    require_provider_search_access("bookmyshow", claims)
-
     v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
     v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
     v_lat = _validate_param(lat, LAT_LON_PATTERN, "lat")
@@ -496,8 +470,6 @@ async def get_movies(
     Returns:
     	JSONResponse: A response containing normalized movie listings.
     """
-    require_provider_search_access("bookmyshow", claims)
-
     v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
     v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
     v_lat = _validate_param(lat, LAT_LON_PATTERN, "lat")
@@ -624,8 +596,6 @@ async def get_movie_formats(
     Raises:
     	HTTPException: If eventCode is empty after trimming.
     """
-    require_provider_search_access("bookmyshow", claims)
-
     v_code = _validate_param(eventCode, EVENT_CODE_PATTERN, "eventCode").upper()
     v_region = _validate_param(region, REGION_CODE_PATTERN, "region")
     v_region_slug = _validate_param(regionSlug, REGION_SLUG_PATTERN, "regionSlug")
