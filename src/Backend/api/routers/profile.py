@@ -125,8 +125,9 @@ async def update_preferences(
     if not uid:
         raise HTTPException(status_code=401, detail="User identification missing.")
 
-    # Verify reCAPTCHA token (mandatory when security is enabled)
-    await verify_recaptcha(payload.recaptcha_token if payload else None)
+    # Verify reCAPTCHA token if provided (routine preference saves are protected by Firebase App Check & Auth token)
+    if payload and payload.recaptcha_token:
+        await verify_recaptcha(payload.recaptcha_token)
 
     update_dict = {}
     normalized_phone = None

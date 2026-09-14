@@ -54,8 +54,12 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
   const hideWallet = securityDisabled || paymentsDisabled;
   const siteKeyVal = effectiveConfig?.recaptcha_site || import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY;
 
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
   const consentRecaptchaRef = useRef<ReCAPTCHA>(null);
+  const testAlertRecaptchaRef = useRef<ReCAPTCHA>(null);
+  const [testAlertDialog, setTestAlertDialog] = useState<{
+    open: boolean;
+    medium: string;
+  }>({ open: false, medium: '' });
 
   const fetchProfileData = useCallback(async () => {
     try {
@@ -114,14 +118,8 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
   const handleSaveContactDetails = async () => {
     setError(null);
     setSuccessMsg(null);
-
-    const token = recaptchaRef.current?.getValue() || "";
-    if (!securityDisabled && !token) {
-      setError("Please complete the reCAPTCHA challenge before saving contact details.");
-      return;
-    }
-
     setUpdatingProfile(true);
+
     try {
       const res = await authenticatedFetch('/api/profile/preferences', {
         method: 'PUT',
@@ -130,14 +128,12 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
           phone_number: phoneInput.trim() || null,
           discord_webhook_url: discordInput.trim() || null,
           email_address: emailInput.trim() || null,
-          recaptcha_token: token,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to update contact details.');
 
       setSuccessMsg('Saved Successfully');
-      try { recaptchaRef.current?.reset(); } catch {}
       fetchProfileData();
     } catch (err: any) {
       setError(err?.message || 'Failed to save contact information.');
@@ -161,7 +157,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
 
     let token = "";
     if (action === 'opt_in' && !securityDisabled) {
-      token = consentRecaptchaRef.current?.getValue() || recaptchaRef.current?.getValue() || "";
+      token = consentRecaptchaRef.current?.getValue() || "";
       if (!token) {
         setError("Please complete the reCAPTCHA challenge before confirming consent opt-in.");
         return;
@@ -190,7 +186,6 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
       if (!res.ok) throw new Error(data.detail || 'Consent update failed.');
 
       try { consentRecaptchaRef.current?.reset(); } catch {}
-      try { recaptchaRef.current?.reset(); } catch {}
       setSuccessMsg(`Successfully ${action === 'opt_in' ? 'opted in to' : 'opted out of'} ${channel.toUpperCase()} alerts.`);
       fetchProfileData();
     } catch (err: any) {
@@ -198,23 +193,40 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
     }
   };
 
-  const handleSendTestAlert = async (medium: string) => {
+  const getTestAlertTarget = (medium: string) => {
+    if (medium === 'Email') return emailInput.trim() || profile?.email || '';
+    if (medium === 'Discord') return discordInput.trim() || profile?.discord_webhook_url || '';
+    return phoneInput.trim() || profile?.phone_number || '';
+  };
+
+  const handleOpenTestAlert = (medium: string) => {
+    setError(null);
+    setSuccessMsg(null);
+    setTestAlertDialog({ open: true, medium });
+  };
+
+  const executeSendTestAlert = async () => {
+    const medium = testAlertDialog.medium;
     setError(null);
     setSuccessMsg(null);
 
-    const token = recaptchaRef.current?.getValue() || "";
-    if (!securityDisabled && !token) {
-      setError("Please complete the reCAPTCHA verification before sending a test alert.");
+    let token = "";
+    if (!securityDisabled) {
+      token = testAlertRecaptchaRef.current?.getValue() || "";
+      if (!token) {
+        setError("Please complete the reCAPTCHA challenge before sending a test alert.");
+        return;
+      }
+    }
+
+    const recipient = getTestAlertTarget(medium);
+    if (!recipient) {
+      setError(`No contact destination configured for ${medium}. Please save your contact details first.`);
       return;
     }
 
     setTestingMedium(medium);
     try {
-      let recipient = '';
-      if (medium === 'Email') recipient = emailInput.trim() || profile?.email || '';
-      else if (medium === 'Discord') recipient = discordInput.trim() || profile?.discord_webhook_url || '';
-      else recipient = phoneInput.trim() || profile?.phone_number || '';
-
       const res = await authenticatedFetch('/api/test-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,7 +239,8 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Test alert failed.');
 
-      try { recaptchaRef.current?.reset(); } catch {}
+      try { testAlertRecaptchaRef.current?.reset(); } catch {}
+      setTestAlertDialog({ open: false, medium: '' });
       setSuccessMsg(`Test alert for ${medium} dispatched successfully!`);
     } catch (err: any) {
       setError(err?.message || `Failed to send test alert for ${medium}.`);
@@ -504,7 +517,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                   size="sm"
                   variant="outline"
                   disabled={testingMedium === 'Email'}
-                  onClick={() => handleSendTestAlert('Email')}
+                  onClick={() => handleOpenTestAlert('Email')}
                   className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
                 >
                   <Send className="h-3 w-3" />
@@ -523,8 +536,8 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Discord Webhook</h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    {profile?.discord_webhook_url ? 'Configured' : 'Not configured'}
+                  <p className="text-[11px] text-muted-foreground font-mono truncate max-w-[200px] sm:max-w-xs">
+                    {profile?.discord_webhook_url || 'Webhook URL not configured'}
                   </p>
                 </div>
               </div>
@@ -585,7 +598,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                     size="sm"
                     variant="outline"
                     disabled={testingMedium === 'Discord'}
-                    onClick={() => handleSendTestAlert('Discord')}
+                    onClick={() => handleOpenTestAlert('Discord')}
                     className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
                   >
                     <Send className="h-3 w-3" />
@@ -637,7 +650,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                     size="sm"
                     variant="outline"
                     disabled={testingMedium === 'SMS'}
-                    onClick={() => handleSendTestAlert('SMS')}
+                    onClick={() => handleOpenTestAlert('SMS')}
                     className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
                   >
                     <Send className="h-3 w-3" />
@@ -689,7 +702,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                     size="sm"
                     variant="outline"
                     disabled={testingMedium === 'WhatsApp'}
-                    onClick={() => handleSendTestAlert('WhatsApp')}
+                    onClick={() => handleOpenTestAlert('WhatsApp')}
                     className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
                   >
                     <Send className="h-3 w-3" />
@@ -741,7 +754,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                     size="sm"
                     variant="outline"
                     disabled={testingMedium === 'Phone Call'}
-                    onClick={() => handleSendTestAlert('Phone Call')}
+                    onClick={() => handleOpenTestAlert('Phone Call')}
                     className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
                   >
                     <Send className="h-3 w-3" />
@@ -776,27 +789,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
           </div>
         </Card>
 
-        {/* Security Verification (reCAPTCHA) */}
-        {!securityDisabled && (
-          <Card className="border border-border/70 glassmorphism p-5 rounded-xl space-y-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-rose-400" />
-              <h3 className="text-sm font-semibold text-foreground">Security Verification</h3>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Please complete the verification below before saving contact settings or sending test alerts.
-            </p>
-            <div className="flex justify-center sm:justify-start pt-1">
-              <div className="g-recaptcha-premium-container">
-                <ReCAPTCHA
-                  ref={recaptchaRef}
-                  sitekey={siteKeyVal}
-                  theme="dark"
-                />
-              </div>
-            </div>
-          </Card>
-        )}
+
       </div>
 
       {/* Wallet Transaction Ledger (when payments and security are enabled) */}
@@ -980,6 +973,85 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                 }`}
               >
                 {consentDialog.action === 'opt_in' ? 'Confirm Opt-In' : 'Revoke Consent'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Test Alert Confirmation Dialog */}
+      {testAlertDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-2xl border border-rose-500/30 bg-[#121217] p-6 shadow-2xl text-left space-y-4">
+            <div className="flex items-center gap-3 pb-3 border-b border-border/50">
+              <div className="h-9 w-9 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
+                <Send className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground">
+                  Send Test {testAlertDialog.medium} Alert
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Verify notification delivery to your configured address/phone
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              We will dispatch a sample ticket alert to verify your{' '}
+              <strong className="text-foreground uppercase">{testAlertDialog.medium}</strong> channel:{' '}
+              <span className="font-mono text-foreground font-semibold">
+                {getTestAlertTarget(testAlertDialog.medium) || '(Not configured)'}
+              </span>
+            </p>
+
+            {!getTestAlertTarget(testAlertDialog.medium) && (
+              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>Please configure and save your {testAlertDialog.medium} contact details before testing.</span>
+              </div>
+            )}
+
+            {!securityDisabled && (
+              <div className="flex justify-center py-2">
+                <div className="g-recaptcha-premium-container">
+                  <ReCAPTCHA
+                    ref={testAlertRecaptchaRef}
+                    sitekey={siteKeyVal}
+                    theme="dark"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-border/50">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  try { testAlertRecaptchaRef.current?.reset(); } catch {}
+                  setTestAlertDialog({ open: false, medium: '' });
+                }}
+                disabled={!!testingMedium}
+                className="h-9 text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={executeSendTestAlert}
+                disabled={!getTestAlertTarget(testAlertDialog.medium) || !!testingMedium}
+                className="h-9 px-5 text-xs font-semibold bg-rose-500 hover:bg-rose-600 text-white cursor-pointer flex items-center gap-1.5"
+              >
+                {testingMedium ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Dispatching...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-3.5 w-3.5" />
+                    Send Test Alert
+                  </>
+                )}
               </Button>
             </div>
           </div>
