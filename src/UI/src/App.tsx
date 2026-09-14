@@ -14,6 +14,8 @@ import { BlockedPage } from './pages/BlockedPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { AppDashboard } from './pages/AppDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { ProfilePage } from './pages/ProfilePage';
+import { TermsModal } from './components/ui/terms-modal';
 
 import { auth } from './lib/firebase';
 import { authenticatedFetch } from './utils/api';
@@ -24,6 +26,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [claims, setClaims] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [termsPending, setTermsPending] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (currentUser) => {
@@ -36,16 +39,39 @@ export default function App() {
           // Record login event for admin Discord notification
           authenticatedFetch('/api/users/login-event', { method: 'POST' })
             .catch(err => console.error("Error sending login event:", err));
+
+          // Check terms acceptance
+          if (tokenResult.claims?.authorized) {
+            authenticatedFetch('/api/terms/status')
+              .then(res => res.json())
+              .then(data => {
+                if (data && data.accepted === false) {
+                  setTermsPending(true);
+                }
+              })
+              .catch(err => console.error("Error checking terms status:", err));
+          }
         } catch (err) {
           console.error("Error fetching custom claims:", err);
         }
       } else {
         setUser(null);
         setClaims(null);
+        setTermsPending(false);
       }
       setAuthLoading(false);
     });
   }, []);
+
+  const handleAcceptTerms = async () => {
+    const res = await authenticatedFetch('/api/terms/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: 'v2.0' }),
+    });
+    if (!res.ok) throw new Error('Failed to record acceptance.');
+    setTermsPending(false);
+  };
 
   if (authLoading) {
     return (
@@ -68,6 +94,7 @@ export default function App() {
     <BrowserRouter>
       <div className="min-h-screen bg-background text-foreground flex flex-col antialiased">
         <Header user={user} claims={claims} />
+        <TermsModal isOpen={termsPending} onAccept={handleAcceptTerms} />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/tc" element={<TermsPage />} />
@@ -76,6 +103,12 @@ export default function App() {
           <Route path="/instruction" element={<InstructionsPage />} />
           <Route path="/login" element={
             user ? <Navigate to="/" replace /> : <LoginPage />
+          } />
+          <Route path="/profile" element={
+            !user ? <Navigate to="/login" replace /> :
+            isBlocked ? <BlockedPage /> :
+            !isAuthorized ? <UnauthorizedPage /> :
+            <ProfilePage />
           } />
           <Route path="/app" element={
             !user ? <Navigate to="/login" replace /> :

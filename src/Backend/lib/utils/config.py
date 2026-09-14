@@ -49,6 +49,31 @@ class Settings(BaseSettings):
     # Security Settings
     disable_security: bool = Field(default=False)
 
+    # Self-hosted / Payments Configuration
+    disable_payments: bool = Field(default=False)
+
+    # Provider Abstraction Settings
+    notification_provider: str = Field(default="twilio")
+    payment_gateway: str = Field(default="cashfree")
+
+    # Twilio Configuration (Single Number for SMS, Voice, and WhatsApp)
+    twilio_account_sid: str = Field(default="")
+    twilio_auth_token: str = Field(default="")
+    twilio_phone_number: str = Field(default="")
+    twilio_whatsapp_content_sid: str = Field(default="")
+
+    # Cashfree Payment Gateway Configuration
+    cashfree_app_id: str = Field(default="")
+    cashfree_secret_key: str = Field(default="")
+    cashfree_environment: str = Field(default="sandbox")
+    cashfree_webhook_secret: str = Field(default="")
+
+    # Application Base URL (used for Twilio callback & TwiML URLs)
+    app_base_url: str = Field(default="http://localhost:8000")
+
+    # Terms and Privacy Policy Version
+    current_terms_version: str = Field(default="2.0")
+
     # reCAPTCHA Configuration
     recaptcha_site: str = Field(default="6LfUdl0tAAAAALD21Jd3geQFRavY8xeWMbadKybZ")
     recaptcha_secret: str = Field(default="6LfUdl0tAAAAAAjyjVtoGRY2cY52NJUOhc4R3mLu")

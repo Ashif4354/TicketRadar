@@ -80,9 +80,15 @@ export function AppDashboard() {
 
   // Global Config inputs
   const [serviceProvider] = useState("BookMyShow");
-  const [medium, setMedium] = useState<"Email" | "Discord Webhook">("Email");
+  const [medium, setMedium] = useState<"Email" | "Discord Webhook" | "SMS" | "WhatsApp" | "Phone Call">("Email");
   const [email, setEmail] = useState("");
   const [webhook, setWebhook] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [smsConsent, setSmsConsent] = useState(false);
+  const [whatsappConsent, setWhatsappConsent] = useState(false);
+  const [callConsent, setCallConsent] = useState(false);
+  const [, setUserProfile] = useState<any>(null);
+  const [userWallet, setUserWallet] = useState<any>(null);
   const [intervalSec, setIntervalSec] = useState(60);
 
   // New Monitor Form inputs
@@ -108,9 +114,12 @@ export function AppDashboard() {
   const [editUrl, setEditUrl] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editTheatres, setEditTheatres] = useState("");
-  const [editMedium, setEditMedium] = useState<"Email" | "Discord Webhook">("Email");
+  const [editMedium, setEditMedium] = useState<"Email" | "Discord Webhook" | "SMS" | "WhatsApp" | "Phone Call">("Email");
   const [editEmail, setEditEmail] = useState("");
   const [editWebhook, setEditWebhook] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"wallet" | "cashfree">("wallet");
+  const [submittingCashfree, setSubmittingCashfree] = useState(false);
   const [editIntervalSec, setEditIntervalSec] = useState(60);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -137,10 +146,9 @@ export function AppDashboard() {
     setEditSmartEventCode(code);
 
     const savedLang = job.language || job.params?.language || "";
-    const savedFmt = job.format || job.params?.format || "";
-    if (savedFmt || savedLang) {
+    if (code) {
       setEditSelectedFormat({
-        label: savedFmt || "2D",
+        label: job.format || job.params?.format || "Standard",
         eventCode: code,
         eventUrl: "",
         refEventCode: code,
@@ -162,11 +170,18 @@ export function AppDashboard() {
     setEditTheatres(listTheatres.join("\n"));
     setEditSmartTheatres(listTheatres);
 
-    const med = job.notification_medium?.toLowerCase().includes("webhook") ? "Discord Webhook" : "Email";
-    setEditMedium(med);
+    let normalizedMedium: "Email" | "Discord Webhook" | "SMS" | "WhatsApp" | "Phone Call" = "Email";
+    const jm = (job.notification_medium || "").toLowerCase();
+    if (jm.includes("discord") || jm.includes("webhook")) normalizedMedium = "Discord Webhook";
+    else if (jm.includes("sms")) normalizedMedium = "SMS";
+    else if (jm.includes("whatsapp")) normalizedMedium = "WhatsApp";
+    else if (jm.includes("call") || jm.includes("phone")) normalizedMedium = "Phone Call";
+    else normalizedMedium = "Email";
+    setEditMedium(normalizedMedium);
 
     setEditEmail(job.notification_config?.recipient_email || "");
     setEditWebhook(job.notification_config?.webhook_url || "");
+    setEditPhone(job.phone_number || job.notification_config?.phone_number || "");
     setEditIntervalSec(job.check_interval || 60);
     setEditError(null);
   };
@@ -238,6 +253,11 @@ export function AppDashboard() {
       return;
     }
 
+    if (["SMS", "WhatsApp", "Phone Call"].includes(editMedium) && !editPhone.trim()) {
+      setEditError("A valid Indian mobile number (+91) is required for this alert medium.");
+      return;
+    }
+
     if (editIntervalSec < 60) {
       setEditError("Check frequency cannot be less than 1 minute (60 seconds).");
       return;
@@ -245,12 +265,16 @@ export function AppDashboard() {
 
     const dateFormatted = editDate.replace(/-/g, '');
 
+    let editNotifConfig: any = {};
+    if (editMedium === "Email") editNotifConfig = { recipient_email: editEmail.trim() };
+    else if (editMedium === "Discord Webhook") editNotifConfig = { webhook_url: editWebhook.trim() };
+    else editNotifConfig = { phone_number: editPhone.trim() };
+
     const payload = {
       service_provider: editingJob.service_provider || "BookMyShow",
       notification_medium: editMedium,
-      notification_config: editMedium === "Email"
-        ? { recipient_email: editEmail.trim() }
-        : { webhook_url: editWebhook.trim() },
+      notification_config: editNotifConfig,
+      phone_number: ["SMS", "WhatsApp", "Phone Call"].includes(editMedium) ? editPhone.trim() : undefined,
       check_interval: editIntervalSec,
       params: {
         url: finalUrl.trim(),
@@ -320,6 +344,27 @@ export function AppDashboard() {
   useEffect(() => {
     fetchConfig();
     fetchJobs();
+
+    // Fetch user profile and wallet
+    authenticatedFetch('/api/profile')
+      .then(res => res.json())
+      .then(prof => {
+        if (prof && !prof.detail) {
+          setUserProfile(prof);
+          if (prof.phone_number) setPhoneNumber(prof.phone_number);
+          if (prof.consents?.sms_consented) setSmsConsent(true);
+          if (prof.consents?.whatsapp_consented) setWhatsappConsent(true);
+          if (prof.consents?.call_consented) setCallConsent(true);
+        }
+      })
+      .catch(err => console.error("Failed to load profile in dashboard:", err));
+
+    authenticatedFetch('/api/wallet/balance')
+      .then(res => res.json())
+      .then(w => {
+        if (w && !w.detail) setUserWallet(w);
+      })
+      .catch(err => console.error("Failed to load wallet in dashboard:", err));
     
     // Set default date picker value to today
     const today = new Date();
@@ -376,6 +421,91 @@ export function AppDashboard() {
       } catch (err) {
         // ignore error when recaptcha component is not rendered
       }
+    }
+  };
+
+  const initiateCashfreeJobPayment = async (jobPayload: any) => {
+    setSubmittingCashfree(true);
+    setFormErrors([]);
+    try {
+      const res = await authenticatedFetch('/api/payments/job/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...jobPayload, payment_method: 'cashfree' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Failed to initiate Cashfree payment.');
+      }
+
+      const sessionToken = data.session_token || data.gateway_session_id;
+      const paymentId = data.payment_id;
+
+      const launchModal = (sessId: string) => {
+        const isDev = config?.environment === 'development';
+        const cashfree = (window as any).Cashfree({
+          mode: isDev ? 'sandbox' : 'production',
+        });
+        cashfree.checkout({
+          paymentSessionId: sessId,
+          redirectTarget: '_modal',
+        }).then((result: any) => {
+          if (result.error) {
+            setFormErrors([result.error.message || 'Payment window closed or cancelled.']);
+            setSubmittingCashfree(false);
+          } else {
+            setFormSuccess('Payment submitted! Verifying transaction and starting ticket tracker...');
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+              attempts += 1;
+              try {
+                const sRes = await authenticatedFetch(`/api/payments/${paymentId}/status`);
+                if (sRes.ok) {
+                  const sData = await sRes.json();
+                  if (sData.status === 'success' && sData.job_id) {
+                    clearInterval(pollInterval);
+                    setFormSuccess(`Successfully registered monitor #${sData.job_id}! Ticket tracker started.`);
+                    setUrl("");
+                    setTheatres("");
+                    setSmartMovieUrl("");
+                    setSmartTheatres([]);
+                    setSmartEventCode("");
+                    setSelectedFormat(null);
+                    setAvailableShowDates([]);
+                    fetchJobs();
+                    setSubmittingCashfree(false);
+                    return;
+                  } else if (sData.status === 'failed') {
+                    clearInterval(pollInterval);
+                    setFormErrors(['Payment failed on gateway.']);
+                    setSubmittingCashfree(false);
+                    return;
+                  }
+                }
+              } catch (pollErr) {
+                console.warn("Poll error:", pollErr);
+              }
+              if (attempts > 12) {
+                clearInterval(pollInterval);
+                fetchJobs();
+                setSubmittingCashfree(false);
+              }
+            }, 2000);
+          }
+        });
+      };
+
+      if (typeof (window as any).Cashfree === 'undefined') {
+        const script = document.createElement('script');
+        script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+        script.onload = () => launchModal(sessionToken);
+        document.body.appendChild(script);
+      } else {
+        launchModal(sessionToken);
+      }
+    } catch (err: any) {
+      setFormErrors([err?.message || 'Error processing Cashfree job payment.']);
+      setSubmittingCashfree(false);
     }
   };
 
@@ -439,6 +569,21 @@ export function AppDashboard() {
       errors.push("Discord Webhook URL is required.");
     }
 
+    if (["SMS", "WhatsApp", "Phone Call"].includes(medium)) {
+      if (!phoneNumber.trim()) {
+        errors.push("A valid Indian mobile number (+91) is required for this alert medium.");
+      }
+      if (medium === "SMS" && !smsConsent) {
+        errors.push("Please check the SMS consent box to receive automated SMS alerts.");
+      }
+      if (medium === "WhatsApp" && !whatsappConsent) {
+        errors.push("Please check the WhatsApp consent box to receive automated WhatsApp alerts.");
+      }
+      if (medium === "Phone Call" && !callConsent) {
+        errors.push("Please check the Phone Call consent box to receive automated voice alerts.");
+      }
+    }
+
     if (intervalSec < 60) {
       errors.push("Check frequency cannot be less than 1 minute (60 seconds).");
     }
@@ -450,12 +595,20 @@ export function AppDashboard() {
 
     const dateFormatted = targetDate.replace(/-/g, '');
 
+    let notifConfig: any = {};
+    if (medium === "Email") notifConfig = { recipient_email: email.trim() };
+    else if (medium === "Discord Webhook") notifConfig = { webhook_url: webhook.trim() };
+    else notifConfig = { phone_number: phoneNumber.trim() };
+
     const payload = {
       service_provider: serviceProvider,
       notification_medium: medium,
-      notification_config: medium === "Email" 
-        ? { recipient_email: email.trim() } 
-        : { webhook_url: webhook.trim() },
+      notification_config: notifConfig,
+      phone_number: ["SMS", "WhatsApp", "Phone Call"].includes(medium) ? phoneNumber.trim() : undefined,
+      sms_consent: medium === "SMS" ? smsConsent : false,
+      whatsapp_consent: medium === "WhatsApp" ? whatsappConsent : false,
+      call_consent: medium === "Phone Call" ? callConsent : false,
+      payment_method: config?.disable_payments ? "free" : (paymentMethod === "cashfree" ? "cashfree" : "wallet"),
       check_interval: intervalSec,
       recaptcha_token: token,
       params: {
@@ -466,6 +619,15 @@ export function AppDashboard() {
         format: selectedFormat?.label || ""
       }
     };
+
+    if (!config?.disable_payments && ["SMS", "WhatsApp", "Phone Call"].includes(medium)) {
+      const pricePaise = medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150;
+      const walletPaise = userWallet?.balance_paise || 0;
+      if (paymentMethod === "cashfree" || walletPaise < pricePaise) {
+        await initiateCashfreeJobPayment(payload);
+        return;
+      }
+    }
 
     try {
       const res = await authenticatedFetch('/api/jobs', {
@@ -484,6 +646,12 @@ export function AppDashboard() {
         setSelectedFormat(null);
         setAvailableShowDates([]);
         fetchJobs();
+
+        // Refresh wallet balance
+        authenticatedFetch('/api/wallet/balance')
+          .then(r => r.json())
+          .then(w => { if (w && !w.detail) setUserWallet(w); })
+          .catch(() => {});
       } else {
         setFormErrors([data.detail || "Failed to create monitoring job."]);
       }
@@ -526,6 +694,10 @@ export function AppDashboard() {
       const res = await authenticatedFetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchJobs();
+        authenticatedFetch('/api/wallet/balance')
+          .then(r => r.json())
+          .then(w => { if (w && !w.detail) setUserWallet(w); })
+          .catch(() => {});
       }
     } catch (err) {
       console.error("Failed to delete job:", err);
@@ -768,35 +940,27 @@ export function AppDashboard() {
 
                 {/* Notification configuration */}
                 <div className="space-y-3.5 border-t border-border/30 pt-4 mt-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Where should we notify you?</label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMedium("Email")}
-                        className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-all cursor-pointer ${
-                          medium === "Email" 
-                            ? "bg-rose-500/10 text-rose-400 border-rose-500/25" 
-                            : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
-                        }`}
-                      >
-                        Email
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMedium("Discord Webhook")}
-                        className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-all cursor-pointer ${
-                          medium === "Discord Webhook" 
-                            ? "bg-rose-500/10 text-rose-400 border-rose-500/25" 
-                            : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
-                        }`}
-                      >
-                        Discord
-                      </button>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {(["Email", "Discord Webhook", "SMS", "WhatsApp", "Phone Call"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setMedium(m)}
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
+                            medium === m
+                              ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
+                              : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
+                          }`}
+                        >
+                          {m === "Discord Webhook" ? "Discord" : m}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {medium === "Email" ? (
+                  {medium === "Email" && (
                     <div className="space-y-1.5">
                       <Input 
                         type="email" 
@@ -806,7 +970,9 @@ export function AppDashboard() {
                         className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
                       />
                     </div>
-                  ) : (
+                  )}
+
+                  {medium === "Discord Webhook" && (
                     <div className="space-y-1.5">
                       <Input 
                         type="text" 
@@ -815,6 +981,108 @@ export function AppDashboard() {
                         onChange={(e) => setWebhook(e.target.value)}
                         className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
                       />
+                    </div>
+                  )}
+
+                  {["SMS", "WhatsApp", "Phone Call"].includes(medium) && (
+                    <div className="space-y-2.5">
+                      <Input 
+                        type="text" 
+                        placeholder="+91 98765 43210 (Indian Mobile Number)" 
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
+                      />
+                      
+                      {medium === "SMS" && (
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={smsConsent}
+                            onChange={(e) => setSmsConsent(e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-border text-rose-500"
+                          />
+                          <span>I consent to receiving automated ticket alert SMS messages.</span>
+                        </label>
+                      )}
+
+                      {medium === "WhatsApp" && (
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={whatsappConsent}
+                            onChange={(e) => setWhatsappConsent(e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-border text-rose-500"
+                          />
+                          <span>I consent to receiving automated WhatsApp ticket alerts via template.</span>
+                        </label>
+                      )}
+
+                      {medium === "Phone Call" && (
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={callConsent}
+                            onChange={(e) => setCallConsent(e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-border text-rose-500"
+                          />
+                          <span>I consent to receiving automated phone calls (Polly.Aditi TTS).</span>
+                        </label>
+                      )}
+
+                      {!config?.disable_payments && (
+                        <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 space-y-2.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-muted-foreground block">Cost & Balance</span>
+                              <span className="font-semibold text-foreground">
+                                {medium === "SMS" ? "₹0.50" : medium === "WhatsApp" ? "₹1.00" : "₹1.50"} / alert
+                              </span>
+                              <span className="text-muted-foreground text-[11px] ml-1.5">
+                                (Wallet: ₹{userWallet ? userWallet.balance_inr.toFixed(2) : "0.00"})
+                              </span>
+                            </div>
+                            <Link to="/profile" className="text-[11px] font-semibold text-rose-400 hover:underline">
+                              Manage Wallet →
+                            </Link>
+                          </div>
+
+                          <div className="border-t border-border/40 pt-2 space-y-1.5">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground block">Payment Method</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setPaymentMethod("wallet")}
+                                disabled={((userWallet?.balance_paise || 0) < (medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150))}
+                                className={`p-2 rounded-lg border text-left transition-all ${
+                                  paymentMethod === "wallet"
+                                    ? "border-rose-500 bg-rose-500/10 text-rose-400 font-semibold"
+                                    : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40"
+                                } ${((userWallet?.balance_paise || 0) < (medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150)) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                              >
+                                <div className="text-[11px] font-bold">Pay from Wallet</div>
+                                <div className="text-[10px] opacity-80">
+                                  {((userWallet?.balance_paise || 0) < (medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150))
+                                    ? "Insufficient Balance"
+                                    : `₹${(userWallet?.balance_inr || 0).toFixed(2)} available`}
+                                </div>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPaymentMethod("cashfree")}
+                                className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                                  paymentMethod === "cashfree"
+                                    ? "border-rose-500 bg-rose-500/10 text-rose-400 font-semibold"
+                                    : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40"
+                                }`}
+                              >
+                                <div className="text-[11px] font-bold">Pay via Cashfree</div>
+                                <div className="text-[10px] opacity-80">Cards / UPI / Netbanking</div>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -910,9 +1178,10 @@ export function AppDashboard() {
                 {/* Submit button */}
                 <Button 
                   type="submit" 
+                  disabled={submittingCashfree}
                   className="w-full h-10 text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white cursor-pointer rounded-lg mt-2"
                 >
-                  Start Ticket Alert
+                  {submittingCashfree ? "Processing Payment..." : "Start Ticket Alert"}
                 </Button>
               </form>
             </CardContent>
@@ -1122,12 +1391,30 @@ export function AppDashboard() {
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 text-muted-foreground">
+                          <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
                             <MessageSquare className="h-4 w-4 text-rose-500 shrink-0" />
                             <span>Notify Via:</span>
                             <Badge variant="outline" className="text-[9px] font-bold px-2 py-0.5 bg-muted/30">
                               {job.notification_medium.toUpperCase()}
                             </Badge>
+                            {job.notification_status === 'sent' || job.notification_status === 'delivered' ? (
+                              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold px-2 py-0.5">
+                                Delivered
+                              </Badge>
+                            ) : job.notification_status === 'policy_exempt' ? (
+                              <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[9px] font-bold px-2 py-0.5">
+                                Policy Exempt (3x Unanswered)
+                              </Badge>
+                            ) : job.notification_status === 'failed' ? (
+                              <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[9px] font-bold px-2 py-0.5">
+                                Failed
+                              </Badge>
+                            ) : null}
+                            {job.refund_issued && (
+                              <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold px-2 py-0.5">
+                                ₹{((job.price_paise || 0)/100).toFixed(2)} Refunded
+                              </Badge>
+                            )}
                           </div>
                         </div>
 
@@ -1358,33 +1645,25 @@ export function AppDashboard() {
                   <label className="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">
                     Notification Medium
                   </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditMedium("Email")}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-all cursor-pointer ${
-                        editMedium === "Email"
-                          ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
-                          : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
-                      }`}
-                    >
-                      Email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditMedium("Discord Webhook")}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-all cursor-pointer ${
-                        editMedium === "Discord Webhook"
-                          ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
-                          : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
-                      }`}
-                    >
-                      Discord
-                    </button>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {(["Email", "Discord Webhook", "SMS", "WhatsApp", "Phone Call"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setEditMedium(m)}
+                        className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-all cursor-pointer ${
+                          editMedium === m
+                            ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
+                            : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
+                        }`}
+                      >
+                        {m === "Discord Webhook" ? "Discord" : m}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {editMedium === "Email" ? (
+                {editMedium === "Email" && (
                   <Input
                     type="email"
                     value={editEmail}
@@ -1392,12 +1671,24 @@ export function AppDashboard() {
                     placeholder="your-email@gmail.com"
                     className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
                   />
-                ) : (
+                )}
+
+                {editMedium === "Discord Webhook" && (
                   <Input
                     type="text"
                     value={editWebhook}
                     onChange={(e) => setEditWebhook(e.target.value)}
                     placeholder="Paste Discord Webhook URL"
+                    className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
+                  />
+                )}
+
+                {["SMS", "WhatsApp", "Phone Call"].includes(editMedium) && (
+                  <Input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="+91 98765 43210 (Indian Mobile Number)"
                     className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
                   />
                 )}
@@ -1461,7 +1752,14 @@ export function AppDashboard() {
         }}
         title="Remove Ticket Tracker"
         description={
-          <>Are you sure you want to remove ticket tracker <strong className="text-foreground font-mono">#{jobToDelete?.id}</strong> ({jobToDelete?.movie_name})? This action cannot be undone.</>
+          <>
+            Are you sure you want to remove ticket tracker <strong className="text-foreground font-mono">#{jobToDelete?.id}</strong> ({jobToDelete?.movie_name})? This action cannot be undone.
+            {jobToDelete?.price_paise && jobToDelete.price_paise > 0 && jobToDelete.notification_status !== 'delivered' && jobToDelete.notification_status !== 'sent' && (
+              <span className="block mt-2 font-medium text-emerald-400">
+                💰 Cancelling before booking opens will immediately refund ₹{(jobToDelete.price_paise / 100).toFixed(2)} to your wallet.
+              </span>
+            )}
+          </>
         }
         confirmText="Remove Alert"
         cancelText="Cancel"

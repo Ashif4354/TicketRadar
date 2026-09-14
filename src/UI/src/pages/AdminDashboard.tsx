@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock, ExternalLink, Search, X } from 'lucide-react';
+import { 
+  Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, 
+  LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock, 
+  ExternalLink, Search, X, DollarSign, Wallet, RotateCcw, FileText, CheckCircle2 
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp } from '../utils/formatters';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
@@ -12,7 +17,7 @@ import { ConfirmModal } from '@/components/ui/confirm-modal';
  * Provides an administrative interface for managing access requests, user accounts, and ticket-monitoring jobs.
  */
 export function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs' | 'pricing' | 'wallets' | 'refunds' | 'audit_logs'>('requests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [requests, setRequests] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -24,6 +29,35 @@ export function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [jobToStop, setJobToStop] = useState<any | null>(null);
   const [jobToDelete, setJobToDelete] = useState<any | null>(null);
+
+  // Pricing states
+  const [pricingConfig, setPricingConfig] = useState<any>(null);
+  const [pricingHistory, setPricingHistory] = useState<any[]>([]);
+  const [smsPaise, setSmsPaise] = useState('50');
+  const [whatsappPaise, setWhatsappPaise] = useState('100');
+  const [phoneCallPaise, setPhoneCallPaise] = useState('150');
+  const [pricingNote, setPricingNote] = useState('');
+  const [pricingUpdating, setPricingUpdating] = useState(false);
+  const [pricingMsg, setPricingMsg] = useState<string | null>(null);
+
+  // Wallet states
+  const [walletSearchUid, setWalletSearchUid] = useState('');
+  const [searchedWallet, setSearchedWallet] = useState<any>(null);
+  const [walletAdjustAmount, setWalletAdjustAmount] = useState('100');
+  const [walletAdjustDirection, setWalletAdjustDirection] = useState<'CREDIT' | 'DEBIT'>('CREDIT');
+  const [walletAdjustReason, setWalletAdjustReason] = useState('');
+  const [walletAdjusting, setWalletAdjusting] = useState(false);
+  const [walletMsg, setWalletMsg] = useState<string | null>(null);
+
+  // Cashfree refund states
+  const [refundOrderId, setRefundOrderId] = useState('');
+  const [refundAmountPaise, setRefundAmountPaise] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refunding, setRefunding] = useState(false);
+  const [refundMsg, setRefundMsg] = useState<string | null>(null);
+
+  // Audit logs
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -62,6 +96,24 @@ export function AdminDashboard() {
         const res = await authenticatedFetch('/api/jobs?all=true');
         if (res.ok) setJobs(await res.json());
         else setError("Failed to fetch jobs.");
+      } else if (activeTab === 'pricing') {
+        const res = await authenticatedFetch('/admin/pricing');
+        if (res.ok) {
+          const data = await res.json();
+          setPricingConfig(data.current);
+          setPricingHistory(data.history || []);
+          if (data.current) {
+            setSmsPaise(String(data.current.sms_paise ?? 50));
+            setWhatsappPaise(String(data.current.whatsapp_paise ?? 100));
+            setPhoneCallPaise(String(data.current.phone_call_paise ?? 150));
+          }
+        } else {
+          setError("Failed to fetch pricing configuration.");
+        }
+      } else if (activeTab === 'audit_logs') {
+        const res = await authenticatedFetch('/admin/audit-logs');
+        if (res.ok) setAuditLogs(await res.json());
+        else setError("Failed to fetch admin audit logs.");
       }
     } catch (e: any) {
       setError(e.message || "An error occurred fetching admin data.");
@@ -161,6 +213,127 @@ export function AdminDashboard() {
       alert("Error deleting job: " + e.message);
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleUpdatePricing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pricingNote.trim()) {
+      setPricingMsg("Audit reason note is required for updating prices.");
+      return;
+    }
+    setPricingUpdating(true);
+    setPricingMsg(null);
+    try {
+      const res = await authenticatedFetch('/admin/pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sms_paise: parseInt(smsPaise, 10),
+          whatsapp_paise: parseInt(whatsappPaise, 10),
+          phone_call_paise: parseInt(phoneCallPaise, 10),
+          note: pricingNote.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPricingMsg("Pricing updated and audit logged successfully!");
+        setPricingConfig(data.config);
+        setPricingNote('');
+        fetchData();
+      } else {
+        setPricingMsg(data.detail || "Failed to update pricing.");
+      }
+    } catch (e: any) {
+      setPricingMsg(e.message || "Failed to update pricing.");
+    } finally {
+      setPricingUpdating(false);
+    }
+  };
+
+  const handleSearchUserWallet = async () => {
+    if (!walletSearchUid.trim()) return;
+    setWalletAdjusting(true);
+    setWalletMsg(null);
+    try {
+      const res = await authenticatedFetch(`/admin/wallets/${walletSearchUid.trim()}`);
+      const data = await res.json();
+      if (res.ok) {
+        setSearchedWallet(data);
+      } else {
+        setWalletMsg(data.detail || "Failed to find user wallet.");
+      }
+    } catch (e: any) {
+      setWalletMsg(e.message || "Error searching wallet.");
+    } finally {
+      setWalletAdjusting(false);
+    }
+  };
+
+  const handleAdjustWallet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!walletSearchUid.trim() || !walletAdjustReason.trim()) {
+      setWalletMsg("UID and mandatory audit explanation are required.");
+      return;
+    }
+    setWalletAdjusting(true);
+    setWalletMsg(null);
+    try {
+      const res = await authenticatedFetch(`/admin/wallets/${walletSearchUid.trim()}/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount_paise: parseInt(walletAdjustAmount, 10),
+          direction: walletAdjustDirection,
+          reason: walletAdjustReason.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWalletMsg(`Successfully ${walletAdjustDirection === 'CREDIT' ? 'credited' : 'debited'} ₹${(parseInt(walletAdjustAmount, 10)/100).toFixed(2)}.`);
+        setWalletAdjustReason('');
+        handleSearchUserWallet();
+      } else {
+        setWalletMsg(data.detail || "Wallet adjustment failed.");
+      }
+    } catch (e: any) {
+      setWalletMsg(e.message || "Wallet adjustment error.");
+    } finally {
+      setWalletAdjusting(false);
+    }
+  };
+
+  const handleProcessCashfreeRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refundOrderId.trim() || !refundReason.trim()) {
+      setRefundMsg("Cashfree Order ID and audit reason are required.");
+      return;
+    }
+    setRefunding(true);
+    setRefundMsg(null);
+    try {
+      const res = await authenticatedFetch('/admin/refunds/cashfree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: refundOrderId.trim(),
+          amount_paise: parseInt(refundAmountPaise, 10),
+          reason: refundReason.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRefundMsg(`Refund initiated successfully! Provider Refund ID: ${data.provider_refund_id || data.refund_id}`);
+        setRefundOrderId('');
+        setRefundAmountPaise('');
+        setRefundReason('');
+      } else {
+        setRefundMsg(data.detail || "Refund failed.");
+      }
+    } catch (e: any) {
+      setRefundMsg(e.message || "Error processing refund.");
+    } finally {
+      setRefunding(false);
     }
   };
 
@@ -273,6 +446,42 @@ export function AdminDashboard() {
           >
             <Film className="h-3.5 w-3.5" />
             Ticket Trackers ({jobs.length > 0 ? jobs.length : (counts ? counts.jobs : 0)})
+          </Button>
+          <Button
+            onClick={() => setActiveTab('pricing')}
+            variant={activeTab === 'pricing' ? 'default' : 'ghost'}
+            size="sm"
+            className="text-xs font-semibold gap-1.5"
+          >
+            <DollarSign className="h-3.5 w-3.5 text-rose-400" />
+            Pricing
+          </Button>
+          <Button
+            onClick={() => setActiveTab('wallets')}
+            variant={activeTab === 'wallets' ? 'default' : 'ghost'}
+            size="sm"
+            className="text-xs font-semibold gap-1.5"
+          >
+            <Wallet className="h-3.5 w-3.5 text-rose-400" />
+            Wallets
+          </Button>
+          <Button
+            onClick={() => setActiveTab('refunds')}
+            variant={activeTab === 'refunds' ? 'default' : 'ghost'}
+            size="sm"
+            className="text-xs font-semibold gap-1.5"
+          >
+            <RotateCcw className="h-3.5 w-3.5 text-rose-400" />
+            Refunds
+          </Button>
+          <Button
+            onClick={() => setActiveTab('audit_logs')}
+            variant={activeTab === 'audit_logs' ? 'default' : 'ghost'}
+            size="sm"
+            className="text-xs font-semibold gap-1.5"
+          >
+            <FileText className="h-3.5 w-3.5 text-rose-400" />
+            Audit Logs
           </Button>
         </div>
 
@@ -898,6 +1107,418 @@ export function AdminDashboard() {
             </>
           )}
         </>
+      )}
+
+      {/* Tab: Pricing Configuration */}
+      {activeTab === 'pricing' && (
+        <div className="space-y-6">
+          {pricingMsg && (
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>{pricingMsg}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border border-border/80 glassmorphism p-5 rounded-xl">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">SMS Price</span>
+              <span className="text-2xl font-bold text-foreground">₹{((pricingConfig?.sms_paise ?? 50) / 100).toFixed(2)}</span>
+              <span className="text-[11px] text-muted-foreground block">({pricingConfig?.sms_paise ?? 50} paise)</span>
+            </Card>
+            <Card className="border border-border/80 glassmorphism p-5 rounded-xl">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">WhatsApp Price</span>
+              <span className="text-2xl font-bold text-emerald-400">₹{((pricingConfig?.whatsapp_paise ?? 100) / 100).toFixed(2)}</span>
+              <span className="text-[11px] text-muted-foreground block">({pricingConfig?.whatsapp_paise ?? 100} paise)</span>
+            </Card>
+            <Card className="border border-border/80 glassmorphism p-5 rounded-xl">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Phone Call Price</span>
+              <span className="text-2xl font-bold text-rose-400">₹{((pricingConfig?.phone_call_paise ?? 150) / 100).toFixed(2)}</span>
+              <span className="text-[11px] text-muted-foreground block">({pricingConfig?.phone_call_paise ?? 150} paise)</span>
+            </Card>
+          </div>
+
+          <Card className="border border-border/80 glassmorphism p-6 rounded-2xl">
+            <CardHeader className="p-0 pb-4 border-b border-border/40 mb-4">
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-rose-400" />
+                Update Notification Pricing Schedule
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Price changes atomically supersede current rates and require a mandatory audit explanation.
+              </p>
+            </CardHeader>
+
+            <form onSubmit={handleUpdatePricing} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">SMS (paise)</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={smsPaise}
+                    onChange={(e) => setSmsPaise(e.target.value)}
+                    className="h-9 text-xs bg-muted/20"
+                    placeholder="50"
+                  />
+                  <span className="text-[10px] text-muted-foreground">₹{((parseInt(smsPaise, 10) || 0) / 100).toFixed(2)}</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">WhatsApp (paise)</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={whatsappPaise}
+                    onChange={(e) => setWhatsappPaise(e.target.value)}
+                    className="h-9 text-xs bg-muted/20"
+                    placeholder="100"
+                  />
+                  <span className="text-[10px] text-muted-foreground">₹{((parseInt(whatsappPaise, 10) || 0) / 100).toFixed(2)}</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Phone Call (paise)</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={phoneCallPaise}
+                    onChange={(e) => setPhoneCallPaise(e.target.value)}
+                    className="h-9 text-xs bg-muted/20"
+                    placeholder="150"
+                  />
+                  <span className="text-[10px] text-muted-foreground">₹{((parseInt(phoneCallPaise, 10) || 0) / 100).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Audit Reason Note (Mandatory)</label>
+                <Input
+                  value={pricingNote}
+                  onChange={(e) => setPricingNote(e.target.value)}
+                  placeholder="e.g., Telecom operator tariff revision for Q3"
+                  className="h-9 text-xs bg-muted/20"
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={pricingUpdating}
+                className="h-9 px-5 text-xs font-semibold bg-rose-500 hover:bg-rose-600 cursor-pointer"
+              >
+                {pricingUpdating ? 'Updating...' : 'Save & Log Audit'}
+              </Button>
+            </form>
+          </Card>
+
+          {/* Pricing History */}
+          <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
+            <h3 className="text-sm font-bold text-foreground">Historical Pricing Configurations</h3>
+            {pricingHistory.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No historical records found.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border/50 text-muted-foreground">
+                      <th className="pb-2">Effective From</th>
+                      <th className="pb-2">SMS</th>
+                      <th className="pb-2">WhatsApp</th>
+                      <th className="pb-2">Call</th>
+                      <th className="pb-2">Status</th>
+                      <th className="pb-2">Audit Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {pricingHistory.map((item) => (
+                      <tr key={item.id} className="hover:bg-muted/10">
+                        <td className="py-2.5 text-muted-foreground whitespace-nowrap">
+                          {item.effective_from ? new Date(item.effective_from).toLocaleString() : 'System Seed'}
+                        </td>
+                        <td className="py-2.5">₹{(item.sms_paise / 100).toFixed(2)}</td>
+                        <td className="py-2.5">₹{(item.whatsapp_paise / 100).toFixed(2)}</td>
+                        <td className="py-2.5">₹{(item.phone_call_paise / 100).toFixed(2)}</td>
+                        <td className="py-2.5">
+                          {item.is_current ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px]">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[9px] text-muted-foreground">
+                              Superseded
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="py-2.5 text-muted-foreground">{item.note || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: User Wallets & Adjustments */}
+      {activeTab === 'wallets' && (
+        <div className="space-y-6">
+          <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
+            <h3 className="text-sm font-bold text-foreground">User Wallet Lookup & Adjustment</h3>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <Input
+                placeholder="Enter User Firebase UID..."
+                value={walletSearchUid}
+                onChange={(e) => setWalletSearchUid(e.target.value)}
+                className="h-9 text-xs bg-muted/20"
+              />
+              <Button
+                onClick={handleSearchUserWallet}
+                disabled={walletAdjusting}
+                className="w-full sm:w-auto h-9 px-5 text-xs font-semibold bg-rose-500 hover:bg-rose-600 cursor-pointer"
+              >
+                Search Wallet
+              </Button>
+            </div>
+
+            {walletMsg && (
+              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+                {walletMsg}
+              </div>
+            )}
+
+            {searchedWallet && (
+              <div className="pt-4 border-t border-border/40 space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-xl border border-rose-500/20 bg-rose-500/5">
+                  <div>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Current Balance</span>
+                    <span className="text-2xl font-bold text-rose-400 block">₹{searchedWallet.balance_inr.toFixed(2)}</span>
+                    <span className="text-[11px] text-muted-foreground">({searchedWallet.balance_paise} paise)</span>
+                  </div>
+                  <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs">
+                    UID: {searchedWallet.uid}
+                  </Badge>
+                </div>
+
+                <form onSubmit={handleAdjustWallet} className="space-y-3 pt-2">
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Adjust Balance</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Action</label>
+                      <select
+                        value={walletAdjustDirection}
+                        onChange={(e) => setWalletAdjustDirection(e.target.value as any)}
+                        className="w-full h-9 rounded-lg border border-border bg-[#121217] px-3 text-xs text-foreground"
+                      >
+                        <option value="CREDIT">CREDIT (Add funds)</option>
+                        <option value="DEBIT">DEBIT (Deduct funds)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Amount (paise)</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={walletAdjustAmount}
+                        onChange={(e) => setWalletAdjustAmount(e.target.value)}
+                        className="h-9 text-xs bg-muted/20"
+                        placeholder="100"
+                      />
+                      <span className="text-[10px] text-muted-foreground">₹{((parseInt(walletAdjustAmount, 10) || 0) / 100).toFixed(2)}</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Reason (Mandatory Audit)</label>
+                      <Input
+                        value={walletAdjustReason}
+                        onChange={(e) => setWalletAdjustReason(e.target.value)}
+                        placeholder="e.g. Customer loyalty bonus"
+                        className="h-9 text-xs bg-muted/20"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={walletAdjusting}
+                    className="h-9 px-5 text-xs font-semibold bg-rose-500 hover:bg-rose-600 cursor-pointer"
+                  >
+                    {walletAdjusting ? 'Processing...' : 'Submit Balance Adjustment'}
+                  </Button>
+                </form>
+
+                {/* Ledger for user */}
+                <div className="pt-4 border-t border-border/40 space-y-2">
+                  <h4 className="text-xs font-bold text-foreground">Transaction History ({searchedWallet.transactions?.length || 0})</h4>
+                  {searchedWallet.transactions?.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No transactions found for this user.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-border/50 text-muted-foreground">
+                            <th className="pb-2">Date</th>
+                            <th className="pb-2">Type</th>
+                            <th className="pb-2">Description</th>
+                            <th className="pb-2 text-right">Amount</th>
+                            <th className="pb-2 text-right">Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {searchedWallet.transactions.map((tx: any) => (
+                            <tr key={tx.id} className="hover:bg-muted/10">
+                              <td className="py-2 text-muted-foreground whitespace-nowrap">
+                                {tx.created_at ? new Date(tx.created_at).toLocaleString() : '—'}
+                              </td>
+                              <td className="py-2">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-muted/40">
+                                  {tx.type}
+                                </span>
+                              </td>
+                              <td className="py-2 text-foreground truncate max-w-xs">{tx.description}</td>
+                              <td className={`py-2 text-right font-bold ${tx.direction === 'CREDIT' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {tx.direction === 'CREDIT' ? '+' : '-'}₹{(tx.amount_paise / 100).toFixed(2)}
+                              </td>
+                              <td className="py-2 text-right font-mono text-muted-foreground">
+                                ₹{(tx.balance_after_paise / 100).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Cashfree Refunds */}
+      {activeTab === 'refunds' && (
+        <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
+          <CardHeader className="p-0 pb-4 border-b border-border/40">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-rose-400" />
+              Initiate Cashfree Gateway Refund
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Directly refunds a customer's original payment method via Cashfree API.
+            </p>
+          </CardHeader>
+
+          {refundMsg && (
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>{refundMsg}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleProcessCashfreeRefund} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Cashfree Order ID</label>
+                <Input
+                  value={refundOrderId}
+                  onChange={(e) => setRefundOrderId(e.target.value)}
+                  placeholder="e.g. order_12345678"
+                  className="h-9 text-xs bg-muted/20"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Refund Amount (paise)</label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={refundAmountPaise}
+                  onChange={(e) => setRefundAmountPaise(e.target.value)}
+                  placeholder="e.g. 500 (₹5.00)"
+                  className="h-9 text-xs bg-muted/20"
+                  required
+                />
+                <span className="text-[10px] text-muted-foreground">
+                  ₹{((parseInt(refundAmountPaise, 10) || 0) / 100).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Audit Reason</label>
+              <Input
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+                placeholder="e.g., Customer requested gateway refund due to duplicate payment"
+                className="h-9 text-xs bg-muted/20"
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={refunding}
+              className="h-9 px-5 text-xs font-semibold bg-rose-500 hover:bg-rose-600 cursor-pointer"
+            >
+              {refunding ? 'Processing Refund...' : 'Initiate Gateway Refund'}
+            </Button>
+          </form>
+        </Card>
+      )}
+
+      {/* Tab: Admin Audit Logs */}
+      {activeTab === 'audit_logs' && (
+        <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <FileText className="h-4 w-4 text-rose-400" />
+              Immutable Administrative & Financial Audit Logs
+            </h3>
+            <span className="text-xs text-muted-foreground">{auditLogs.length} events logged</span>
+          </div>
+
+          {auditLogs.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">No audit logs found.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border/50 text-muted-foreground font-semibold">
+                    <th className="pb-2.5">Date & Time</th>
+                    <th className="pb-2.5">Admin Email</th>
+                    <th className="pb-2.5">Action</th>
+                    <th className="pb-2.5">Target UID</th>
+                    <th className="pb-2.5">Amount</th>
+                    <th className="pb-2.5">Reason</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {auditLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-muted/10">
+                      <td className="py-2.5 text-muted-foreground whitespace-nowrap">
+                        {log.created_at ? new Date(log.created_at).toLocaleString() : '—'}
+                      </td>
+                      <td className="py-2.5 text-foreground">{log.admin_email}</td>
+                      <td className="py-2.5">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-muted/40 border border-border">
+                          {log.action_type}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-muted-foreground font-mono">{log.target_uid || '—'}</td>
+                      <td className="py-2.5 font-bold text-foreground">
+                        {log.amount_paise ? `₹${(log.amount_paise / 100).toFixed(2)}` : '—'}
+                      </td>
+                      <td className="py-2.5 text-muted-foreground max-w-xs truncate">{log.reason || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Confirm Admin Stop Job Modal */}

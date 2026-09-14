@@ -1,6 +1,5 @@
-# src/Backend/api/routers/admin.py
-
 import logging
+import uuid
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from google.cloud import firestore as google_firestore
 
@@ -11,8 +10,16 @@ from lib.services.notification import (
     send_user_access_granted_email,
 )
 from lib.services.gcp_logger import gcp_logger
-from api.schemas import UpdateRoleRequest
-from api.dependencies import get_user_details
+from lib.services.pricing import PricingService
+from lib.services.wallet import WalletService
+from lib.providers.payment.factory import PaymentGatewayFactory
+from api.schemas import (
+    UpdateRoleRequest,
+    UpdatePricesRequest,
+    AdminAdjustWalletRequest,
+    AdminCashfreeRefundRequest,
+)
+from api.dependencies import get_user_details, require_payments_enabled
 
 logger = logging.getLogger("ticketradar.api")
 manager = JobManager()
@@ -413,3 +420,224 @@ async def admin_delete_job(
         return {"success": True, "message": f"Job #{job_id} deleted."}
     else:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
+
+
+@router.get("/pricing", dependencies=[Depends(require_payments_enabled)])
+async def admin_get_pricing():
+    """Returns current active prices and price update history."""
+    current = PricingService.get_current_prices()
+    history = PricingService.get_price_history(limit=25)
+    return {
+        "current": current,
+        "history": history,
+    }
+
+
+@router.post("/pricing", dependencies=[Depends(require_payments_enabled)])
+async def admin_update_pricing(
+    payload: UpdatePricesRequest,
+    admin_claims: dict = Depends(get_admin_user)
+):
+    """Updates notification pricing with mandatory reason, creating audit logs."""
+    try:
+        new_config = PricingService.update_prices(
+            admin_uid=admin_claims.get("uid"),
+            admin_email=admin_claims.get("email", ""),
+            sms_paise=payload.sms_paise,
+            whatsapp_paise=payload.whatsapp_paise,
+            phone_call_paise=payload.phone_call_paise,
+            note=payload.note,
+        )
+        return {"success": True, "config": new_config}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error updating prices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/wallets/{uid}", dependencies=[Depends(require_payments_enabled)])
+async def admin_get_user_wallet(uid: str):
+    """Retrieves user wallet balance and transaction ledger."""
+    balance_paise = WalletService.get_balance(uid)
+    txns = WalletService.get_transactions(uid, limit=50)
+    return {
+        "uid": uid,
+        "balance_paise": balance_paise,
+        "balance_inr": round(balance_paise / 100.0, 2),
+        "transactions": txns,
+    }
+
+
+@router.post("/wallets/{uid}/adjust", dependencies=[Depends(require_payments_enabled)])
+async def admin_adjust_wallet(
+    uid: str,
+    payload: AdminAdjustWalletRequest,
+    admin_claims: dict = Depends(get_admin_user)
+):
+    """
+    Credits or debits a user's wallet with mandatory audit explanation.
+    Creates an immutable wallet transaction record and an admin audit log entry.
+    """
+    direction = payload.direction.upper()
+    amount_paise = payload.amount_paise
+    reason = payload.reason
+    admin_uid = admin_claims.get("uid")
+    admin_email = admin_claims.get("email", "")
+
+    idempotency_key = f"admin_adj_{uuid.uuid4()}"
+    txn_type = "ADMIN_CREDIT" if direction == "CREDIT" else "ADMIN_DEBIT"
+
+    try:
+        if direction == "CREDIT":
+            txn = WalletService.credit(
+                uid=uid,
+                amount_paise=amount_paise,
+                txn_type=txn_type,
+                description=f"Admin credit: {reason}",
+                idempotency_key=idempotency_key,
+                created_by=f"admin:{admin_uid}",
+            )
+        else:
+            txn = WalletService.debit(
+                uid=uid,
+                amount_paise=amount_paise,
+                txn_type=txn_type,
+                description=f"Admin debit: {reason}",
+                idempotency_key=idempotency_key,
+                created_by=f"admin:{admin_uid}",
+            )
+
+        # Audit log
+        if db:
+            log_id = str(uuid.uuid4())
+            db.collection("admin_audit_logs").document(log_id).set({
+                "id": log_id,
+                "admin_uid": admin_uid,
+                "admin_email": admin_email,
+                "action_type": txn_type,
+                "target_uid": uid,
+                "amount_paise": amount_paise,
+                "reason": reason,
+                "new_value": txn,
+                "created_at": google_firestore.SERVER_TIMESTAMP,
+            })
+
+        return {"success": True, "transaction": txn}
+    except Exception as e:
+        logger.error(f"Admin wallet adjustment failed for {uid}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/refunds/cashfree", dependencies=[Depends(require_payments_enabled)])
+async def admin_cashfree_refund(
+    payload: AdminCashfreeRefundRequest,
+    admin_claims: dict = Depends(get_admin_user)
+):
+    """
+    Initiates an admin-directed refund back to the user's original payment method via Cashfree.
+    Requires an existing Cashfree order ID.
+    """
+    admin_uid = admin_claims.get("uid")
+    admin_email = admin_claims.get("email", "")
+    refund_id = f"cf_ref_{str(uuid.uuid4())[:8]}"
+
+    try:
+        gateway = PaymentGatewayFactory.create()
+        result = await gateway.create_refund(
+            order_id=payload.order_id,
+            amount_paise=payload.amount_paise,
+            refund_id=refund_id,
+            reason=payload.reason,
+        )
+
+        if not result.success:
+            raise HTTPException(status_code=400, detail=result.error_message or "Cashfree refund failed.")
+
+        # Record refund doc in refunds collection
+        if db:
+            ref_id = str(uuid.uuid4())
+            db.collection("refunds").document(ref_id).set({
+                "id": ref_id,
+                "order_id": payload.order_id,
+                "gateway_refund_id": result.provider_refund_id,
+                "type": "GATEWAY_REFUND",
+                "amount_paise": payload.amount_paise,
+                "status": "success",
+                "destination": "original_payment_method",
+                "reason": payload.reason,
+                "job_id": payload.job_id,
+                "initiated_by": f"admin:{admin_uid}",
+                "idempotency_key": refund_id,
+                "created_at": google_firestore.SERVER_TIMESTAMP,
+            })
+
+            # Record audit log
+            log_id = str(uuid.uuid4())
+            db.collection("admin_audit_logs").document(log_id).set({
+                "id": log_id,
+                "admin_uid": admin_uid,
+                "admin_email": admin_email,
+                "action_type": "GATEWAY_REFUND_INITIATED",
+                "amount_paise": payload.amount_paise,
+                "reason": payload.reason,
+                "metadata": {
+                    "order_id": payload.order_id,
+                    "refund_id": refund_id,
+                    "cf_refund_id": result.provider_refund_id,
+                },
+                "created_at": google_firestore.SERVER_TIMESTAMP,
+            })
+
+        return {
+            "success": True,
+            "refund_id": refund_id,
+            "provider_refund_id": result.provider_refund_id,
+            "message": "Refund to original payment method initiated successfully."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing Cashfree refund: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/audit-logs")
+async def admin_get_audit_logs(limit: int = 50):
+    """Retrieves immutable audit logs of administrative and financial actions."""
+    if not db:
+        return []
+    try:
+        docs = (
+            db.collection("admin_audit_logs")
+            .order_by("created_at", direction=google_firestore.Query.DESCENDING)
+            .limit(limit)
+            .stream()
+        )
+        logs = []
+        for doc in docs:
+            item = doc.to_dict() or {}
+            if "created_at" in item and item["created_at"]:
+                try:
+                    item["created_at"] = item["created_at"].isoformat()
+                except Exception:
+                    pass
+            logs.append(item)
+        return logs
+    except Exception as e:
+        logger.error(f"Error fetching audit logs: {e}")
+        # Fallback without composite index requirement
+        try:
+            docs = list(db.collection("admin_audit_logs").stream())
+            items = [d.to_dict() or {} for d in docs]
+            items.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+            for item in items[:limit]:
+                if "created_at" in item and item["created_at"]:
+                    try:
+                        item["created_at"] = item["created_at"].isoformat()
+                    except Exception:
+                        pass
+            return items[:limit]
+        except Exception:
+            return []
+

@@ -68,3 +68,34 @@ async def verify_recaptcha(token: str):
     except httpx.HTTPError as e:
         logger.error(f"reCAPTCHA verification request failed: {e}")
         raise HTTPException(status_code=500, detail="Unable to verify reCAPTCHA with Google servers.")
+
+
+def require_payments_enabled():
+    """Dependency that ensures payment and wallet operations are enabled."""
+    import os
+    is_disabled = (
+        os.getenv("DISABLE_PAYMENTS", "").lower() in ("true", "1")
+        or (settings and getattr(settings, "disable_payments", False))
+    )
+    if is_disabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Payment features are disabled (DISABLE_PAYMENTS=true)."
+        )
+
+
+async def require_terms_accepted(claims: dict = None):
+    """Checks that user has accepted current terms version before proceeding."""
+    import os
+    if os.getenv("DISABLE_SECURITY", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_security", False)):
+        return True
+
+    from lib.services.terms import TermsService
+    uid = claims.get("uid") if claims else None
+    if uid and not TermsService.check_terms_accepted(uid):
+        raise HTTPException(
+            status_code=403,
+            detail="You must accept the updated Terms of Service (v2.0) to use this feature."
+        )
+    return True
+

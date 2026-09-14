@@ -19,26 +19,30 @@ async def get_config():
     """Retrieve application configuration and validation error status."""
     import os
     disable_sec = os.getenv("DISABLE_SECURITY", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_security", False))
+    disable_pay = os.getenv("DISABLE_PAYMENTS", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_payments", False))
     return {
         "config_error": config_error,
         "smtp_server": settings.smtp_server if settings else None,
         "smtp_email": settings.smtp_email if settings else None,
         "default_check_interval": settings.default_check_interval if settings else 60,
-        "disable_security": disable_sec
+        "disable_security": disable_sec,
+        "disable_payments": disable_pay,
     }
 
 
 @router.post("/test-notification")
 async def test_notification(payload: TestAlertRequest, claims: dict = Depends(get_authorized_user)):
     """Sends a test alert to verify connection details."""
-    medium = payload.medium.lower()
+    medium = payload.medium.lower().replace(" ", "_")
     target = payload.target.strip()
 
     if not target:
-        raise HTTPException(status_code=400, detail="Target recipient/URL is required.")
+        raise HTTPException(status_code=400, detail="Target recipient/URL/phone is required.")
 
     # Verify reCAPTCHA token
     await verify_recaptcha(payload.recaptcha_token)
+
+    from lib.utils.phone import normalize_indian_phone
 
     if "email" in medium:
         config = {"recipient_email": target}
@@ -46,6 +50,27 @@ async def test_notification(payload: TestAlertRequest, claims: dict = Depends(ge
     elif "discord" in medium:
         config = {"webhook_url": target}
         notif_type = "discord"
+    elif "sms" in medium:
+        try:
+            norm_phone = normalize_indian_phone(target)
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        config = {"phone_number": norm_phone}
+        notif_type = "sms"
+    elif "whatsapp" in medium:
+        try:
+            norm_phone = normalize_indian_phone(target)
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        config = {"phone_number": norm_phone}
+        notif_type = "whatsapp"
+    elif "call" in medium or "phone" in medium:
+        try:
+            norm_phone = normalize_indian_phone(target)
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        config = {"phone_number": norm_phone}
+        notif_type = "phone_call"
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported notification medium: {payload.medium}")
 

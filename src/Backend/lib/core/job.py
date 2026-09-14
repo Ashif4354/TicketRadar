@@ -61,7 +61,21 @@ class MonitorJob:
         check_interval: Optional[int] = None,
         job_id: Optional[str] = None,
         created_by: Optional[str] = None,
-        creator_email: Optional[str] = None
+        creator_email: Optional[str] = None,
+        phone_number: Optional[str] = None,
+        sms_consent: bool = False,
+        call_consent: bool = False,
+        whatsapp_consented_at: Optional[datetime] = None,
+        payment_method: str = "free",
+        payment_id: Optional[str] = None,
+        price_paise: int = 0,
+        price_config_id: Optional[str] = None,
+        notification_status: str = "pending",
+        notification_sent: bool = False,
+        notification_dispatched_at: Optional[datetime] = None,
+        notification_delivered_at: Optional[datetime] = None,
+        notification_attempt_count: int = 0,
+        refund_issued: bool = False,
     ):
         """
         Initialize a movie ticket monitoring job with its configuration, metadata, and initial state.
@@ -93,6 +107,22 @@ class MonitorJob:
         self.status = "Idle"  # Idle, Running, Success, Error, Stopped
         self.last_checked_at: Optional[datetime] = None
         self.last_result: str = "Created"
+
+        # Multi-channel notification & payment attributes
+        self.phone_number = phone_number
+        self.sms_consent = sms_consent
+        self.call_consent = call_consent
+        self.whatsapp_consented_at = whatsapp_consented_at
+        self.payment_method = payment_method
+        self.payment_id = payment_id
+        self.price_paise = price_paise
+        self.price_config_id = price_config_id
+        self.notification_status = notification_status
+        self.notification_sent = notification_sent
+        self.notification_dispatched_at = notification_dispatched_at
+        self.notification_delivered_at = notification_delivered_at
+        self.notification_attempt_count = notification_attempt_count
+        self.refund_issued = refund_issued
         
         # Thread lock for state modifications
         self._lock = threading.Lock()
@@ -168,7 +198,8 @@ class MonitorJob:
         notification_medium: str,
         notification_config: Dict[str, Any],
         service_provider: str = "bookmyshow",
-        check_interval: Optional[int] = None
+        check_interval: Optional[int] = None,
+        phone_number: Optional[str] = None,
     ) -> None:
         """Thread-safely updates the job configuration and parameters."""
         with self._lock:
@@ -177,6 +208,8 @@ class MonitorJob:
             self.notification_config = notification_config
             self.service_provider = service_provider.strip().lower()
             self.check_interval = max(60, check_interval) if check_interval is not None else 60
+            if phone_number is not None:
+                self.phone_number = phone_number
             parsed_name = _parse_movie_name_from_url(params.get("url", ""))
             if parsed_name != "BookMyShow Movie":
                 self.movie_name = parsed_name
@@ -203,6 +236,20 @@ class MonitorJob:
                 "last_result": self.last_result,
                 "created_by": self.created_by,
                 "creator_email": self.creator_email,
+                "phone_number": self.phone_number,
+                "sms_consent": self.sms_consent,
+                "call_consent": self.call_consent,
+                "whatsapp_consented_at": self.whatsapp_consented_at,
+                "payment_method": self.payment_method,
+                "payment_id": self.payment_id,
+                "price_paise": self.price_paise,
+                "price_config_id": self.price_config_id,
+                "notification_status": self.notification_status,
+                "notification_sent": self.notification_sent,
+                "notification_dispatched_at": self.notification_dispatched_at,
+                "notification_delivered_at": self.notification_delivered_at,
+                "notification_attempt_count": self.notification_attempt_count,
+                "refund_issued": self.refund_issued,
             }
 
     def to_dict(self) -> Dict[str, Any]:
@@ -225,42 +272,70 @@ class MonitorJob:
                 "creator_email": self.creator_email,
                 "status": self.status,
                 "created_at": self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
+                "phone_number": self.phone_number,
+                "sms_consent": self.sms_consent,
+                "call_consent": self.call_consent,
+                "whatsapp_consented_at": self.whatsapp_consented_at.isoformat() if isinstance(self.whatsapp_consented_at, datetime) else self.whatsapp_consented_at,
+                "payment_method": self.payment_method,
+                "payment_id": self.payment_id,
+                "price_paise": self.price_paise,
+                "price_config_id": self.price_config_id,
+                "notification_status": self.notification_status,
+                "notification_sent": self.notification_sent,
+                "notification_dispatched_at": self.notification_dispatched_at.isoformat() if isinstance(self.notification_dispatched_at, datetime) else self.notification_dispatched_at,
+                "notification_delivered_at": self.notification_delivered_at.isoformat() if isinstance(self.notification_delivered_at, datetime) else self.notification_delivered_at,
+                "notification_attempt_count": self.notification_attempt_count,
+                "refund_issued": self.refund_issued,
             }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MonitorJob":
         """Deserializes a dictionary (e.g. from Firestore) into a MonitorJob instance."""
+        def _parse_ts(val):
+            if isinstance(val, str):
+                try:
+                    return datetime.fromisoformat(val)
+                except ValueError:
+                    return None
+            elif isinstance(val, datetime):
+                return val
+            return None
+
         job = cls(
             params=data.get("params", {}),
             notification_medium=data.get("notification_medium", "email"),
             notification_config=data.get("notification_config", {}),
             service_provider=data.get("service_provider", "bookmyshow"),
-            check_interval=data.get("check_interval", 30),
+            check_interval=data.get("check_interval", 60),
             job_id=data.get("id"),
             created_by=data.get("created_by"),
-            creator_email=data.get("creator_email")
+            creator_email=data.get("creator_email"),
+            phone_number=data.get("phone_number"),
+            sms_consent=data.get("sms_consent", False),
+            call_consent=data.get("call_consent", False),
+            whatsapp_consented_at=_parse_ts(data.get("whatsapp_consented_at")),
+            payment_method=data.get("payment_method", "free"),
+            payment_id=data.get("payment_id"),
+            price_paise=int(data.get("price_paise", 0)),
+            price_config_id=data.get("price_config_id"),
+            notification_status=data.get("notification_status", "pending"),
+            notification_sent=data.get("notification_sent", False),
+            notification_dispatched_at=_parse_ts(data.get("notification_dispatched_at")),
+            notification_delivered_at=_parse_ts(data.get("notification_delivered_at")),
+            notification_attempt_count=int(data.get("notification_attempt_count", 0)),
+            refund_issued=data.get("refund_issued", False),
         )
         job.movie_name = data.get("movie_name", "Fetching...")
         job.status = data.get("status", "Idle")
         job.last_result = data.get("last_result", "Created")
 
-        created_at_val = data.get("created_at")
-        if isinstance(created_at_val, str):
-            try:
-                job.created_at = datetime.fromisoformat(created_at_val)
-            except ValueError:
-                pass
-        elif isinstance(created_at_val, datetime):
-            job.created_at = created_at_val
+        created_at_dt = _parse_ts(data.get("created_at"))
+        if created_at_dt:
+            job.created_at = created_at_dt
 
-        last_checked_val = data.get("last_checked_at")
-        if isinstance(last_checked_val, str):
-            try:
-                job.last_checked_at = datetime.fromisoformat(last_checked_val)
-            except ValueError:
-                pass
-        elif isinstance(last_checked_val, datetime):
-            job.last_checked_at = last_checked_val
+        last_checked_dt = _parse_ts(data.get("last_checked_at"))
+        if last_checked_dt:
+            job.last_checked_at = last_checked_dt
 
         return job
 

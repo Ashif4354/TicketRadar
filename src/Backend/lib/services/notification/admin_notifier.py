@@ -3,7 +3,7 @@
 import logging
 import httpx
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from ...utils.config import settings
 
 logger = logging.getLogger("ticketradar.admin_notifier")
@@ -29,7 +29,7 @@ async def send_admin_discord_embed(
         "title": title,
         "description": description,
         "color": color,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "footer": {
             "text": "TicketRadar Admin Alerts"
         }

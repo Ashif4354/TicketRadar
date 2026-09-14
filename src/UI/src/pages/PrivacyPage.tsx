@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, User, ListCheck, Lock, Server, Database, Trash2 } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, User, Lock, CreditCard, Phone, Database, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
 export function PrivacyPage() {
@@ -19,9 +19,9 @@ export function PrivacyPage() {
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-2xl sm:text-3xl font-extrabold tracking-tight">Privacy Policy</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl font-extrabold tracking-tight">Privacy Policy (v2.0)</CardTitle>
               <CardDescription className="text-xs text-muted-foreground mt-1">
-                Last updated: July 2026 • Detailed breakdown of data collected, used, and stored by TicketRadar
+                Last updated: September 2026 • Multi-Channel Telephony & Payment Data Protection Policy
               </CardDescription>
             </div>
           </div>
@@ -32,10 +32,10 @@ export function PrivacyPage() {
           <section className="space-y-3">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block"></span>
-              1. Overview
+              1. Overview & Commitment
             </h3>
             <p className="text-muted-foreground">
-              TicketRadar respects your privacy and is committed to transparency. This Privacy Policy details the specific data we collect, including your user profile details and full task monitoring configurations, how we utilize this information to deliver real-time ticket availability alerts, and your options to manage or delete your data.
+              TicketRadar respects your privacy and is strictly committed to data protection. This Privacy Policy details the specific data we collect, including user accounts, phone numbers, explicit consent audit records, and digital payment ledger transactions, how we utilize this information to deliver real-time ticket availability alerts, and your options to manage or delete your data.
             </p>
           </section>
 
@@ -46,7 +46,7 @@ export function PrivacyPage() {
               2. User Account Data Collected
             </h3>
             <p className="text-muted-foreground">
-              When you authenticate with TicketRadar via Google OAuth, we collect limited profile data necessary to establish your account identity, authorize dashboard access, and personalize your experience:
+              When you authenticate with TicketRadar via Google OAuth, we collect limited profile data necessary to establish your account identity and personalize your experience:
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
               <div className="bg-muted/20 border border-border/50 rounded-xl p-3.5 space-y-1">
@@ -61,7 +61,7 @@ export function PrivacyPage() {
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                   User Email Address
                 </div>
-                <p className="text-xs text-muted-foreground">Your primary Google account email used for login and alert delivery.</p>
+                <p className="text-xs text-muted-foreground">Your primary Google account email used for authentication and alert delivery.</p>
               </div>
               <div className="bg-muted/20 border border-border/50 rounded-xl p-3.5 space-y-1">
                 <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -71,62 +71,22 @@ export function PrivacyPage() {
                 <p className="text-xs text-muted-foreground">URL to your Google avatar picture used for UI avatar display.</p>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground pt-1">
-              <em>Note: We also store a unique internal user identifier (Firebase Auth UID) and authorization claims (such as admin or user status) linked to your account.</em>
-            </p>
           </section>
 
           {/* Section 3 */}
           <section className="space-y-3">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-              <ListCheck className="h-4 w-4 text-emerald-400" />
-              3. Task & Monitoring Details Collected
+              <Phone className="h-4 w-4 text-emerald-400" />
+              3. Telephony, Phone Numbers & Consent Records
             </h3>
-            <p className="text-muted-foreground">
-              When you set up or run ticket monitoring alerts on TicketRadar, we store and process comprehensive task configuration and status details:
-            </p>
-            <div className="bg-muted/20 border border-border/50 rounded-xl p-4 space-y-3">
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Monitored URL:</strong> Target event or movie booking link (e.g., BookMyShow URL).</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Movie / Event Title:</strong> Name of the movie or show selected for monitoring.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Target Show Date(s):</strong> Selected dates (`date_str`) for ticket availability checks.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Selected Theatres:</strong> List of specific cinema locations or venues configured for alerts.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Service Provider:</strong> The ticketing provider platform monitored (e.g., BookMyShow).</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Notification Medium:</strong> Your chosen alert delivery method (Email or Discord Webhook).</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Notification Destination:</strong> Configured recipient email address or Discord webhook endpoint URL.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Polling Interval:</strong> Configured check frequency in seconds (minimum 1 minute).</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Task Status & Timestamps:</strong> Creation time, active/paused status, and last checked timestamp.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                  <span><strong>Execution & Audit Logs:</strong> Outcome of the latest check (e.g., "Available", "Not Found", or error diagnostic details).</span>
-                </li>
+            <div className="text-muted-foreground space-y-2">
+              <p>
+                When you configure SMS, WhatsApp, or Automated Phone Call alerts:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs">
+                <li><strong>Indian Phone Numbers:</strong> We collect and normalize your phone number under the E.164 standard (+91). Phone numbers are stored in encrypted format and redacted in administrative logs (e.g. `+91 98*** **210`).</li>
+                <li><strong>Consent Logging:</strong> In compliance with TRAI and telecom guidelines, we record immutable consent timestamps and IP metadata for opt-in and opt-out actions in our `notification_consents` collection.</li>
+                <li><strong>Delivery Telemetry:</strong> Transmission to carrier networks is brokered securely via Twilio Inc. Calls and messages contain strictly ticket availability information. We never record your personal voice or conversation.</li>
               </ul>
             </div>
           </section>
@@ -134,33 +94,36 @@ export function PrivacyPage() {
           {/* Section 4 */}
           <section className="space-y-3">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-              <Server className="h-4 w-4 text-emerald-400" />
-              4. System Security & Operational Data
+              <CreditCard className="h-4 w-4 text-emerald-400" />
+              4. Payment & Financial Data Safeguards
             </h3>
-            <p className="text-muted-foreground">
-              To guarantee service stability and protect against unauthorized automated requests, we record essential diagnostic data:
-            </p>
-            <ul className="list-disc pl-5 space-y-1 text-muted-foreground text-xs">
-              <li><strong>App Check & reCAPTCHA Enterprise Tokens:</strong> Verification tokens to validate request authenticity and prevent abuse.</li>
-              <li><strong>Security & Network Headers:</strong> Technical logs including IP security headers and request origins during authentication or task dispatch.</li>
-            </ul>
+            <div className="text-muted-foreground space-y-2">
+              <p>
+                TicketRadar does <strong>NOT collect, store, or process raw payment instrument details</strong> such as credit/debit card numbers, CVVs, or UPI PINs.
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs">
+                <li>All payment checkouts and card transactions are handled directly by <strong>Cashfree Payments India Pvt. Ltd.</strong>, a PCI-DSS compliant, RBI-authorized payment aggregator.</li>
+                <li>TicketRadar only stores payment references (gateway order ID, payment transaction ID, timestamp, and amount in paise) to credit your digital wallet or verify job payments.</li>
+                <li>Internal wallet balances and transactions are tracked via an immutable append-only ledger in our database.</li>
+              </ul>
+            </div>
           </section>
 
           {/* Section 5 */}
           <section className="space-y-3">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <Lock className="h-4 w-4 text-emerald-400" />
-              5. How We Use Your Information & Zero Third-Party Selling
+              5. How We Use Your Information & Zero Advertising
             </h3>
             <div className="text-muted-foreground space-y-2">
-              <p>Your data is used strictly for the following functional purposes:</p>
+              <p>Your data is used strictly for the following operational purposes:</p>
               <ul className="list-disc pl-5 space-y-1 text-xs">
-                <li>To execute scheduled automated ticket availability checks on public cinema listings according to your task parameters.</li>
-                <li>To send instant alerts to your designated email or Discord webhook when tickets become available.</li>
-                <li>To display your task list, status metrics, and check logs on your personal dashboard.</li>
+                <li>To execute automated availability checks against public cinema listings according to your task parameters.</li>
+                <li>To transmit notifications to your configured channels (Email, Discord, SMS, WhatsApp, Phone Call).</li>
+                <li>To maintain your wallet credit ledger and process automated refund rollbacks for cancelled tasks or delivery failures.</li>
               </ul>
               <p className="pt-2">
-                <strong>We NEVER sell, rent, trade, or monetize your personal information or task data.</strong> We do not use your data for advertising, marketing campaigns, tracking, or profiling across third-party websites.
+                <strong>We NEVER sell, rent, trade, or monetize your personal information or phone numbers.</strong> We do not serve third-party ads, nor do we share your data with marketing or analytics data brokers.
               </p>
             </div>
           </section>
@@ -172,7 +135,7 @@ export function PrivacyPage() {
               6. Data Storage & Security Safeguards
             </h3>
             <p className="text-muted-foreground">
-              All stored user profiles and task configurations are secured using Google Firebase infrastructure with role-based access rules. Sensitive operational tokens and credentials are protected with industry-standard encryption standards. Public scraping routines inspect publicly accessible theatre web pages without exposing your identity.
+              All stored user profiles, wallet records, and task configurations are secured using Google Cloud Firestore infrastructure with robust security rules and role-based access control. All communication between your client and our API is encrypted via HTTPS/TLS 1.3.
             </p>
           </section>
 
@@ -180,14 +143,15 @@ export function PrivacyPage() {
           <section className="space-y-3">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <Trash2 className="h-4 w-4 text-emerald-400" />
-              7. Your Control & Data Deletion
+              7. Your Rights & Data Deletion
             </h3>
             <p className="text-muted-foreground">
-              You maintain full ownership and control of your data on TicketRadar:
+              You maintain full control over your personal data:
             </p>
             <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
-              <li><strong>Task Management:</strong> You can pause, edit, or permanently delete individual monitoring tasks directly from your dashboard at any time.</li>
-              <li><strong>Account & Data Purge:</strong> Deleting a task immediately stops all background checks and removes the task configuration and execution history. You can request complete account data deletion by contacting project maintainers via our repository.</li>
+              <li><strong>Revoking Consents:</strong> You can opt-out of SMS, WhatsApp, or Phone Call notifications at any time directly in your Profile.</li>
+              <li><strong>Task & Phone Deletion:</strong> You can remove or update your phone number, or delete monitoring jobs from your dashboard at any time.</li>
+              <li><strong>Full Account Deletion:</strong> You can request complete account deletion and purge of all associated records by contacting project maintainers.</li>
             </ul>
           </section>
 
@@ -200,4 +164,3 @@ export function PrivacyPage() {
     </main>
   );
 }
-

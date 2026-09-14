@@ -5,13 +5,15 @@ import threading
 import time
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
+from google.cloud import firestore
 
 from .job import MonitorJob
 from ..utils.logger import get_job_logger
 from ..services.scraper.factory import ScraperFactory
 from ..services.notification.factory import NotificationStrategyFactory
 from ..services.gcp_logger import gcp_logger, current_job_id, current_job_creator
+from ..services.wallet import WalletService
 
 logger = logging.getLogger(__name__)
 
@@ -64,34 +66,40 @@ class JobManager:
         return asyncio.Event()
 
     def _save_job_to_firestore(self, job: MonitorJob) -> None:
-        """Upserts a MonitorJob document into the Firestore 'jobs' collection."""
+        """Upserts a MonitorJob document into Firestore ('notification_jobs' and 'jobs')."""
         try:
             from .auth import db
             if db:
-                db.collection("jobs").document(job.id).set(job.to_dict(), merge=True)
+                data = job.to_dict()
+                db.collection("notification_jobs").document(job.id).set(data, merge=True)
+                db.collection("jobs").document(job.id).set(data, merge=True)
                 logger.debug(f"Saved job {job.id} to Firestore.")
         except Exception as e:
             logger.error(f"Failed to save job {job.id} to Firestore: {e}")
 
     def _delete_job_from_firestore(self, job_id: str) -> None:
-        """Deletes a job document from the Firestore 'jobs' collection."""
+        """Deletes a job document from Firestore ('notification_jobs' and 'jobs')."""
         try:
             from .auth import db
             if db:
+                db.collection("notification_jobs").document(job_id).delete()
                 db.collection("jobs").document(job_id).delete()
                 logger.info(f"Deleted job {job_id} from Firestore.")
         except Exception as e:
             logger.error(f"Failed to delete job {job_id} from Firestore: {e}")
 
     def _load_jobs_from_firestore(self) -> None:
-        """Loads active/non-deleted jobs from the Firestore 'jobs' collection upon startup."""
+        """Loads active/non-deleted jobs from Firestore upon startup."""
         try:
             from .auth import db
             if not db:
                 logger.warning("Firestore client not available. Skipping job restoration from Firestore.")
                 return
 
-            docs = db.collection("jobs").stream()
+            docs = list(db.collection("notification_jobs").stream())
+            if not docs:
+                docs = list(db.collection("jobs").stream())
+
             loaded_count = 0
             with self.lock:
                 for doc in docs:
@@ -183,8 +191,129 @@ class JobManager:
             self._save_job_to_firestore(job)
             return True
 
-    def delete_job(self, job_id: str) -> bool:
-        """Stops and deletes a job, cleaning up its files and references."""
+    def claim_cancellation(self, job_id: str) -> dict:
+        """
+        Transactional claim for job cancellation to prevent race with notification dispatch.
+        Returns:
+            {"ok": False, "reason": "notification_in_progress"}
+            {"ok": True, "refund": False}  # already delivered
+            {"ok": True, "refund": True}   # eligible for refund
+        """
+        from .auth import db
+        job = self.get_job(job_id)
+        if job and job.notification_status == "dispatched":
+            return {"ok": False, "reason": "notification_in_progress"}
+        if job and job.notification_sent:
+            return {"ok": True, "refund": False}
+
+        if db:
+            job_ref = db.collection("notification_jobs").document(job_id)
+            try:
+                @firestore.transactional
+                def _txn_cancel(transaction):
+                    snap = job_ref.get(transaction=transaction)
+                    if not snap.exists:
+                        if job and job.notification_sent:
+                            return {"ok": True, "refund": False}
+                        return {"ok": True, "refund": True}
+                    data = snap.to_dict() or {}
+                    if data.get("notification_status") == "dispatched":
+                        return {"ok": False, "reason": "notification_in_progress"}
+                    if data.get("notification_sent"):
+                        return {"ok": True, "refund": False}
+                    transaction.update(job_ref, {
+                        "status": "cancelling",
+                        "updated_at": firestore.SERVER_TIMESTAMP,
+                    })
+                    return {"ok": True, "refund": True}
+
+                return _txn_cancel(db.transaction())
+            except Exception as e:
+                logger.error(f"Error in claim_cancellation transaction for {job_id}: {e}")
+                if job:
+                    if job.notification_status == "dispatched":
+                        return {"ok": False, "reason": "notification_in_progress"}
+                    if job.notification_sent:
+                        return {"ok": True, "refund": False}
+                return {"ok": True, "refund": True}
+
+        return {"ok": True, "refund": not (job and job.notification_sent)}
+
+    def claim_notification_slot(self, job: MonitorJob) -> bool:
+        """
+        Transactional claim before dispatching notification.
+        Prevents race condition with job cancellation.
+        """
+        from .auth import db
+        with job._lock:
+            if job.status in ("Stopped", "Cancelling"):
+                return False
+            if job.notification_sent:
+                return False
+            if job.notification_status == "dispatched":
+                return False
+
+        if db:
+            job_ref = db.collection("notification_jobs").document(job.id)
+            try:
+                @firestore.transactional
+                def _txn_claim(transaction):
+                    snap = job_ref.get(transaction=transaction)
+                    if not snap.exists:
+                        return True
+                    data = snap.to_dict() or {}
+                    st = str(data.get("status", "")).lower()
+                    if st in ("stopped", "cancelling", "deleted"):
+                        return False
+                    if data.get("notification_sent"):
+                        return False
+                    if data.get("notification_status") == "dispatched":
+                        return False
+                    transaction.update(job_ref, {
+                        "notification_status": "dispatched",
+                        "notification_dispatched_at": firestore.SERVER_TIMESTAMP,
+                    })
+                    return True
+
+                claimed = _txn_claim(db.transaction())
+                if not claimed:
+                    return False
+            except Exception as e:
+                logger.error(f"Error in claim_notification_slot transaction for {job.id}: {e}")
+
+        with job._lock:
+            job.notification_status = "dispatched"
+            job.notification_dispatched_at = datetime.now(timezone.utc)
+        self._save_job_to_firestore(job)
+        return True
+
+    def delete_job(self, job_id: str, refund_eligible: Optional[bool] = None) -> bool:
+        """Stops and deletes a job, processing cancellation refunds if eligible."""
+        job = self.get_job(job_id)
+        if job:
+            if refund_eligible is None:
+                claim_res = self.claim_cancellation(job_id)
+                if not claim_res.get("ok"):
+                    logger.warning(f"Cannot delete job {job_id}: {claim_res.get('reason')}")
+                    return False
+                refund_eligible = claim_res.get("refund", False)
+
+            # If not delivered, not already refunded, price > 0, and refund_eligible -> refund to wallet
+            if refund_eligible and job.price_paise > 0 and not job.notification_sent and not job.refund_issued and job.created_by:
+                try:
+                    WalletService.credit(
+                        uid=job.created_by,
+                        amount_paise=job.price_paise,
+                        txn_type="JOB_REFUND",
+                        description=f"Refund for job #{job.id}: job cancelled before notification",
+                        idempotency_key=f"cancel_refund_{job.id}",
+                        job_id=job.id,
+                    )
+                    job.refund_issued = True
+                    logger.info(f"Cancellation refund issued for job {job.id}.")
+                except Exception as re:
+                    logger.error(f"Failed to issue cancel refund for {job.id}: {re}")
+
         self.stop_job(job_id)
         
         # Give a small window for the loop to register the event and exit
@@ -256,75 +385,212 @@ class JobManager:
                     break
 
                 if success:
-                    # Attempt to send notification asynchronously
+                    # 1. Concurrency protection & deduplication claim
+                    if not self.claim_notification_slot(job):
+                        job_logger.info("Notification slot could not be claimed (job cancelled or already sent). Skipping dispatch.")
+                        break
+
+                    # 2. Consent verification for regulated channels
+                    medium_norm = job.notification_medium.lower().replace(" ", "_")
+                    consent_ok = True
+                    if medium_norm in ("whatsapp", "sms", "phone_call", "call") and job.created_by:
+                        try:
+                            from .auth import db
+                            if db:
+                                cdoc = db.collection("notification_consents").document(job.created_by).get()
+                                if cdoc.exists:
+                                    cdata = cdoc.to_dict() or {}
+                                    if "whatsapp" in medium_norm and cdata.get("whatsapp_consented") is False:
+                                        consent_ok = False
+                                    elif "sms" in medium_norm and cdata.get("sms_consented") is False:
+                                        consent_ok = False
+                                    elif ("call" in medium_norm or "phone" in medium_norm) and (cdata.get("call_consented") is False and cdata.get("phone_call_consented") is False):
+                                        consent_ok = False
+                        except Exception as ce:
+                            job_logger.warning(f"Error checking user consent: {ce}")
+
+                    if not consent_ok:
+                        job_logger.warning("Consent revoked by user before notification dispatch. Aborting delivery.")
+                        job.update_state("Error", "Notification aborted: user consent revoked.")
+                        job.notification_status = "failed"
+                        if job.price_paise > 0 and not job.refund_issued and job.created_by:
+                            try:
+                                WalletService.credit(
+                                    uid=job.created_by,
+                                    amount_paise=job.price_paise,
+                                    txn_type="JOB_REFUND",
+                                    description=f"Refund for job #{job.id}: consent revoked",
+                                    idempotency_key=f"consent_revoke_refund_{job.id}",
+                                    job_id=job.id,
+                                )
+                                job.refund_issued = True
+                            except Exception as re:
+                                job_logger.error(f"Failed to issue consent revoke refund: {re}")
+                        self._save_job_to_firestore(job)
+                        break
+
+                    # 3. Retries: up to 3 attempts without delay on failures
+                    max_attempts = 3
+                    notif_success = False
+                    notif_msg = ""
+                    notifier = None
+
                     try:
+                        notif_cfg = dict(job.notification_config)
+                        if job.phone_number and "phone_number" not in notif_cfg:
+                            notif_cfg["phone_number"] = job.phone_number
+
                         notifier = NotificationStrategyFactory.create_strategy(
                             job.notification_medium,
-                            job.notification_config
+                            notif_cfg,
+                            job_id=job.id
                         )
+                    except Exception as ne:
+                        job_logger.error(f"Failed to create notification strategy: {ne}")
+                        notif_msg = str(ne)
 
+                    if notifier:
+                        import re
+                        from ..utils.redact import redact_phone
                         subject = f"TicketRadar: Booking Open for {job.date_str}!"
+                        for attempt in range(1, max_attempts + 1):
+                            job.notification_attempt_count = attempt
+                            try:
+                                notif_success, notif_msg = await notifier.send_notification(
+                                    subject=subject,
+                                    movie_name=job.movie_name,
+                                    date_str=job.date_str,
+                                    available_theatres=available,
+                                    unavailable_theatres=unavailable,
+                                    url=job.url,
+                                    language=job.language,
+                                    format_name=job.format_name
+                                )
+                            except Exception as notif_err:
+                                notif_success = False
+                                notif_msg = str(notif_err)
 
-                        notif_success, notif_msg = await notifier.send_notification(
-                            subject=subject,
-                            movie_name=job.movie_name,
-                            date_str=job.date_str,
-                            available_theatres=available,
-                            unavailable_theatres=unavailable,
-                            url=job.url,
-                            language=job.language,
-                            format_name=job.format_name
+                            # Extract provider SID if available
+                            provider_sid = None
+                            sid_match = re.search(r'(?:SID|Call SID):\s*([A-Za-z0-9_]+)', notif_msg)
+                            if sid_match:
+                                provider_sid = sid_match.group(1)
+
+                            # Record attempt in channel state
+                            try:
+                                from .auth import db
+                                if db:
+                                    ch_data = {
+                                        "job_id": job.id,
+                                        "uid": job.created_by,
+                                        "medium": job.notification_medium,
+                                        "attempt_count": attempt,
+                                        "last_attempt_at": firestore.SERVER_TIMESTAMP,
+                                        "last_attempt_outcome": notif_msg,
+                                    }
+                                    if provider_sid:
+                                        ch_data["current_attempt_provider_id"] = provider_sid
+                                    db.collection("notification_job_channels").document(job.id).set(ch_data, merge=True)
+
+                                    # Create tracking doc for provider callbacks
+                                    if provider_sid:
+                                        if "call" in medium_norm or "phone" in medium_norm:
+                                            db.collection("twilio_calls").document(provider_sid).set({
+                                                "call_sid": provider_sid,
+                                                "job_id": job.id,
+                                                "uid": job.created_by,
+                                                "to_number_redacted": redact_phone(job.phone_number),
+                                                "status": "initiated",
+                                                "call_outcome": "initiated",
+                                                "attempt_number": attempt,
+                                                "created_at": firestore.SERVER_TIMESTAMP,
+                                            }, merge=True)
+                                        else:
+                                            db.collection("twilio_messages").document(provider_sid).set({
+                                                "message_sid": provider_sid,
+                                                "job_id": job.id,
+                                                "uid": job.created_by,
+                                                "medium": "sms" if "sms" in medium_norm else "whatsapp",
+                                                "to_number_redacted": redact_phone(job.phone_number),
+                                                "status": "sent",
+                                                "attempt_number": attempt,
+                                                "created_at": firestore.SERVER_TIMESTAMP,
+                                            }, merge=True)
+                            except Exception:
+                                pass
+
+                            if notif_success:
+                                break
+                            else:
+                                job_logger.warning(f"Notification attempt {attempt}/{max_attempts} failed: {notif_msg}")
+
+                    # 4. Handle notification dispatch outcome
+                    if notif_success:
+                        job_logger.info(
+                            f"📣 Alert dispatched via {job.notification_medium.upper()}!"
                         )
-
-                        if notif_success:
-                            job_logger.info(
-                                f"📣  Alert sent via {job.notification_medium.upper()}! "
-                                f"Check your inbox / Discord."
-                            )
-                            status_msg = f"{details} Alert delivered."
-                            if unavailable:
-                                status_msg += " Tracking paused — resume from dashboard to monitor remaining unavailable theatres."
-                            job.update_state("Success", status_msg, movie_name=movie_name)
-                            self._save_job_to_firestore(job)
-                            gcp_logger.log_event(
-                                "Ticket Booking Alert Delivered",
-                                user_id=job.created_by or "system",
-                                details={
-                                    "job_id": job.id,
-                                    "task_creator": creator_email,
-                                    "movie_name": job.movie_name,
-                                    "available_theatres": available,
-                                    "notification_medium": job.notification_medium,
-                                    "date_str": job.date_str
-                                }
-                            )
+                        if medium_norm in ("email", "discord", "discord_webhook"):
+                            job.notification_sent = True
+                            job.notification_status = "delivered"
+                            job.notification_delivered_at = datetime.now(timezone.utc)
                         else:
-                            job_logger.error(
-                                f"⚠️  Tickets found but the alert could not be delivered. "
-                                f"Reason: {notif_msg}"
-                            )
-                            job.update_state("Error", f"{details} Alert failed: {notif_msg}", movie_name=movie_name)
-                            self._save_job_to_firestore(job)
-                            gcp_logger.log_event(
-                                "Ticket Booking Alert Delivery Failed",
-                                user_id=job.created_by or "system",
-                                details={
-                                    "job_id": job.id,
-                                    "task_creator": creator_email,
-                                    "movie_name": job.movie_name,
-                                    "reason": notif_msg
-                                },
-                                level="ERROR"
-                            )
+                            job.notification_status = "dispatched"
+                            job.notification_dispatched_at = datetime.now(timezone.utc)
 
-                    except Exception as notif_err:
-                        job_logger.error(
-                            f"⚠️  Tickets found but an error occurred while sending the alert. ({notif_err})"
-                        )
-                        job.update_state("Error", f"{details} Alert error: {str(notif_err)}", movie_name=movie_name)
+                        status_msg = f"{details} Alert sent."
+                        if unavailable:
+                            status_msg += " Tracking paused — resume from dashboard to monitor remaining unavailable theatres."
+                        job.update_state("Success", status_msg, movie_name=movie_name)
                         self._save_job_to_firestore(job)
+                        gcp_logger.log_event(
+                            "Ticket Booking Alert Delivered",
+                            user_id=job.created_by or "system",
+                            details={
+                                "job_id": job.id,
+                                "task_creator": creator_email,
+                                "movie_name": job.movie_name,
+                                "available_theatres": available,
+                                "notification_medium": job.notification_medium,
+                                "date_str": job.date_str
+                            }
+                        )
+                    else:
+                        job_logger.error(
+                            f"⚠️ Tickets found but alert failed after {job.notification_attempt_count} attempts. Reason: {notif_msg}"
+                        )
+                        job.notification_status = "failed"
+                        job.update_state("Error", f"{details} Alert failed: {notif_msg}", movie_name=movie_name)
 
-                    # Stop monitoring once booking is successfully found
+                        # Auto-refund if paid and not yet refunded
+                        if job.price_paise > 0 and not job.refund_issued and job.created_by:
+                            try:
+                                WalletService.credit(
+                                    uid=job.created_by,
+                                    amount_paise=job.price_paise,
+                                    txn_type="JOB_REFUND",
+                                    description=f"Refund for job #{job.id}: notification delivery failure",
+                                    idempotency_key=f"notif_fail_refund_{job.id}",
+                                    job_id=job.id,
+                                )
+                                job.refund_issued = True
+                                job_logger.info(f"Wallet refund of ₹{job.price_paise/100:.2f} issued for failed job #{job.id}.")
+                            except Exception as rerr:
+                                job_logger.error(f"Failed to issue failure refund for job #{job.id}: {rerr}")
+
+                        self._save_job_to_firestore(job)
+                        gcp_logger.log_event(
+                            "Ticket Booking Alert Delivery Failed",
+                            user_id=job.created_by or "system",
+                            details={
+                                "job_id": job.id,
+                                "task_creator": creator_email,
+                                "movie_name": job.movie_name,
+                                "reason": notif_msg
+                            },
+                            level="ERROR"
+                        )
+
+                    # Stop monitoring once booking is successfully processed
                     break
 
                 else:

@@ -18,7 +18,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from lib.core.monitor import JobManager
-from api.routers import config, jobs, auth, admin, bms_proxy
+from api.routers import (
+    config,
+    jobs,
+    auth,
+    admin,
+    bms_proxy,
+    wallet,
+    payments,
+    profile,
+    consent,
+    terms,
+    twilio_webhooks,
+    cashfree_webhooks,
+)
 
 # Initialize logger
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +70,13 @@ app.include_router(jobs.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(bms_proxy.router)
+app.include_router(wallet.router)
+app.include_router(payments.router)
+app.include_router(profile.router)
+app.include_router(consent.router)
+app.include_router(terms.router)
+app.include_router(twilio_webhooks.router)
+app.include_router(cashfree_webhooks.router)
 
 
 

@@ -1,22 +1,25 @@
-# src/Backend/api/routers/jobs.py
-
 import json
 import hashlib
 import logging
+import os
+import uuid
 from typing import List, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from lib.utils.config import config_error
+from lib.utils.config import config_error, settings
 from lib.core.job import MonitorJob
 from lib.core.monitor import JobManager
 from lib.services.scraper.factory import ScraperFactory
 from lib.services.notification import admin_notifier
 from lib.services.gcp_logger import gcp_logger
-from lib.core.auth import get_authorized_user
+from lib.core.auth import get_authorized_user, db
+from lib.utils.phone import normalize_indian_phone
+from lib.services.pricing import PricingService
+from lib.services.wallet import WalletService, InsufficientFundsError
 from api.schemas import CreateJobRequest, UpdateJobRequest, JobParams
-from api.dependencies import verify_recaptcha, get_user_details
+from api.dependencies import verify_recaptcha, get_user_details, require_terms_accepted
 
 logger = logging.getLogger("ticketradar.api")
 manager = JobManager()
@@ -196,28 +199,100 @@ async def create_job(
     except Exception:
         raise HTTPException(status_code=400, detail=f"Unsupported service provider: {service_provider}")
 
+    # Check terms acceptance
+    await require_terms_accepted(claims)
+
     # Validate parameters
     url = validate_job_url(service_provider, payload.params.url)
-
     params = _extract_job_params(payload.params, url)
 
-    medium = payload.notification_medium.strip().lower()
-    notif_config = {}
-    if "email" in medium:
+    medium_raw = payload.notification_medium.strip().lower().replace(" ", "_")
+    notif_config = dict(payload.notification_config)
+    phone = payload.phone_number
+
+    if "email" in medium_raw:
         recipient = payload.notification_config.get("recipient_email", "").strip()
         if not recipient:
             raise HTTPException(status_code=400, detail="Recipient email is required for Email notification.")
         notif_config = {"recipient_email": recipient}
         medium_name = "Email"
-    else:
+    elif "discord" in medium_raw:
         webhook = payload.notification_config.get("webhook_url", "").strip()
         if not webhook:
             raise HTTPException(status_code=400, detail="Discord Webhook URL is required for Webhook notification.")
         notif_config = {"webhook_url": webhook}
         medium_name = "Discord Webhook"
+    elif medium_raw in ("sms", "whatsapp", "phone_call", "call"):
+        phone_input = phone or payload.notification_config.get("phone_number") or payload.notification_config.get("phone", "")
+        if not phone_input:
+            raise HTTPException(status_code=400, detail="Phone number is required for SMS, WhatsApp, and Phone Call.")
+        try:
+            phone = normalize_indian_phone(phone_input)
+            notif_config["phone_number"] = phone
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+
+        # Check consent in Firestore if available
+        if db:
+            c_doc = db.collection("notification_consents").document(claims.get("uid")).get()
+            cdata = c_doc.to_dict() or {} if c_doc.exists else {}
+            if medium_raw == "whatsapp" and not (payload.whatsapp_consent or cdata.get("whatsapp_consented")):
+                raise HTTPException(status_code=400, detail="WhatsApp consent is required. Please opt-in in your Profile.")
+            elif medium_raw == "sms" and not (payload.sms_consent or cdata.get("sms_consented")):
+                raise HTTPException(status_code=400, detail="SMS consent is required. Please opt-in in your Profile.")
+            elif medium_raw in ("phone_call", "call") and not (payload.call_consent or cdata.get("call_consented")):
+                raise HTTPException(status_code=400, detail="Phone Call consent is required. Please opt-in in your Profile.")
+
+        if medium_raw == "sms":
+            medium_name = "SMS"
+        elif medium_raw == "whatsapp":
+            medium_name = "WhatsApp"
+        else:
+            medium_name = "Phone Call"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported notification medium: {payload.notification_medium}")
 
     # Fetch creator details
     user_name, email, _ = get_user_details(claims.get("uid"), claims)
+
+    # Pricing & Payment handling
+    disable_payments = (
+        os.getenv("DISABLE_PAYMENTS", "").lower() in ("true", "1")
+        or (settings and getattr(settings, "disable_payments", False))
+    )
+
+    price_paise = 0
+    price_config_id = None
+    payment_method = "free" if disable_payments else payload.payment_method.lower()
+
+    temp_job_id = str(uuid.uuid4())[:8]
+    debited_wallet = False
+
+    if not disable_payments:
+        price_paise, price_config_id = PricingService.get_price_for_medium(medium_name)
+        if price_paise > 0:
+            if payment_method == "wallet":
+                idempotency_key = f"job_pay_{temp_job_id}"
+                try:
+                    WalletService.debit(
+                        uid=claims.get("uid"),
+                        amount_paise=price_paise,
+                        txn_type="JOB_PAYMENT",
+                        description=f"Payment for {medium_name} monitor #{temp_job_id}",
+                        idempotency_key=idempotency_key,
+                        job_id=temp_job_id,
+                        created_by=f"user:{claims.get('uid')}",
+                    )
+                    debited_wallet = True
+                except InsufficientFundsError as ife:
+                    raise HTTPException(status_code=402, detail=str(ife))
+            elif payment_method == "cashfree":
+                raise HTTPException(
+                    status_code=400,
+                    detail="For Cashfree direct payment, initiate checkout via /api/payments/job/initiate."
+                )
+            else:
+                payment_method = "wallet"
 
     # Create Monitor Job
     new_job = MonitorJob(
@@ -227,7 +302,14 @@ async def create_job(
         service_provider=service_provider,
         check_interval=payload.check_interval,
         created_by=claims.get("uid"),
-        creator_email=email
+        creator_email=email,
+        phone_number=phone if medium_raw in ("sms", "whatsapp", "phone_call", "call") else None,
+        sms_consent=payload.sms_consent,
+        call_consent=payload.call_consent,
+        payment_method=payment_method,
+        price_paise=price_paise,
+        price_config_id=price_config_id,
+        job_id=temp_job_id,
     )
 
     success = manager.start_job(new_job)
@@ -253,11 +335,27 @@ async def create_job(
                 "date_str": payload.params.date_str,
                 "check_interval": payload.check_interval,
                 "notification_medium": medium_name,
+                "payment_method": payment_method,
+                "price_paise": price_paise,
                 "user_email": email
             }
         )
         return new_job.get_state()
     else:
+        # Rollback wallet debit if started failed
+        if debited_wallet:
+            try:
+                WalletService.credit(
+                    uid=claims.get("uid"),
+                    amount_paise=price_paise,
+                    txn_type="JOB_REFUND",
+                    description=f"Auto-rollback for failed start of job #{temp_job_id}",
+                    idempotency_key=f"cancel_job_pay_rollback_{temp_job_id}",
+                    job_id=temp_job_id,
+                )
+            except Exception as rollback_err:
+                logger.error(f"Failed to rollback wallet debit for {temp_job_id}: {rollback_err}")
+
         raise HTTPException(status_code=500, detail="Failed to start monitoring job. An active thread might already be running.")
 
 
@@ -332,7 +430,16 @@ async def delete_job(
 ):
     """Deletes a job."""
     job = verify_job_access(job_id, claims)
-    success = manager.delete_job(job_id)
+
+    claim_res = manager.claim_cancellation(job_id)
+    if not claim_res.get("ok"):
+        raise HTTPException(
+            status_code=409,
+            detail="Notification is currently being dispatched. Cannot cancel now."
+        )
+
+    refund_eligible = claim_res.get("refund", False)
+    success = manager.delete_job(job_id, refund_eligible=refund_eligible)
     if success:
         user_name, email, _ = get_user_details(claims.get("uid"), claims)
         background_tasks.add_task(
@@ -368,16 +475,8 @@ async def update_job(
 ):
     """
     Update a monitor job owned by the authenticated user and apply its new monitoring configuration.
-    
-    Parameters:
-    	job_id (str): Identifier of the job to update.
-    	payload (UpdateJobRequest): Updated monitoring, provider, scheduling, and notification settings.
-    	claims (dict): Authenticated user claims used to verify job ownership.
-    
-    Returns:
-    	dict: A success response containing a confirmation message and the updated job state.
     """
-    job = manager.get_job(job_id)
+    job = verify_job_access(job_id, claims)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
 
@@ -406,19 +505,45 @@ async def update_job(
 
     params = _extract_job_params(payload.params, url)
 
-    medium = payload.notification_medium.strip().lower()
+    medium = payload.notification_medium.strip().lower().replace(" ", "_")
+    notif_config = {}
+    phone = None
+
     if "email" in medium:
         recipient = payload.notification_config.get("recipient_email", "").strip()
         if not recipient:
             raise HTTPException(status_code=400, detail="Recipient email is required for Email notification.")
         notif_config = {"recipient_email": recipient}
         medium_name = "Email"
-    else:
+    elif "discord" in medium:
         webhook = payload.notification_config.get("webhook_url", "").strip()
         if not webhook:
             raise HTTPException(status_code=400, detail="Discord Webhook URL is required for Webhook notification.")
         notif_config = {"webhook_url": webhook}
         medium_name = "Discord Webhook"
+    elif medium in ("sms", "whatsapp", "phone_call", "call"):
+        phone_input = (
+            payload.notification_config.get("phone_number")
+            or payload.notification_config.get("phone")
+            or getattr(payload, "phone_number", None)
+            or job.phone_number
+        )
+        if not phone_input:
+            raise HTTPException(status_code=400, detail="Phone number is required for SMS, WhatsApp, and Phone Call.")
+        try:
+            phone = normalize_indian_phone(str(phone_input))
+            notif_config = {"phone_number": phone}
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+
+        if medium == "sms":
+            medium_name = "SMS"
+        elif medium == "whatsapp":
+            medium_name = "WhatsApp"
+        else:
+            medium_name = "Phone Call"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported notification medium: {payload.notification_medium}")
 
     was_running = (job.status == "Running")
 
@@ -428,7 +553,8 @@ async def update_job(
         notification_medium=medium_name,
         notification_config=notif_config,
         service_provider=service_provider,
-        check_interval=payload.check_interval
+        check_interval=payload.check_interval,
+        phone_number=phone,
     )
 
     if was_running:
