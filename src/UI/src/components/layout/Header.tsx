@@ -144,7 +144,7 @@ export function Header({ user, claims, config }: HeaderProps) {
                       <Link
                         to="/admin"
                         onClick={() => setDropdownOpen(false)}
-                        className="flex w-full items-center gap-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold px-3 py-2 border border-rose-500/20 transition-colors cursor-pointer justify-center"
+                        className="w-full text-xs font-semibold h-9 flex items-center justify-center gap-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 transition-colors cursor-pointer"
                       >
                         <Shield className="h-3.5 w-3.5" />
                         Admin Panel
@@ -154,9 +154,9 @@ export function Header({ user, claims, config }: HeaderProps) {
                     <Link
                       to="/profile"
                       onClick={() => setDropdownOpen(false)}
-                      className="flex w-full items-center gap-2 rounded-lg bg-muted/30 hover:bg-muted/60 text-foreground text-xs font-medium px-3 py-2 border border-border/40 transition-colors cursor-pointer"
+                      className="w-full text-xs font-semibold h-9 flex items-center justify-center gap-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 transition-colors cursor-pointer"
                     >
-                      <UserIcon className="h-3.5 w-3.5 text-rose-400" />
+                      <UserIcon className="h-3.5 w-3.5" />
                       Profile
                     </Link>
 

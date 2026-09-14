@@ -208,9 +208,9 @@ async def notify_job_deleted(
     await send_admin_discord_embed(title, description, color, fields)
 
 
-# 8. Job Deleted / Stopped by Admin
+# 8. Job Deleted / Stopped / Started by Admin
 async def notify_job_admin_action(
-    action: str,  # "stopped" or "deleted"
+    action: str,  # "stopped", "deleted", or "started"
     job_id: str,
     movie_name: str,
     owner_user_name: str,
@@ -222,10 +222,11 @@ async def notify_job_admin_action(
     admin_email: str
 ):
     action_clean = action.capitalize()
-    icon = "🛡️"
+    is_started = action.lower() == "started"
+    icon = "▶️" if is_started else "🛡️"
     title = f"{icon} Job {action_clean} by Admin"
     description = f"Monitoring job **#{job_id}** was **{action.lower()}** by administrator **{admin_name or 'N/A'}**."
-    color = 0x7C3AED  # Purple
+    color = 0x10B981 if is_started else 0x7C3AED
     fields = [
         {"name": "Job ID", "value": job_id, "inline": True},
         {"name": "Movie Name", "value": movie_name or "N/A", "inline": True},
@@ -235,6 +236,9 @@ async def notify_job_admin_action(
         {"name": "Booking Platform", "value": booking_platform or "N/A", "inline": True},
         {"name": "Theatres List", "value": _format_theatres(theatres), "inline": False},
     ]
+    if is_started:
+        fields.insert(5, {"name": "User Charged", "value": "No (Admin Action)", "inline": True})
+
     await send_admin_discord_embed(title, description, color, fields)
 
 

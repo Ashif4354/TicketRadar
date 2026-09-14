@@ -164,3 +164,46 @@ async def test_admin_transactions_and_email_discord_pricing(admin_async_client):
     assert "total" in data
     assert "page" in data
 
+
+@pytest.mark.asyncio
+async def test_admin_start_job_free_of_charge(admin_async_client):
+    from lib.core.job import MonitorJob
+    from lib.services.wallet import WalletService
+    from main import manager
+
+    user_uid = "job-owner-user-999"
+    # User has 1000 paise in wallet
+    WalletService.credit(user_uid, 1000, "TOPUP", "Initial balance", "init_key_999")
+    initial_balance = WalletService.get_balance(user_uid)
+    assert initial_balance == 1000
+
+    test_job = MonitorJob(
+        params={"movie_url": "https://in.bookmyshow.com/movies/test/123", "theatres": ["PVR"], "date_str": "20261001"},
+        notification_medium="Email",
+        notification_config={"recipient_email": "user@example.com"},
+        created_by=user_uid,
+        creator_email="user@example.com"
+    )
+    test_job.status = "Stopped"
+    manager.jobs[test_job.id] = test_job
+
+    # Admin starts the job
+    res_start = await admin_async_client.post(f"/admin/jobs/{test_job.id}/start")
+    assert res_start.status_code == 200
+    assert res_start.json()["success"] is True
+    assert test_job.status == "Running"
+
+    # CRITICAL: Verify the user was NOT charged at all
+    assert WalletService.get_balance(user_uid) == initial_balance
+
+    # Calling start again when already running
+    res_again = await admin_async_client.post(f"/admin/jobs/{test_job.id}/start")
+    assert res_again.status_code == 200
+    assert "already running" in res_again.json()["message"]
+
+    # Clean up
+    manager.stop_job(test_job.id)
+    if test_job.id in manager.jobs:
+        del manager.jobs[test_job.id]
+
+

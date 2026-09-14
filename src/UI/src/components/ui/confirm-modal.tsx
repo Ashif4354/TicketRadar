@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Pause, Trash2, StopCircle, X } from 'lucide-react';
+import { AlertTriangle, Pause, Trash2, StopCircle, Play, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export interface ConfirmModalProps {
@@ -10,8 +10,8 @@ export interface ConfirmModalProps {
   description: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
-  variant?: 'danger' | 'warning' | 'info';
-  icon?: 'pause' | 'delete' | 'stop' | 'warning';
+  variant?: 'danger' | 'warning' | 'info' | 'success';
+  icon?: 'pause' | 'delete' | 'stop' | 'warning' | 'play';
   isLoading?: boolean;
 }
 
@@ -49,6 +49,12 @@ export function ConfirmModal({
             <StopCircle className="h-5 w-5" />
           </div>
         );
+      case 'play':
+        return (
+          <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <Play className="h-5 w-5 fill-current" />
+          </div>
+        );
       case 'warning':
       default:
         return (
@@ -62,6 +68,9 @@ export function ConfirmModal({
   const getConfirmButtonStyle = () => {
     if (variant === 'danger') {
       return "bg-rose-600 hover:bg-rose-500 text-white font-bold";
+    }
+    if (variant === 'success') {
+      return "bg-emerald-600 hover:bg-emerald-500 text-white font-bold";
     }
     return "bg-amber-600 hover:bg-amber-500 text-white font-bold";
   };

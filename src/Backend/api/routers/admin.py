@@ -344,6 +344,54 @@ async def admin_deny_request(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/jobs/{job_id}/start")
+async def admin_start_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    admin_claims: dict = Depends(get_admin_user)
+):
+    """Starts or restarts any stopped or non-started job without charging the user."""
+    job = manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job #{job_id} not found.")
+
+    if job.status == "Running":
+        return {"success": True, "message": f"Job #{job_id} is already running.", "state": job.get_state()}
+
+    job.update_state("Idle", "Started by administrator (Free).")
+    success = manager.start_job(job)
+    if success:
+        owner_name, owner_email, _ = get_user_details(job.created_by if job else None)
+        admin_name, admin_email, _ = get_user_details(admin_claims.get("uid"), admin_claims)
+        background_tasks.add_task(
+            admin_notifier.notify_job_admin_action,
+            "started",
+            job.id,
+            job.movie_name,
+            owner_name,
+            owner_email,
+            job.service_provider,
+            job.theatres,
+            job.date_str,
+            admin_name,
+            admin_email
+        )
+        gcp_logger.log_event(
+            "Admin Job Started",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_email,
+                "job_id": job_id,
+                "movie_name": job.movie_name,
+                "owner_email": owner_email,
+                "charged": False
+            }
+        )
+        return {"success": True, "message": f"Job #{job_id} started by admin (free of charge).", "state": job.get_state()}
+    else:
+        raise HTTPException(status_code=500, detail=f"Failed to start job #{job_id}.")
+
+
 @router.post("/jobs/{job_id}/stop")
 async def admin_stop_job(
     job_id: str,

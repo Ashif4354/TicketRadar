@@ -4,7 +4,7 @@ import {
   Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, 
   LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock, 
   ExternalLink, Search, X, DollarSign, Wallet, RotateCcw, FileText, CheckCircle2,
-  ChevronLeft, ChevronRight, Filter
+  ChevronLeft, ChevronRight, Filter, Play
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -37,6 +37,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
   const [error, setError] = useState<string | null>(null);
   const [jobToStop, setJobToStop] = useState<any | null>(null);
   const [jobToDelete, setJobToDelete] = useState<any | null>(null);
+  const [jobToStart, setJobToStart] = useState<any | null>(null);
 
   // Pricing states
   const [pricingConfig, setPricingConfig] = useState<any>(null);
@@ -272,6 +273,23 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
     }
   };
 
+
+  const handleAdminStartJob = async (jobId: string) => {
+    setActionLoading(jobId);
+    try {
+      const res = await authenticatedFetch(`/admin/jobs/${jobId}/start`, { method: 'POST' });
+      if (res.ok) {
+        setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'Running', last_result: 'Started by Admin (Free)' } : j));
+      } else {
+        const data = await res.json();
+        alert(data.detail || "Failed to start job.");
+      }
+    } catch (e: any) {
+      alert("Error starting job: " + e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleAdminStopJob = async (jobId: string) => {
     setActionLoading(jobId);
@@ -1018,7 +1036,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                                   {j.status}
                                 </Badge>
 
-                                {j.status === 'Running' && (
+                                {j.status === 'Running' ? (
                                   <Button
                                     onClick={() => setJobToStop(j)}
                                     disabled={actionLoading !== null}
@@ -1027,6 +1045,16 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                                     className="h-7 px-2.5 text-[10px] font-bold cursor-pointer"
                                   >
                                     Stop
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    onClick={() => setJobToStart(j)}
+                                    disabled={actionLoading !== null}
+                                    size="sm"
+                                    className="h-7 px-2.5 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer gap-1"
+                                  >
+                                    <Play className="h-3 w-3 fill-current" />
+                                    Start
                                   </Button>
                                 )}
                                 <Button
@@ -1210,7 +1238,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                                   </div>
                                 </td>
                                 <td className="py-3.5 px-4 text-right space-x-2">
-                                  {j.status === 'Running' && (
+                                  {j.status === 'Running' ? (
                                     <Button
                                       onClick={() => setJobToStop(j)}
                                       disabled={actionLoading !== null}
@@ -1219,6 +1247,16 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                                       className="h-7 text-[10px] font-bold cursor-pointer"
                                     >
                                       Stop
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      onClick={() => setJobToStart(j)}
+                                      disabled={actionLoading !== null}
+                                      size="sm"
+                                      className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer gap-1"
+                                    >
+                                      <Play className="h-3 w-3 fill-current" />
+                                      Start
                                     </Button>
                                   )}
                                   <Button
@@ -1911,6 +1949,32 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
           )}
         </Card>
       )}
+
+      {/* Confirm Admin Start Job Modal */}
+      <ConfirmModal
+        isOpen={!!jobToStart}
+        onClose={() => setJobToStart(null)}
+        onConfirm={async () => {
+          if (jobToStart) {
+            await handleAdminStartJob(jobToStart.id);
+            setJobToStart(null);
+          }
+        }}
+        title="Start Monitoring Job"
+        description={
+          <>
+            Are you sure you want to start job <strong className="text-foreground font-mono">#{jobToStart?.id}</strong> ({jobToStart?.movie_name || 'Movie Tracker'})?
+            <span className="block mt-2 text-emerald-400 font-medium text-[11px] bg-emerald-500/10 border border-emerald-500/20 rounded-md p-2">
+              ✨ Admin Action: The user will NOT be charged for starting or running this monitor.
+            </span>
+          </>
+        }
+        confirmText="Start Job (Free)"
+        cancelText="Cancel"
+        variant="success"
+        icon="play"
+        isLoading={actionLoading === jobToStart?.id}
+      />
 
       {/* Confirm Admin Stop Job Modal */}
       <ConfirmModal
