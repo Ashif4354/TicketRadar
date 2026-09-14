@@ -73,16 +73,22 @@ class GCPLoggingService:
         cred_dict = {
             "type": settings.gcp_logging_type or "service_account",
             "project_id": settings.gcp_logging_project_id,
-            "private_key_id": settings.gcp_logging_private_key_id,
             "private_key": settings.gcp_logging_private_key.replace("\\n", "\n") if settings.gcp_logging_private_key else "",
             "client_email": settings.gcp_logging_client_email,
-            "client_id": settings.gcp_logging_client_id,
-            "auth_uri": settings.gcp_logging_auth_uri or "https://accounts.google.com/o/oauth2/auth",
             "token_uri": settings.gcp_logging_token_uri or "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": settings.gcp_logging_auth_provider_x509_cert_url or "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": settings.gcp_logging_client_x509_cert_url,
-            "universe_domain": getattr(settings, "gcp_logging_universe_domain", "googleapis.com") or "googleapis.com"
         }
+        if settings.gcp_logging_private_key_id:
+            cred_dict["private_key_id"] = settings.gcp_logging_private_key_id
+        if settings.gcp_logging_client_id:
+            cred_dict["client_id"] = settings.gcp_logging_client_id
+        if settings.gcp_logging_auth_uri:
+            cred_dict["auth_uri"] = settings.gcp_logging_auth_uri
+        if settings.gcp_logging_auth_provider_x509_cert_url:
+            cred_dict["auth_provider_x509_cert_url"] = settings.gcp_logging_auth_provider_x509_cert_url
+        if settings.gcp_logging_client_x509_cert_url:
+            cred_dict["client_x509_cert_url"] = settings.gcp_logging_client_x509_cert_url
+        if hasattr(settings, "gcp_logging_universe_domain") and settings.gcp_logging_universe_domain:
+            cred_dict["universe_domain"] = settings.gcp_logging_universe_domain
 
         if not cred_dict["project_id"] or not cred_dict["private_key"]:
             logger.warning("GCP Logging credentials missing in environment settings. GCP Logging disabled.")

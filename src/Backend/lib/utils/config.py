@@ -89,34 +89,34 @@ class Settings(BaseSettings):
     # reCAPTCHA Secret Key (used solely by the backend to verify tokens via Google siteverify API)
     recaptcha_secret: str = Field(default="")
 
-    # Firebase Configuration
-    firebase_type: str = Field(default="")
+    # Firebase Configuration (Essential: project_id, private_key, client_email)
     firebase_project_id: str = Field(default="")
-    firebase_private_key_id: str = Field(default="")
     firebase_private_key: str = Field(default="")
     firebase_client_email: str = Field(default="")
+    firebase_type: str = Field(default="service_account")
+    firebase_private_key_id: str = Field(default="")
     firebase_client_id: str = Field(default="")
-    firebase_auth_uri: str = Field(default="")
-    firebase_token_uri: str = Field(default="")
-    firebase_auth_provider_x509_cert_url: str = Field(default="")
+    firebase_auth_uri: str = Field(default="https://accounts.google.com/o/oauth2/auth")
+    firebase_token_uri: str = Field(default="https://oauth2.googleapis.com/token")
+    firebase_auth_provider_x509_cert_url: str = Field(default="https://www.googleapis.com/oauth2/v1/certs")
     firebase_client_x509_cert_url: str = Field(default="")
-    firebase_universe_domain: str = Field(default="")
+    firebase_universe_domain: str = Field(default="googleapis.com")
 
     # Admin Discord Webhook Configuration
     admin_discord_webhook_url: str = Field(default="")
 
-    # Google Cloud Logging Configuration
-    gcp_logging_type: str = Field(default="service_account")
+    # Google Cloud Logging Configuration (Essential: project_id, private_key, client_email)
     gcp_logging_project_id: str = Field(default="")
-    gcp_logging_private_key_id: str = Field(default="")
     gcp_logging_private_key: str = Field(default="")
     gcp_logging_client_email: str = Field(default="")
+    gcp_logging_type: str = Field(default="service_account")
+    gcp_logging_private_key_id: str = Field(default="")
     gcp_logging_client_id: str = Field(default="")
-    gcp_logging_auth_uri: str = Field(default="")
-    gcp_logging_token_uri: str = Field(default="")
-    gcp_logging_auth_provider_x509_cert_url: str = Field(default="")
+    gcp_logging_auth_uri: str = Field(default="https://accounts.google.com/o/oauth2/auth")
+    gcp_logging_token_uri: str = Field(default="https://oauth2.googleapis.com/token")
+    gcp_logging_auth_provider_x509_cert_url: str = Field(default="https://www.googleapis.com/oauth2/v1/certs")
     gcp_logging_client_x509_cert_url: str = Field(default="")
-    gcp_logging_universe_domain: str = Field(default="")
+    gcp_logging_universe_domain: str = Field(default="googleapis.com")
 
     # Use pydantic configuration to load from .env
     model_config = SettingsConfigDict(
