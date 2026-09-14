@@ -29,7 +29,9 @@ async def _send_rendered_email(to_email: str, template_name: str, **context: Any
         return False, "SMTP is not configured."
 
     try:
-        rendered = EmailTemplates.get_template(template_name, **context)
+        ctx = {"recipient_email": to_email.strip(), "user_email": to_email.strip()}
+        ctx.update(context)
+        rendered = EmailTemplates.get_template(template_name, **ctx)
     except Exception as te:
         logger.error(f"Failed to render email template '{template_name}': {te}")
         return False, f"Template render error: {te}"

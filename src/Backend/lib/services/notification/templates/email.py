@@ -1,6 +1,7 @@
 # src/Backend/lib/services/notification/templates/email.py
 
 import html
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 
@@ -89,6 +90,276 @@ class EmailTemplates:
         <p style="margin: 0 0 4px 0; font-weight: 600; color: #d1d5db;">TicketRadar • Real-time Cinema Availability Alerts</p>
         <p style="margin: 0;">This is an automated system notification. Please do not reply directly to this message.</p>
       </div>
+    </div>
+  </body>
+</html>"""
+
+    @classmethod
+    def _render_invoice_html(
+        cls,
+        doc_title: str,
+        status_label: str,
+        status_color: str,
+        status_bg: str,
+        status_border: str,
+        accent_gradient: str,
+        invoice_id: str,
+        order_id: str,
+        payment_id: str,
+        payment_method: str,
+        customer_name: str,
+        customer_email: str,
+        customer_phone: str,
+        customer_id: str,
+        issue_date: str,
+        items: List[Dict[str, Any]],
+        subtotal_str: str,
+        tax_str: Optional[str],
+        tax_label: str,
+        total_label: str,
+        grand_total_str: str,
+        grand_total_color: str = "#0f172a",
+        wallet_ledger: Optional[Dict[str, Any]] = None,
+        terms_notes: Optional[List[str]] = None,
+    ) -> str:
+        # Build line items
+        items_rows_html = ""
+        for idx, itm in enumerate(items):
+            bg = "#ffffff" if idx % 2 == 0 else "#f8fafc"
+            desc = itm.get("desc", "")
+            qty = html.escape(str(itm.get("qty", "1")))
+            rate = html.escape(str(itm.get("rate", "")))
+            amt = html.escape(str(itm.get("amount", "")))
+            items_rows_html += f"""
+            <tr style="background-color: {bg};">
+              <td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; color: #1e293b; line-height: 1.5;">{desc}</td>
+              <td align="center" style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; color: #475569;">{qty}</td>
+              <td align="right" style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; color: #475569;">{rate}</td>
+              <td align="right" style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #0f172a;">{amt}</td>
+            </tr>"""
+
+        # Build wallet ledger box if applicable
+        wallet_ledger_html = ""
+        if wallet_ledger:
+            prev_b = html.escape(wallet_ledger.get("prev_bal", "₹0.00"))
+            act_lbl = html.escape(wallet_ledger.get("action_label", "Credit Amount:"))
+            imp_amt = html.escape(wallet_ledger.get("impact_amt", "+₹0.00"))
+            imp_clr = wallet_ledger.get("impact_color", "#059669")
+            new_b = html.escape(wallet_ledger.get("new_bal", "₹0.00"))
+            wallet_ledger_html = f"""
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+              <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; margin-bottom: 8px;">
+                💳 TicketRadar Wallet Impact
+              </div>
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 12px; line-height: 1.8;">
+                <tr>
+                  <td style="color: #64748b;">Previous Balance:</td>
+                  <td align="right" style="color: #475569; font-weight: 500;">{prev_b}</td>
+                </tr>
+                <tr>
+                  <td style="color: #64748b;">{act_lbl}</td>
+                  <td align="right" style="color: {imp_clr}; font-weight: 700;">{imp_amt}</td>
+                </tr>
+                <tr style="border-top: 1px dashed #cbd5e1;">
+                  <td style="color: #0f172a; font-weight: 700; padding-top: 4px;">Updated Balance:</td>
+                  <td align="right" style="color: #059669; font-weight: 800; font-size: 13px; padding-top: 4px;">{new_b}</td>
+                </tr>
+              </table>
+            </div>"""
+
+        tax_row_html = ""
+        if tax_str:
+            tax_row_html = f"""
+            <tr>
+              <td style="color: #64748b;">{html.escape(tax_label)}:</td>
+              <td align="right" style="color: #64748b;">{html.escape(tax_str)}</td>
+            </tr>"""
+
+        notes_list = terms_notes or [
+            "This is an automated system tax invoice / receipt; no signature is required.",
+            "Wallet credits are immediately available for automated ticket monitoring & alert services.",
+            "Unspent wallet balances are subject to the TicketRadar Refund Policy."
+        ]
+        notes_html = "".join(f"• {html.escape(n)}<br>" for n in notes_list)
+
+        phone_line = f'<div style="color: #64748b; margin-top: 2px; font-size: 12px;">{html.escape(customer_phone)}</div>' if customer_phone else ''
+        email_line = f'<div style="color: #475569; margin-top: 2px;">{html.escape(customer_email)}</div>' if customer_email else ''
+        uid_line = f'<div style="color: #94a3b8; margin-top: 4px; font-size: 11px;">Account ID: <span style="font-family: monospace; color: #64748b;">{html.escape(customer_id)}</span></div>' if customer_id else ''
+
+        return f"""<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{html.escape(doc_title)} - TicketRadar</title>
+    <style>
+      @media print {{
+        body {{ background-color: #ffffff !important; padding: 0 !important; margin: 0 !important; }}
+        .no-print {{ display: none !important; }}
+        .invoice-card {{ border: none !important; box-shadow: none !important; max-width: 100% !important; border-radius: 0 !important; }}
+      }}
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
+    <div style="width: 100%; padding: 40px 15px; box-sizing: border-box; background-color: #f1f5f9;">
+      <table align="center" cellpadding="0" cellspacing="0" border="0" style="max-width: 660px; width: 100%; margin: 0 auto;">
+        <tr>
+          <td>
+            <div class="invoice-card" style="background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04); overflow: hidden;">
+              
+              <!-- TOP ACCENT BAR -->
+              <div style="height: 6px; background: {accent_gradient};"></div>
+
+              <div style="padding: 36px 36px 28px 36px;">
+
+                <!-- HEADER: BRAND & INVOICE META -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 28px;">
+                  <tr>
+                    <td valign="top" style="vertical-align: top;">
+                      <div style="display: flex; align-items: center;">
+                        <span style="font-size: 22px; font-weight: 800; letter-spacing: -0.03em; color: #0f172a;">Ticket<span style="color: #2563eb;">Radar</span></span>
+                      </div>
+                      <p style="margin: 4px 0 0 0; font-size: 12px; color: #64748b; line-height: 1.4;">
+                        Automated Cinema Tracker & Alerts<br>
+                        darkglance.developer@gmail.com • <a href="https://ticketradar.darkglance.in" target="_blank" style="color: #2563eb; text-decoration: none;">ticketradar.darkglance.in</a>
+                      </p>
+                    </td>
+                    <td valign="top" align="right" style="vertical-align: top; text-align: right;">
+                      <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background-color: {status_bg}; color: {status_color}; border: 1px solid {status_border};">
+                        {html.escape(status_label)}
+                      </span>
+                      <h2 style="margin: 8px 0 2px 0; font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">{html.escape(doc_title)}</h2>
+                      <p style="margin: 0; font-size: 12px; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; color: #64748b; font-weight: 600;">
+                        {html.escape(invoice_id)}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- DIVIDER -->
+                <div style="height: 1px; background-color: #f1f5f9; margin-bottom: 24px;"></div>
+
+                <!-- BILLED TO / DETAILS GRID -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 28px; font-size: 13px;">
+                  <tr>
+                    <td width="50%" valign="top" style="vertical-align: top; padding-right: 15px;">
+                      <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 6px;">Customer Details</div>
+                      <div style="font-weight: 700; color: #0f172a; font-size: 14px;">{html.escape(customer_name or "Valued Customer")}</div>
+                      {email_line}
+                      {phone_line}
+                      {uid_line}
+                    </td>
+                    <td width="50%" valign="top" style="vertical-align: top; padding-left: 15px; border-left: 1px solid #f1f5f9;">
+                      <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 6px;">Transaction Details</div>
+                      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 12px; line-height: 1.8;">
+                        <tr>
+                          <td style="color: #64748b;">Issue Date:</td>
+                          <td align="right" style="color: #0f172a; font-weight: 600;">{html.escape(issue_date)}</td>
+                        </tr>
+                        <tr>
+                          <td style="color: #64748b;">Order / Job ID:</td>
+                          <td align="right" style="font-family: monospace; color: #0f172a; font-weight: 600;">{html.escape(order_id)}</td>
+                        </tr>
+                        <tr>
+                          <td style="color: #64748b;">Payment Ref:</td>
+                          <td align="right" style="font-family: monospace; color: #0f172a; font-weight: 600;">{html.escape(payment_id)}</td>
+                        </tr>
+                        <tr>
+                          <td style="color: #64748b;">Payment Method:</td>
+                          <td align="right" style="color: #0f172a; font-weight: 600;">{html.escape(payment_method)}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- LINE ITEMS TABLE -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: separate; border-spacing: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 24px; font-size: 13px;">
+                  <thead>
+                    <tr style="background-color: #f8fafc; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                      <th align="left" style="padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0;">Description</th>
+                      <th align="center" style="padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0; width: 60px;">Qty</th>
+                      <th align="right" style="padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0; width: 90px;">Rate</th>
+                      <th align="right" style="padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0; width: 100px;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items_rows_html}
+                  </tbody>
+                </table>
+
+                <!-- SUMMARY & TOTALS -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 28px;">
+                  <tr>
+                    <td width="55%" valign="top" style="vertical-align: top; padding-right: 15px;">
+                      {wallet_ledger_html}
+                    </td>
+                    <td width="45%" valign="top" style="vertical-align: top;">
+                      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 13px; line-height: 2;">
+                        <tr>
+                          <td style="color: #64748b;">Subtotal:</td>
+                          <td align="right" style="color: #1e293b; font-weight: 600;">{html.escape(subtotal_str)}</td>
+                        </tr>
+                        {tax_row_html}
+                        <tr>
+                          <td colspan="2" style="padding-top: 6px; padding-bottom: 6px;">
+                            <div style="height: 2px; background-color: #0f172a;"></div>
+                          </td>
+                        </tr>
+                        <tr style="font-size: 15px;">
+                          <td style="color: #0f172a; font-weight: 800;">{html.escape(total_label)}:</td>
+                          <td align="right" style="color: {grand_total_color}; font-weight: 800; font-size: 18px;">{html.escape(grand_total_str)}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- ACTION BAR (Print Button) -->
+                <div class="no-print" style="text-align: center; margin: 30px 0 10px 0;">
+                  <table align="center" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" style="border-radius: 8px; background: #2563eb;">
+                        <a href="#" onclick="window.print(); return false;" style="display: inline-block; padding: 12px 28px; font-size: 13px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 8px;">
+                          🖨️ Download / Print Receipt (PDF)
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin: 10px 0 0 0; font-size: 11px; color: #94a3b8;">
+                    Manage alerts & view transaction history on your <a href="https://ticketradar.darkglance.in/dashboard" target="_blank" style="color: #2563eb; text-decoration: underline;">TicketRadar Dashboard</a>.
+                  </p>
+                </div>
+
+                <!-- DIVIDER -->
+                <div style="height: 1px; background-color: #f1f5f9; margin: 24px 0;"></div>
+
+                <!-- FOOTER -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 11px; color: #94a3b8; line-height: 1.5;">
+                  <tr>
+                    <td>
+                      <p style="margin: 0 0 4px 0; font-weight: 600; color: #64748b;">Terms & Information:</p>
+                      <p style="margin: 0 0 4px 0;">
+                        {notes_html}
+                      </p>
+                      <p style="margin: 8px 0 0 0; color: #64748b;">
+                        TicketRadar • <a href="https://ticketradar.darkglance.in" target="_blank" style="color: #64748b; text-decoration: none;">ticketradar.darkglance.in</a>
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+              </div>
+
+              <!-- BOTTOM BAR -->
+              <div style="background-color: #0f172a; padding: 14px 36px; text-align: center; font-size: 11px; color: #94a3b8;">
+                Questions regarding this transaction? Reach out to <a href="mailto:darkglance.developer@gmail.com" style="color: #38bdf8; text-decoration: none;">darkglance.developer@gmail.com</a>
+              </div>
+
+            </div>
+          </td>
+        </tr>
+      </table>
     </div>
   </body>
 </html>"""
@@ -263,39 +534,53 @@ class EmailTemplates:
         **kwargs: Any
     ) -> Dict[str, str]:
         amt = _safe_float(amount_inr)
-        subject = f"Payment Successful: ₹{amt:.2f} received (Order #{order_id})"
-        body_html = f"""
-        <p style="margin-top: 0; font-size: 15px;">Hi <strong>{html.escape(user_name)}</strong>,</p>
-        <p>Your payment of <strong>₹{amt:.2f}</strong> has been processed successfully.</p>
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #111827; border-radius: 8px; overflow: hidden; font-size: 13px;">
-          <tr>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; color: #9ca3af;">Amount Paid:</td>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; font-weight: 700; color: #34d399; text-align: right;">₹{amt:.2f}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; color: #9ca3af;">Purpose:</td>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; font-weight: 600; color: #f3f4f6; text-align: right;">{html.escape(payment_type)}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; color: #9ca3af;">Order ID:</td>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; font-family: monospace; color: #d1d5db; text-align: right;">{html.escape(order_id)}</td>
-          </tr>
-          {f'<tr><td style="padding: 10px 14px; color: #9ca3af;">Gateway Payment ID:</td><td style="padding: 10px 14px; font-family: monospace; color: #d1d5db; text-align: right;">{html.escape(payment_id)}</td></tr>' if payment_id else ''}
-        </table>
-        <p style="font-size: 13px; color: #9ca3af;">Funds are immediately available in your TicketRadar wallet to power real-time ticket monitors.</p>
-        """
+        now_str = timestamp or datetime.now(timezone.utc).strftime("%d %b %Y, %I:%M %p UTC")
+        inv_id = kwargs.get("invoice_id") or f"REC-TR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{abs(hash(order_id or payment_id or str(amt))) % 100000:05d}"
+        cust_email = kwargs.get("recipient_email") or kwargs.get("user_email") or kwargs.get("email") or ""
+        cust_phone = kwargs.get("phone_number") or kwargs.get("phone") or ""
+        cust_uid = kwargs.get("user_id") or kwargs.get("uid") or ""
+        method = kwargs.get("payment_method") or kwargs.get("payment_gateway") or "Online Payment"
 
-        full_html = cls._base_html(
-            title="✅ Payment Successful",
-            subtitle=f"Order #{order_id} • ₹{amt:.2f}",
-            body_html=body_html,
-            header_gradient="linear-gradient(135deg, #10b981, #059669)"
+        items = [
+            {
+                "desc": f"<strong>{html.escape(payment_type)}</strong><br><span style='color: #64748b; font-size: 11px;'>TicketRadar Service Credits / Transaction</span>",
+                "qty": "1",
+                "rate": f"₹{amt:.2f}",
+                "amount": f"₹{amt:.2f}",
+            }
+        ]
+
+        full_html = cls._render_invoice_html(
+            doc_title="PAYMENT RECEIPT",
+            status_label="● PAID",
+            status_color="#059669",
+            status_bg="#ecfdf5",
+            status_border="#a7f3d0",
+            accent_gradient="linear-gradient(90deg, #10b981, #06b6d4)",
+            invoice_id=inv_id,
+            order_id=order_id or "N/A",
+            payment_id=payment_id or "N/A",
+            payment_method=method,
+            customer_name=user_name,
+            customer_email=cust_email,
+            customer_phone=cust_phone,
+            customer_id=cust_uid,
+            issue_date=now_str,
+            items=items,
+            subtotal_str=f"₹{amt:.2f}",
+            tax_str=None,
+            tax_label="",
+            total_label="Total Paid",
+            grand_total_str=f"₹{amt:.2f}",
+            grand_total_color="#0f172a",
         )
 
+        subject = f"Payment Successful: ₹{amt:.2f} received (Order #{order_id})"
         text_body = (
             f"Payment Successful!\n\n"
             f"Hi {user_name},\n"
             f"We received your payment of ₹{amt:.2f}.\n\n"
+            f"Receipt ID: {inv_id}\n"
             f"Order ID: {order_id}\n"
             f"Payment ID: {payment_id or 'N/A'}\n"
             f"Purpose: {payment_type}\n\n"
@@ -483,27 +768,61 @@ class EmailTemplates:
     ) -> Dict[str, str]:
         amt = _safe_float(amount_inr)
         bal = _safe_float(kwargs.get("balance_inr") if kwargs.get("balance_inr") is not None else new_balance_inr)
+        prev_bal = max(0.0, bal - amt)
+        now_str = kwargs.get("timestamp") or datetime.now(timezone.utc).strftime("%d %b %Y, %I:%M %p UTC")
+        inv_id = kwargs.get("invoice_id") or f"REC-TR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{abs(hash(order_id or str(amt))) % 100000:05d}"
+        cust_email = kwargs.get("recipient_email") or kwargs.get("user_email") or kwargs.get("email") or ""
+        cust_phone = kwargs.get("phone_number") or kwargs.get("phone") or ""
+        cust_uid = kwargs.get("user_id") or kwargs.get("uid") or ""
+
         from lib.utils.config import settings
         gw_name = kwargs.get("gateway_name") or kwargs.get("payment_gateway") or (settings.payment_gateway if settings else None)
-        gw_label = f"via {gw_name.capitalize()}" if gw_name else "via Online Payment"
-        subject = f"Wallet Credited: ₹{amt:.2f} added to your account"
-        body_html = f"""
-        <p style="margin-top: 0; font-size: 15px;">Hi <strong>{html.escape(user_name)}</strong>,</p>
-        <p>Your TicketRadar wallet has been successfully topped up with <strong>₹{amt:.2f}</strong>.</p>
-        <div style="margin: 20px 0; padding: 18px; background-color: #111827; border: 1px solid #2d3748; border-radius: 10px; text-align: center;">
-          <div style="font-size: 12px; color: #9ca3af; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Current Wallet Balance</div>
-          <div style="font-size: 32px; font-weight: 800; color: #34d399; margin: 6px 0;">₹{bal:.2f}</div>
-          <div style="font-size: 12px; color: #d1d5db;">Added: <span style="color: #34d399; font-weight: 700;">+₹{amt:.2f}</span> {gw_label} (Order #{html.escape(order_id)})</div>
-        </div>
-        """
+        method = f"{gw_name.capitalize()} PG" if gw_name else "Online Payment / UPI"
 
-        full_html = cls._base_html(
-            title="💳 Wallet Top-up Successful",
-            subtitle=f"+₹{amt:.2f} added",
-            body_html=body_html,
-            header_gradient="linear-gradient(135deg, #10b981, #059669)"
+        items = [
+            {
+                "desc": "<strong>TicketRadar Wallet Recharge</strong><br><span style='color: #64748b; font-size: 11px;'>Instant wallet credits for real-time cinema ticket alerts & automated calls</span>",
+                "qty": "1",
+                "rate": f"₹{amt:.2f}",
+                "amount": f"₹{amt:.2f}",
+            }
+        ]
+
+        wallet_ledger = {
+            "prev_bal": f"₹{prev_bal:.2f}",
+            "action_label": "Amount Credited:",
+            "impact_amt": f"+₹{amt:.2f}",
+            "impact_color": "#059669",
+            "new_bal": f"₹{bal:.2f}",
+        }
+
+        full_html = cls._render_invoice_html(
+            doc_title="PAYMENT RECEIPT",
+            status_label="● PAID & CREDITED",
+            status_color="#059669",
+            status_bg="#ecfdf5",
+            status_border="#a7f3d0",
+            accent_gradient="linear-gradient(90deg, #10b981, #06b6d4)",
+            invoice_id=inv_id,
+            order_id=order_id or "N/A",
+            payment_id=kwargs.get("payment_id") or "N/A",
+            payment_method=method,
+            customer_name=user_name,
+            customer_email=cust_email,
+            customer_phone=cust_phone,
+            customer_id=cust_uid,
+            issue_date=now_str,
+            items=items,
+            subtotal_str=f"₹{amt:.2f}",
+            tax_str=None,
+            tax_label="",
+            total_label="Total Paid",
+            grand_total_str=f"₹{amt:.2f}",
+            grand_total_color="#0f172a",
+            wallet_ledger=wallet_ledger,
         )
 
+        subject = f"Wallet Credited: ₹{amt:.2f} added to your account"
         text_body = (
             f"Wallet Top-up Successful!\n\n"
             f"Hi {user_name},\n"
@@ -625,35 +944,64 @@ class EmailTemplates:
     ) -> Dict[str, str]:
         amt = _safe_float(amount_inr)
         bal = _safe_float(kwargs.get("balance_inr") if kwargs.get("balance_inr") is not None else new_balance_inr)
+        prev_bal = max(0.0, bal - amt)
         refund_id = kwargs.get("refund_id") or ""
-        subject = f"Refund Issued: ₹{amt:.2f} credited to your wallet"
-        body_html = f"""
-        <p style="margin-top: 0; font-size: 15px;">Hi <strong>{html.escape(user_name)}</strong>,</p>
-        <p>A refund of <strong>₹{amt:.2f}</strong> has been credited to your TicketRadar wallet balance.</p>
-        <div style="margin: 18px 0; padding: 14px 16px; background-color: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; border-radius: 6px; font-size: 13px; color: #34d399;">
-          <strong>Refund Reason:</strong> {html.escape(reason or 'Automated delivery or cancellation policy refund.')}
-        </div>
-        <table style="width: 100%; border-collapse: collapse; margin: 18px 0; background-color: #111827; border-radius: 8px; font-size: 13px;">
-          <tr>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; color: #9ca3af;">Refund Amount:</td>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; font-weight: 800; color: #34d399; text-align: right;">+₹{amt:.2f}</td>
-          </tr>
-          {f'<tr><td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; color: #9ca3af;">Refund ID:</td><td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; font-family: monospace; color: #d1d5db; text-align: right;">{html.escape(refund_id)}</td></tr>' if refund_id else ''}
-          {f'<tr><td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; color: #9ca3af;">Job Tracker ID:</td><td style="padding: 10px 14px; border-bottom: 1px solid #2d3748; font-family: monospace; color: #d1d5db; text-align: right;">#{html.escape(job_id)}</td></tr>' if job_id else ''}
-          <tr>
-            <td style="padding: 10px 14px; color: #9ca3af;">New Wallet Balance:</td>
-            <td style="padding: 10px 14px; font-weight: 700; color: #f3f4f6; text-align: right;">₹{bal:.2f}</td>
-          </tr>
-        </table>
-        """
+        now_str = kwargs.get("timestamp") or datetime.now(timezone.utc).strftime("%d %b %Y, %I:%M %p UTC")
+        inv_id = refund_id or f"RFND-TR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{abs(hash(job_id or str(amt))) % 100000:05d}"
+        cust_email = kwargs.get("recipient_email") or kwargs.get("user_email") or kwargs.get("email") or ""
+        cust_phone = kwargs.get("phone_number") or kwargs.get("phone") or ""
+        cust_uid = kwargs.get("user_id") or kwargs.get("uid") or ""
 
-        full_html = cls._base_html(
-            title="💰 Refund Issued",
-            subtitle=f"+₹{amt:.2f} to Wallet",
-            body_html=body_html,
-            header_gradient="linear-gradient(135deg, #10b981, #059669)"
+        job_note = f" • Tracker #{html.escape(job_id)}" if job_id else ""
+        items = [
+            {
+                "desc": f"<strong>Service Refund / Credit Note</strong><br><span style='color: #64748b; font-size: 11px;'>Reason: {html.escape(reason or 'Automated delivery or cancellation policy refund')}{job_note}</span>",
+                "qty": "1",
+                "rate": f"₹{amt:.2f}",
+                "amount": f"₹{amt:.2f}",
+            }
+        ]
+
+        wallet_ledger = {
+            "prev_bal": f"₹{prev_bal:.2f}",
+            "action_label": "Refund Credited:",
+            "impact_amt": f"+₹{amt:.2f}",
+            "impact_color": "#059669",
+            "new_bal": f"₹{bal:.2f}",
+        }
+
+        full_html = cls._render_invoice_html(
+            doc_title="REFUND RECEIPT",
+            status_label="● REFUND PROCESSED",
+            status_color="#d97706",
+            status_bg="#fef3c7",
+            status_border="#fde68a",
+            accent_gradient="linear-gradient(90deg, #f59e0b, #ef4444)",
+            invoice_id=inv_id,
+            order_id=job_id or "N/A",
+            payment_id=refund_id or "N/A",
+            payment_method="Credited to Wallet Balance",
+            customer_name=user_name,
+            customer_email=cust_email,
+            customer_phone=cust_phone,
+            customer_id=cust_uid,
+            issue_date=now_str,
+            items=items,
+            subtotal_str=f"₹{amt:.2f}",
+            tax_str=None,
+            tax_label="",
+            total_label="Net Refunded",
+            grand_total_str=f"₹{amt:.2f}",
+            grand_total_color="#d97706",
+            wallet_ledger=wallet_ledger,
+            terms_notes=[
+                "This receipt confirms refund crediting to your TicketRadar wallet.",
+                f"Refund reason: {reason or 'Automated delivery or cancellation policy refund'}",
+                f"Reference: {refund_id or job_id or 'Automated Policy'}"
+            ]
         )
 
+        subject = f"Refund Issued: ₹{amt:.2f} credited to your wallet"
         text_body = (
             f"Refund Issued!\n\n"
             f"Hi {user_name},\n"
