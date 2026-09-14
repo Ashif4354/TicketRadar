@@ -9,6 +9,7 @@ from lib.services.notification import (
     admin_notifier,
     send_user_access_granted_email,
 )
+from lib.services.notification.user_mailer import send_admin_pricing_changed_email
 from lib.services.gcp_logger import gcp_logger
 from lib.services.pricing import PricingService
 from lib.services.wallet import WalletService
@@ -436,10 +437,12 @@ async def admin_get_pricing():
 @router.post("/pricing", dependencies=[Depends(require_payments_enabled)])
 async def admin_update_pricing(
     payload: UpdatePricesRequest,
+    background_tasks: BackgroundTasks,
     admin_claims: dict = Depends(get_admin_user)
 ):
     """Updates notification pricing with mandatory reason, creating audit logs."""
     try:
+        old_prices = PricingService.get_current_prices()
         new_config = PricingService.update_prices(
             admin_uid=admin_claims.get("uid"),
             admin_email=admin_claims.get("email", ""),
@@ -447,13 +450,47 @@ async def admin_update_pricing(
             whatsapp_paise=payload.whatsapp_paise,
             phone_call_paise=payload.phone_call_paise,
             note=payload.note,
+            email_paise=payload.email_paise,
+            discord_paise=payload.discord_paise,
         )
+        admin_email = admin_claims.get("email", "")
+        admin_name = admin_claims.get("name") or admin_claims.get("displayName") or "Admin"
+        if admin_email:
+            background_tasks.add_task(
+                send_admin_pricing_changed_email,
+                admin_email,
+                admin_name,
+                old_prices,
+                new_config,
+                payload.note
+            )
         return {"success": True, "config": new_config}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         logger.error(f"Error updating prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/transactions", dependencies=[Depends(require_payments_enabled)])
+async def admin_get_all_transactions(
+    page: int = 1,
+    page_size: int = 20,
+    uid: str | None = None,
+    txn_type: str | None = None,
+    direction: str | None = None,
+    search: str | None = None,
+    admin_claims: dict = Depends(get_admin_user)
+):
+    """Retrieves all transactions of all users, paginated, with filters."""
+    return WalletService.get_all_transactions(
+        page=page,
+        page_size=page_size,
+        uid=uid,
+        txn_type=txn_type,
+        direction=direction,
+        search=search,
+    )
 
 
 @router.get("/wallets/{uid}", dependencies=[Depends(require_payments_enabled)])

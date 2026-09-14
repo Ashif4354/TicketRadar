@@ -2,12 +2,15 @@
 
 from typing import List, Optional
 from .base import NotificationStrategy
+from .templates.message import MessageTemplates
 from ...providers.notification.base import NotificationProviderAdapter
 
-class WhatsAppNotificationStrategy(NotificationStrategy):
+
+class WhatsAppNotificationStrategy(NotificationStrategy, MessageTemplates):
     """
     Delivers movie ticket availability alerts via WhatsApp using approved templates
     through the NotificationProviderAdapter.
+    Inherits template rendering capabilities from MessageTemplates.
     """
 
     def __init__(
@@ -33,19 +36,18 @@ class WhatsAppNotificationStrategy(NotificationStrategy):
         language: str = "",
         format_name: str = ""
     ) -> tuple[bool, str]:
-        # Formatted movie title with language/format if present
-        fmt_str = f" ({language} {format_name})".strip() if (language or format_name) else ""
-        full_title = f"{movie_name}{fmt_str}"
+        rendered = self.get_template(
+            "booking_alert",
+            movie_name=movie_name,
+            date_str=date_str,
+            available_theatres=available_theatres,
+            unavailable_theatres=unavailable_theatres,
+            url=url,
+            language=language,
+            format_name=format_name
+        )
 
-        variables = {
-            "1": full_title,
-            "2": date_str,
-            "3": url,
-            "movie_name": full_title,
-            "date_str": date_str,
-            "url": url,
-        }
-
+        variables = rendered.get("variables", {})
         idempotency_key = f"wa_{self._job_id}_{date_str}"
         result = await self._provider.send_whatsapp_template(
             to=self._phone_number,

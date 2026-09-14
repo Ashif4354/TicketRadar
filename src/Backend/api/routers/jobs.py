@@ -13,6 +13,7 @@ from lib.core.job import MonitorJob
 from lib.core.monitor import JobManager
 from lib.services.scraper.factory import ScraperFactory
 from lib.services.notification import admin_notifier
+from lib.services.notification.user_mailer import send_job_created_email
 from lib.services.gcp_logger import gcp_logger
 from lib.core.auth import get_authorized_user, db
 from lib.utils.phone import normalize_indian_phone
@@ -216,12 +217,22 @@ async def create_job(
             raise HTTPException(status_code=400, detail="Recipient email is required for Email notification.")
         notif_config = {"recipient_email": recipient}
         medium_name = "Email"
+        if db:
+            c_doc = db.collection("notification_consents").document(claims.get("uid")).get()
+            cdata = c_doc.to_dict() or {} if c_doc.exists else {}
+            if not (payload.email_consent or cdata.get("email_consented")):
+                raise HTTPException(status_code=400, detail="Email consent is required. Please opt-in in your Profile.")
     elif "discord" in medium_raw:
         webhook = payload.notification_config.get("webhook_url", "").strip()
         if not webhook:
             raise HTTPException(status_code=400, detail="Discord Webhook URL is required for Webhook notification.")
         notif_config = {"webhook_url": webhook}
         medium_name = "Discord Webhook"
+        if db:
+            c_doc = db.collection("notification_consents").document(claims.get("uid")).get()
+            cdata = c_doc.to_dict() or {} if c_doc.exists else {}
+            if not (payload.discord_consent or cdata.get("discord_consented")):
+                raise HTTPException(status_code=400, detail="Discord consent is required. Please opt-in in your Profile.")
     elif medium_raw in ("sms", "whatsapp", "phone_call", "call"):
         phone_input = phone or payload.notification_config.get("phone_number") or payload.notification_config.get("phone", "")
         if not phone_input:
@@ -324,6 +335,30 @@ async def create_job(
             new_job.theatres,
             payload.params.date_str
         )
+        if email:
+            background_tasks.add_task(
+                send_job_created_email,
+                email,
+                user_name,
+                new_job.id,
+                new_job.movie_name,
+                payload.params.date_str,
+                new_job.theatres,
+                medium_name,
+                payload.check_interval
+            )
+            if debited_wallet and price_paise > 0:
+                from lib.services.notification.user_mailer import send_wallet_transaction_email
+                background_tasks.add_task(
+                    send_wallet_transaction_email,
+                    email,
+                    user_name,
+                    "JOB_PAYMENT",
+                    "DEBIT",
+                    round(price_paise / 100.0, 2),
+                    round(WalletService.get_balance(claims.get("uid")) / 100.0, 2),
+                    f"Ticket monitor #{new_job.id} creation fee"
+                )
         gcp_logger.log_event(
             "Job Created",
             user_id=claims.get("uid"),
@@ -452,6 +487,13 @@ async def delete_job(
             job.theatres,
             job.date_str
         )
+        if email:
+            from lib.services.notification.user_mailer import send_job_cancelled_email, send_refund_email
+            refund_amt = round(job.price_paise / 100.0, 2) if (refund_eligible and job.price_paise > 0) else 0.0
+            background_tasks.add_task(send_job_cancelled_email, email, user_name, job.id, job.movie_name, refund_amt)
+            if refund_amt > 0:
+                background_tasks.add_task(send_refund_email, email, user_name, refund_amt, f"Job #{job.id} cancelled before alert dispatch", job.id)
+
         gcp_logger.log_event(
             "Job Deleted",
             user_id=claims.get("uid"),

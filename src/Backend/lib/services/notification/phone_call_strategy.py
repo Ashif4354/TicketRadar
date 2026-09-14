@@ -2,13 +2,15 @@
 
 from typing import List, Optional
 from .base import NotificationStrategy
+from .templates.message import MessageTemplates
 from ...providers.notification.base import NotificationProviderAdapter
 from ...utils.config import settings
 
-class PhoneCallNotificationStrategy(NotificationStrategy):
+class PhoneCallNotificationStrategy(NotificationStrategy, MessageTemplates):
     """
     Delivers movie ticket availability alerts via an automated Voice Phone Call
     using Amazon Polly (en-IN) TTS via the NotificationProviderAdapter.
+    Inherits template rendering capabilities from MessageTemplates.
     """
 
     def __init__(

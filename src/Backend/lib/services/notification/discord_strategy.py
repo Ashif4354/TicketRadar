@@ -1,41 +1,19 @@
-# src/services/notification/discord_strategy.py
+# src/Backend/lib/services/notification/discord_strategy.py
 
 import httpx
 from typing import List
 from .base import NotificationStrategy
+from .templates.discord import DiscordTemplates
 
-class DiscordWebhookNotificationStrategy(NotificationStrategy):
+
+class DiscordWebhookNotificationStrategy(NotificationStrategy, DiscordTemplates):
     """
-    Concrete strategy to send notifications via Discord Webhooks asynchronously, displaying availability in a table.
+    Concrete strategy to send notifications via Discord Webhooks asynchronously.
+    Inherits template rendering capabilities from DiscordTemplates.
     """
 
     def __init__(self, webhook_url: str):
         self.webhook_url = webhook_url
-
-    def _generate_ascii_table(self, available: List[str], unavailable: List[str]) -> str:
-        """Generates a clean ASCII table representing theatre availability."""
-        header_name = "Theatre Name"
-        header_status = "Status"
-        
-        # Grid boundaries
-        lines = []
-        border = "+-------------------------------------+-------------+"
-        lines.append(border)
-        lines.append(f"| {header_name: <35} | {header_status: <11} |")
-        lines.append(border)
-        
-        for t in available:
-            # Truncate if exceeds column width
-            t_trunc = t[:35]
-            lines.append(f"| {t_trunc: <35} | AVAILABLE   |")
-            lines.append(border)
-            
-        for t in unavailable:
-            t_trunc = t[:35]
-            lines.append(f"| {t_trunc: <35} | UNAVAILABLE |")
-            lines.append(border)
-            
-        return "\n".join(lines)
 
     async def send_notification(
         self,
@@ -50,70 +28,26 @@ class DiscordWebhookNotificationStrategy(NotificationStrategy):
     ) -> tuple[bool, str]:
         """
         Send a Discord webhook notification containing movie and theatre availability details.
-        
-        Parameters:
-            subject (str): Notification title.
-            movie_name (str): Name of the movie.
-            date_str (str): Screening date or date description.
-            available_theatres (List[str]): Theatres where tickets are available.
-            unavailable_theatres (List[str]): Theatres where tickets are unavailable.
-            url (str): Booking URL.
-            language (str): Optional movie language.
-            format_name (str): Optional screening format.
-        
-        Returns:
-            tuple[bool, str]: A success flag and status message describing the result.
+        Uses DiscordTemplates to render formatted ASCII tables and rich embeds.
         """
         if not self.webhook_url:
             return False, "Discord Webhook URL is missing."
 
-        # Compile the ASCII table
-        ascii_table = self._generate_ascii_table(available_theatres, unavailable_theatres)
-
-        # Add resume note if there are remaining unavailable theatres
-        resume_note = ""
-        if unavailable_theatres:
-            resume_note = "\nℹ️ **Note:** Monitoring has paused for this alert. If you still want to monitor for the remaining unavailable theatres, resume your tracker from the dashboard.\n"
-
-        fmt_details = " | ".join(filter(None, [language, format_name]))
-        format_line = f"**Format & Language:** {fmt_details}\n" if fmt_details else ""
-
-        # Build embed description text
-        description = (
-            f"**Movie:** {movie_name}\n"
-            f"{format_line}"
-            f"**Date:** {date_str}\n"
-            f"**Booking Link:** [Click here to book]({url})\n\n"
-            f"**Theatre Availability Table:**\n"
-            f"```text\n"
-            f"{ascii_table}\n"
-            f"```\n"
-            f"{resume_note}\n"
-            f"Book tickets immediately."
+        payload = self.get_template(
+            "booking_alert",
+            subject=subject,
+            movie_name=movie_name,
+            date_str=date_str,
+            available_theatres=available_theatres,
+            unavailable_theatres=unavailable_theatres,
+            url=url,
+            language=language,
+            format_name=format_name
         )
-
-        # Build a beautiful rich embed payload for Discord
-        payload = {
-            "embeds": [
-                {
-                    "title": f"🍿 {subject}",
-                    "description": description,
-                    "color": 0xEC4899,  # Premium Pink color (#ec4899)
-                    "thumbnail": {
-                        "url": "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=100&auto=format&fit=crop&q=60"
-                    },
-                    "footer": {
-                        "text": "TicketRadar"
-                    }
-                }
-            ]
-        }
 
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(self.webhook_url, json=payload, timeout=10.0)
-                
-                # Discord webhook post success responds with either 200 (OK) or 204 (No Content)
                 if response.status_code in (200, 204):
                     return True, "Discord notification sent successfully."
                 else:

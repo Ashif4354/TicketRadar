@@ -134,6 +134,17 @@ TicketRadar has a first-class self-hosted mode toggled via `DISABLE_PAYMENTS` in
 | `true` | `true` | **Free Self-Hosted Mode** | All notification mediums (Email, Discord, SMS, WhatsApp, Voice Calls) are free for all users. The wallet tab, balance widgets, top-ups, pricing configs, and payment gates are completely hidden across the UI and skipped in the API. No Cashfree credentials needed. |
 | `false` | `false` | **Commercial Service Mode** | Wallet, pricing schedules, Cashfree PG integration, and atomic credit transactions are strictly enforced. SMS, WhatsApp, and Voice calls require user wallet balance or Cashfree checkout. |
 
+### Optional: Approval Bypass (`DISABLE_APPROVAL` & `VITE_DISABLE_APPROVAL`)
+
+For internal private deployments or single-operator installations where access approvals and waiting lists are not required:
+- **Backend (`src/Backend/.env`)**: Set `DISABLE_APPROVAL=true`. The authentication middleware automatically bypasses user authorization checks and clears blocked account restrictions, giving authenticated users immediate access to `/app`.
+- **Frontend (`src/UI/.env`)**: Set `VITE_DISABLE_APPROVAL=true`. Automatically redirects authenticated users straight to `/app` instead of the `/unauthorized` waiting screen.
+
+```dotenv
+# Bypass user access requests & account authorization
+DISABLE_APPROVAL=true
+```
+
 ### Optional: Cashfree Payment Gateway
 *(Only needed if `DISABLE_PAYMENTS=false`)*
 ```dotenv
@@ -150,6 +161,61 @@ CURRENT_TERMS_VERSION=v2.0
 ```dotenv
 TWILIO_WHATSAPP_CONTENT_SID=HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
+
+---
+
+## Notification Architecture & Multi-Medium Templates
+
+TicketRadar features a unified notification template catalog under `src/Backend/lib/services/notification/templates/`:
+
+1. **Email Templates (`EmailTemplates`)**:
+   - `signup`: Branded onboarding email sent upon initial registration.
+   - `payment_success` & `payment_failed`: Gateway payment receipts with order IDs and amounts.
+   - `call_3x_unanswered`: Dispatched when an automated voice call is attempted 3 times without answer, noting the exact phone number dialed, cinema, and alert metadata.
+   - `call_success`: Confirms completed voice alert notification with duration and number called.
+   - `wallet_topup_success` & `wallet_topup_failed`: Real-time balance addition updates.
+   - `wallet_debit` & `wallet_credit`: Granular transaction receipts for alert bookings or admin adjustments.
+   - `refund`: Instant refund notice detailing the refund ID, reason, and returned amount.
+   - `admin_pricing_changed`: Alerts administrators whenever pricing schedules are updated.
+   - `job_created` & `job_cancelled`: Alert job lifecycle updates.
+   - `notification_sent` & `notification_failed`: Delivery audit confirmations.
+   - `access_granted`: Sent when an administrator approves access for a user.
+
+2. **Message Templates (`MessageTemplates`)**:
+   - Centralized concise templates for SMS and WhatsApp (alerts, call retries, wallet topups, debits, refunds).
+
+3. **Discord Templates (`DiscordTemplates`)**:
+   - Rich embed structures with ASCII theatre availability tables and quick booking links.
+
+4. **Strategy Pattern Inheritance**:
+   - `EmailNotificationStrategy`, `SMSNotificationStrategy`, `WhatsAppNotificationStrategy`, `DiscordWebhookNotificationStrategy`, and `PhoneCallNotificationStrategy` inherit directly from their respective template catalogs and invoke `self.get_template(...)`.
+
+---
+
+## Dynamic Pricing & Medium Management
+
+TicketRadar supports granular per-medium pricing schedules configurable by administrators:
+- **Supported Mediums**: SMS (`sms_paise`), WhatsApp (`whatsapp_paise`), Phone Call (`phone_call_paise`), Email (`email_paise`), and Discord (`discord_paise`).
+- **Default Pricing**: Email and Discord default to **0 paise (Free)**.
+- **Dynamic Pricing Page (`/pricing`)**: Live prices fetched dynamically from `/api/payments/prices`. Any medium set to 0 paise displays a **Free** badge and requires no wallet balance or checkout during alert creation.
+- **Audit Logging**: Any price update requires a mandatory audit note, logged immutably to Firestore.
+
+---
+
+## Consent Tracking & Bot Protection
+
+TicketRadar enforces explicit user consent for outbound messaging:
+- **Consents**: Users must explicitly opt-in for SMS, WhatsApp, Email, and Discord alerts in `/profile` or during job creation.
+- **reCAPTCHA Enforcement**: Google reCAPTCHA v2 verification is enforced when saving contact details, toggling consent opt-in, dispatching test notifications, and creating ticket alerts.
+- **Custom Alert Mediums**: Profile settings allow configuring a custom notification email address (with a 1-click "Reset to primary email" option) and custom Discord webhook URL.
+
+---
+
+## Wallet Ledger & Transaction Auditing
+
+- **Rupee Currency Standardization**: The system exclusively uses Indian Rupees (`₹`), completely retiring "credits" terminology.
+- **Topup Presets**: Pre-configured quick-selection buttons for **₹5, ₹10, ₹25, and ₹50** with a default preset of ₹10.
+- **Global Transaction Ledger**: Administrators can access `GET /admin/transactions` and the dedicated **Transactions** tab in `/admin` to filter, search, and audit wallet events across all users by UID, transaction type (`TOPUP`, `ALERT_DEBIT`, `ADMIN_ADJUSTMENT`, `REFUND`), direction (`CREDIT`, `DEBIT`), and metadata.
 
 ---
 

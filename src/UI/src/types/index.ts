@@ -54,6 +54,7 @@ export interface AppConfig {
   default_check_interval: number;
   recaptcha_site?: string;
   disable_security?: boolean;
+  disable_approval?: boolean;
   disable_payments?: boolean;
   notification_provider?: string;
   payment_gateway?: string;
@@ -118,9 +119,13 @@ export interface NotificationConsents {
   sms_consented: boolean;
   whatsapp_consented: boolean;
   call_consented: boolean;
+  email_consented?: boolean;
+  discord_consented?: boolean;
   sms_consented_at?: string | null;
   whatsapp_consented_at?: string | null;
   call_consented_at?: string | null;
+  email_consented_at?: string | null;
+  discord_consented_at?: string | null;
 }
 
 export interface NotificationMediumConfig {
@@ -139,6 +144,7 @@ export interface UserProfileData {
   email: string;
   phone_number?: string;
   discord_webhook_url?: string;
+  email_medium_address?: string;
   preferences: {
     default_notification_medium?: string;
     [key: string]: any;

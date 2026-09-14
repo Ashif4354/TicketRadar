@@ -120,7 +120,7 @@ export function PrivacyPage() {
               <ul className="list-disc pl-5 space-y-1 text-xs">
                 <li>To execute automated availability checks against public cinema listings according to your task parameters.</li>
                 <li>To transmit notifications to your configured channels (Email, Discord, SMS, WhatsApp, Phone Call).</li>
-                <li>To maintain your wallet credit ledger and process automated refund rollbacks for cancelled tasks or delivery failures.</li>
+                <li>To maintain your wallet transaction ledger and process automated refund rollbacks for cancelled tasks or delivery failures.</li>
               </ul>
               <p className="pt-2">
                 <strong>We NEVER sell, rent, trade, or monetize your personal information or phone numbers.</strong> We do not serve third-party ads, nor do we share your data with marketing or analytics data brokers.

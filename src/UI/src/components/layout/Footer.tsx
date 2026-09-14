@@ -22,6 +22,10 @@ export function Footer() {
           <p>© 2026 TicketRadar. Continuous movie showtime monitoring.</p>
           <span className="hidden sm:inline text-border">|</span>
           <div className="flex items-center gap-3">
+            <Link to="/pricing" className="hover:text-foreground transition-colors underline-offset-4 hover:underline font-medium">
+              Pricing
+            </Link>
+            <span className="text-border">•</span>
             <Link to="/instructions" className="hover:text-foreground transition-colors underline-offset-4 hover:underline font-medium">
               Instructions
             </Link>

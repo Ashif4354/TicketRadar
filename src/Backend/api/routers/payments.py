@@ -29,8 +29,8 @@ async def get_prices():
         "sms_inr": round(prices.get("sms_paise", 50) / 100.0, 2),
         "whatsapp_inr": round(prices.get("whatsapp_paise", 100) / 100.0, 2),
         "phone_call_inr": round(prices.get("phone_call_paise", 150) / 100.0, 2),
-        "email_inr": 0.0,
-        "discord_inr": 0.0,
+        "email_inr": round(prices.get("email_paise", 0) / 100.0, 2),
+        "discord_inr": round(prices.get("discord_paise", 0) / 100.0, 2),
     }
 
 @router.post("/job/initiate", dependencies=[Depends(require_payments_enabled)])

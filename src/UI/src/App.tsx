@@ -15,11 +15,12 @@ import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { AppDashboard } from './pages/AppDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { ProfilePage } from './pages/ProfilePage';
+import { PricingPage } from './pages/PricingPage';
 import { TermsModal } from './components/ui/terms-modal';
 
 import { auth } from './lib/firebase';
 import { authenticatedFetch } from './utils/api';
-import { isSecurityDisabled, setSecurityConfig } from './utils/security';
+import { isSecurityDisabled, isApprovalDisabled, setSecurityConfig } from './utils/security';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import type { AppConfig } from './types';
@@ -84,13 +85,14 @@ export default function App() {
     const res = await authenticatedFetch('/api/terms/accept', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ version: 'v2.0' }),
+      body: JSON.stringify({ version: '2.0' }),
     });
     if (!res.ok) throw new Error('Failed to record acceptance.');
     setTermsPending(false);
   };
 
   const securityDisabled = isSecurityDisabled(config);
+  const approvalDisabled = securityDisabled || isApprovalDisabled(config);
 
   if (!securityDisabled && (authLoading || configLoading)) {
     return (
@@ -105,9 +107,9 @@ export default function App() {
     );
   }
 
-  const isAuthorized = securityDisabled || claims?.authorized === true;
+  const isAuthorized = approvalDisabled || claims?.authorized === true;
   const isAdmin = securityDisabled || claims?.role === 'admin';
-  const isBlocked = !securityDisabled && claims?.blocked === true;
+  const isBlocked = !approvalDisabled && claims?.blocked === true;
 
   return (
     <BrowserRouter>
@@ -116,6 +118,7 @@ export default function App() {
         <TermsModal isOpen={!securityDisabled && termsPending} onAccept={handleAcceptTerms} />
         <Routes>
           <Route path="/" element={<LandingPage config={config} />} />
+          <Route path="/pricing" element={<PricingPage config={config} />} />
           <Route path="/tc" element={<TermsPage />} />
           <Route path="/pp" element={<PrivacyPage />} />
           <Route path="/instructions" element={<InstructionsPage />} />

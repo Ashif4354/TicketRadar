@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import ReCAPTCHA from 'react-google-recaptcha';
 import {
   ArrowLeft, User, Wallet, Bell, Phone, Mail, MessageSquare, PhoneCall,
-  ShieldCheck, AlertCircle, Plus, Send, RefreshCw, CheckCircle2
+  ShieldCheck, AlertCircle, Plus, Send, RefreshCw, CheckCircle2, RotateCcw
 } from 'lucide-react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,20 +27,21 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Phone and Webhook form states
+  // Email, Phone and Webhook form states
+  const [emailInput, setEmailInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [discordInput, setDiscordInput] = useState('');
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
   // Top-up Modal State
   const [topupModalOpen, setTopupModalOpen] = useState(false);
-  const [topupAmount, setTopupAmount] = useState('100'); // default ₹100
+  const [topupAmount, setTopupAmount] = useState('10'); // default ₹10
   const [topupLoading, setTopupLoading] = useState(false);
 
   // Consent Confirmation Dialog State
   const [consentDialog, setConsentDialog] = useState<{
     open: boolean;
-    channel: 'sms' | 'whatsapp' | 'call';
+    channel: 'sms' | 'whatsapp' | 'call' | 'email' | 'discord';
     action: 'opt_in' | 'opt_out';
   }>({ open: false, channel: 'sms', action: 'opt_in' });
 
@@ -50,6 +52,10 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
   const securityDisabled = isSecurityDisabled(effectiveConfig);
   const paymentsDisabled = isPaymentsDisabled(effectiveConfig);
   const hideWallet = securityDisabled || paymentsDisabled;
+  const siteKeyVal = effectiveConfig?.recaptcha_site || import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY;
+
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+  const consentRecaptchaRef = useRef<ReCAPTCHA>(null);
 
   const fetchProfileData = useCallback(async () => {
     try {
@@ -73,6 +79,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
       setProfile(profData);
       setPhoneInput(profData.phone_number || '');
       setDiscordInput(profData.discord_webhook_url || '');
+      setEmailInput(profData.email_medium_address || profData.preferences?.email_address || profData.email || '');
 
       // 3. Fetch Wallet data if payments and security are enabled
       const isSecDisabled = isSecurityDisabled(cfg || effectiveConfig);
@@ -105,9 +112,16 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
   }, [fetchProfileData]);
 
   const handleSaveContactDetails = async () => {
-    setUpdatingProfile(true);
     setError(null);
     setSuccessMsg(null);
+
+    const token = recaptchaRef.current?.getValue() || "";
+    if (!securityDisabled && !token) {
+      setError("Please complete the reCAPTCHA challenge before saving contact details.");
+      return;
+    }
+
+    setUpdatingProfile(true);
     try {
       const res = await authenticatedFetch('/api/profile/preferences', {
         method: 'PUT',
@@ -115,12 +129,15 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
         body: JSON.stringify({
           phone_number: phoneInput.trim() || null,
           discord_webhook_url: discordInput.trim() || null,
+          email_address: emailInput.trim() || null,
+          recaptcha_token: token,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to update contact details.');
 
-      setSuccessMsg('Contact information updated successfully!');
+      setSuccessMsg('Saved Successfully');
+      try { recaptchaRef.current?.reset(); } catch {}
       fetchProfileData();
     } catch (err: any) {
       setError(err?.message || 'Failed to save contact information.');
@@ -129,7 +146,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
     }
   };
 
-  const handleConsentToggle = (channel: 'sms' | 'whatsapp' | 'call', currentConsented: boolean) => {
+  const handleConsentToggle = (channel: 'sms' | 'whatsapp' | 'call' | 'email' | 'discord', currentConsented: boolean) => {
     setConsentDialog({
       open: true,
       channel,
@@ -139,22 +156,41 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
 
   const executeConsentAction = async () => {
     const { channel, action } = consentDialog;
-    setConsentDialog({ ...consentDialog, open: false });
     setError(null);
     setSuccessMsg(null);
 
+    let token = "";
+    if (action === 'opt_in' && !securityDisabled) {
+      token = consentRecaptchaRef.current?.getValue() || recaptchaRef.current?.getValue() || "";
+      if (!token) {
+        setError("Please complete the reCAPTCHA challenge before confirming consent opt-in.");
+        return;
+      }
+    }
+
+    setConsentDialog({ ...consentDialog, open: false });
+
     try {
       const endpoint = `/api/consent/${channel}/${action === 'opt_in' ? 'opt-in' : 'opt-out'}`;
+      const payload: any = { recaptcha_token: token };
+      if (channel === 'email') {
+        payload.email_address = emailInput.trim() || profile?.email || undefined;
+      } else if (channel === 'discord') {
+        payload.webhook_url = discordInput.trim() || undefined;
+      } else {
+        payload.phone_number = phoneInput.trim() || undefined;
+      }
+
       const res = await authenticatedFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone_number: phoneInput.trim() || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Consent update failed.');
 
+      try { consentRecaptchaRef.current?.reset(); } catch {}
+      try { recaptchaRef.current?.reset(); } catch {}
       setSuccessMsg(`Successfully ${action === 'opt_in' ? 'opted in to' : 'opted out of'} ${channel.toUpperCase()} alerts.`);
       fetchProfileData();
     } catch (err: any) {
@@ -163,12 +199,19 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
   };
 
   const handleSendTestAlert = async (medium: string) => {
-    setTestingMedium(medium);
     setError(null);
     setSuccessMsg(null);
+
+    const token = recaptchaRef.current?.getValue() || "";
+    if (!securityDisabled && !token) {
+      setError("Please complete the reCAPTCHA verification before sending a test alert.");
+      return;
+    }
+
+    setTestingMedium(medium);
     try {
       let recipient = '';
-      if (medium === 'Email') recipient = profile?.email || '';
+      if (medium === 'Email') recipient = emailInput.trim() || profile?.email || '';
       else if (medium === 'Discord') recipient = discordInput.trim() || profile?.discord_webhook_url || '';
       else recipient = phoneInput.trim() || profile?.phone_number || '';
 
@@ -178,16 +221,38 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
         body: JSON.stringify({
           medium: medium.toLowerCase(),
           target: recipient,
+          recaptcha_token: token,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Test alert failed.');
 
+      try { recaptchaRef.current?.reset(); } catch {}
       setSuccessMsg(`Test alert for ${medium} dispatched successfully!`);
     } catch (err: any) {
       setError(err?.message || `Failed to send test alert for ${medium}.`);
     } finally {
       setTestingMedium(null);
+    }
+  };
+
+  const handleAcceptTermsInProfile = async () => {
+    try {
+      const res = await authenticatedFetch('/api/terms/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: '2.0' }),
+      });
+      if (res.ok) {
+        setSuccessMsg('Terms v2.0 accepted successfully!');
+        setProfile((prev) => (prev ? { ...prev, terms_accepted: true, terms_version_accepted: '2.0' } : prev));
+        fetchProfileData();
+      } else {
+        const d = await res.json();
+        setError(d.detail || 'Failed to accept terms.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Error accepting terms.');
     }
   };
 
@@ -288,9 +353,14 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
               Terms {profile.terms_version_accepted || 'v2.0'} Accepted
             </Badge>
           ) : (
-            <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-semibold">
-              Terms Pending
-            </Badge>
+            <button
+              onClick={handleAcceptTermsInProfile}
+              className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer transition-colors flex items-center gap-1.5"
+              title="Click to accept Terms v2.0"
+            >
+              <AlertCircle className="h-3.5 w-3.5" />
+              Terms Pending (Click to Accept v2.0)
+            </button>
           )}
         </div>
       </div>
@@ -330,7 +400,6 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
               <div>
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Wallet Balance</span>
                 <span className="text-2xl font-black text-rose-400">₹{wallet.balance_inr.toFixed(2)}</span>
-                <span className="text-[10px] text-muted-foreground block">({wallet.balance_paise} credits)</span>
               </div>
               <Button
                 onClick={() => setTopupModalOpen(true)}
@@ -368,25 +437,75 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Email Alert</h3>
-                  <p className="text-[11px] text-muted-foreground">{profile?.email}</p>
+                  <p className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                    {emailInput || profile?.email || 'Email not set'}
+                  </p>
                 </div>
               </div>
-              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px]">
-                Free / Active
-              </Badge>
+              {profile?.consents?.email_consented ? (
+                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px]">
+                  Opted In
+                </Badge>
+              ) : (
+                <Badge className="bg-muted text-muted-foreground border border-border text-[10px]">
+                  Opted Out
+                </Badge>
+              )}
             </div>
-            <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs">
-              <span className="text-muted-foreground">Account primary email</span>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={testingMedium === 'Email'}
-                onClick={() => handleSendTestAlert('Email')}
-                className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
-              >
-                <Send className="h-3 w-3" />
-                {testingMedium === 'Email' ? 'Sending...' : 'Test Alert'}
-              </Button>
+
+            <div className="space-y-2 pt-2 border-t border-border/40">
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="email"
+                  placeholder={profile?.email || "your-email@example.com"}
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  className="h-8 text-xs bg-muted/20 flex-1"
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEmailInput(profile?.email || '')}
+                  title="Reset to primary account email"
+                  className="h-8 px-2 text-[11px] flex items-center gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  <span className="hidden sm:inline">Reset</span>
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between text-xs pt-1">
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSaveContactDetails}
+                    disabled={updatingProfile}
+                    className="h-7 text-[11px] cursor-pointer"
+                  >
+                    Save Email
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={profile?.consents?.email_consented ? "outline" : "default"}
+                    onClick={() => handleConsentToggle('email', !!profile?.consents?.email_consented)}
+                    className="h-7 text-[11px] cursor-pointer"
+                  >
+                    {profile?.consents?.email_consented ? 'Revoke Consent' : 'Opt-In'}
+                  </Button>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={testingMedium === 'Email'}
+                  onClick={() => handleSendTestAlert('Email')}
+                  className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
+                >
+                  <Send className="h-3 w-3" />
+                  {testingMedium === 'Email' ? 'Sending...' : 'Test Alert'}
+                </Button>
+              </div>
             </div>
           </Card>
 
@@ -404,28 +523,59 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                   </p>
                 </div>
               </div>
-              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px]">
-                Free / Active
-              </Badge>
+              {profile?.consents?.discord_consented ? (
+                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px]">
+                  Opted In
+                </Badge>
+              ) : (
+                <Badge className="bg-muted text-muted-foreground border border-border text-[10px]">
+                  Opted Out
+                </Badge>
+              )}
             </div>
+
             <div className="space-y-2 pt-2 border-t border-border/40">
-              <Input
-                placeholder="https://discord.com/api/webhooks/..."
-                value={discordInput}
-                onChange={(e) => setDiscordInput(e.target.value)}
-                className="h-8 text-xs bg-muted/20"
-              />
+              <div className="flex gap-2 items-center">
+                <Input
+                  placeholder="https://discord.com/api/webhooks/..."
+                  value={discordInput}
+                  onChange={(e) => setDiscordInput(e.target.value)}
+                  className="h-8 text-xs bg-muted/20 flex-1"
+                />
+                {discordInput && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDiscordInput('')}
+                    title="Clear webhook URL"
+                    className="h-8 px-2 text-[11px] flex items-center gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    <span className="hidden sm:inline">Clear</span>
+                  </Button>
+                )}
+              </div>
               <div className="flex items-center justify-between text-xs">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSaveContactDetails}
-                  disabled={updatingProfile}
-                  className="h-7 text-[11px] cursor-pointer"
-                >
-                  Save Webhook
-                </Button>
-                {profile?.discord_webhook_url && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSaveContactDetails}
+                    disabled={updatingProfile}
+                    className="h-7 text-[11px] cursor-pointer"
+                  >
+                    Save Webhook
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={profile?.consents?.discord_consented ? "outline" : "default"}
+                    onClick={() => handleConsentToggle('discord', !!profile?.consents?.discord_consented)}
+                    className="h-7 text-[11px] cursor-pointer"
+                  >
+                    {profile?.consents?.discord_consented ? 'Revoke Consent' : 'Opt-In'}
+                  </Button>
+                </div>
+                {discordInput.trim() && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -620,6 +770,28 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
             </Button>
           </div>
         </Card>
+
+        {/* Security Verification (reCAPTCHA) */}
+        {!securityDisabled && (
+          <Card className="border border-border/70 glassmorphism p-5 rounded-xl space-y-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-rose-400" />
+              <h3 className="text-sm font-semibold text-foreground">Security Verification</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Please complete the verification below before saving contact settings or sending test alerts.
+            </p>
+            <div className="flex justify-center sm:justify-start pt-1">
+              <div className="g-recaptcha-premium-container">
+                <ReCAPTCHA
+                  ref={recaptchaRef}
+                  sitekey={siteKeyVal}
+                  theme="dark"
+                />
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Wallet Transaction Ledger (when payments and security are enabled) */}
@@ -692,11 +864,11 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Add credits to your wallet via Cashfree (UPI, Netbanking, Cards). 1 Credit = ₹1.00 = 100 paise. Wallet credits are non-withdrawable.
+              Add funds to your wallet via Cashfree (UPI, Netbanking, Cards). Funds are non-withdrawable and used exclusively for ticket notification alerts.
             </p>
 
             <div className="grid grid-cols-4 gap-2 pt-1">
-              {['50', '100', '200', '500'].map((amt) => (
+              {['5', '10', '25', '50'].map((amt) => (
                 <button
                   key={amt}
                   type="button"
@@ -721,7 +893,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                 value={topupAmount}
                 onChange={(e) => setTopupAmount(e.target.value)}
                 className="h-10 text-sm bg-muted/20"
-                placeholder="100"
+                placeholder="10"
               />
             </div>
 
@@ -763,7 +935,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                 <>
                   By opting in, you give express affirmative consent to receive automated{' '}
                   <strong className="text-foreground uppercase">{consentDialog.channel}</strong> ticket availability
-                  alerts at your registered phone number. You may revoke this consent anytime in your Profile.
+                  alerts. You may revoke this consent anytime in your Profile.
                 </>
               ) : (
                 <>
@@ -773,6 +945,18 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                 </>
               )}
             </p>
+
+            {!securityDisabled && consentDialog.action === 'opt_in' && (
+              <div className="flex justify-center py-2">
+                <div className="g-recaptcha-premium-container">
+                  <ReCAPTCHA
+                    ref={consentRecaptchaRef}
+                    sitekey={siteKeyVal}
+                    theme="dark"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-border/50">
               <Button

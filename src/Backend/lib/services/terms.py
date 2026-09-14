@@ -12,6 +12,12 @@ class TermsService:
     Manages acceptance and version tracking for Terms of Service and Privacy Policy.
     """
 
+    @staticmethod
+    def normalize_version(version: str | None) -> str:
+        if not version:
+            return ""
+        return str(version).strip().lower().lstrip("v")
+
     @classmethod
     def get_current_version(cls) -> str:
         return settings.current_terms_version if settings else "2.0"
@@ -24,14 +30,14 @@ class TermsService:
         if is_security_disabled() or not db or not uid or uid == "dev-user-001":
             return True
 
-        current_ver = cls.get_current_version()
+        current_ver = cls.normalize_version(cls.get_current_version())
         try:
             doc = db.collection("users").document(uid).get()
             if not doc.exists:
                 return False
             data = doc.to_dict() or {}
-            accepted_ver = data.get("terms_version_accepted")
-            return accepted_ver == current_ver
+            accepted_ver = cls.normalize_version(data.get("terms_version_accepted"))
+            return bool(accepted_ver and accepted_ver == current_ver)
         except Exception as e:
             logger.error(f"Error checking terms acceptance for {uid}: {e}")
             return False
@@ -45,9 +51,10 @@ class TermsService:
             return False
 
         try:
+            norm_ver = cls.normalize_version(version) or "2.0"
             db.collection("users").document(uid).set({
                 "uid": uid,
-                "terms_version_accepted": version,
+                "terms_version_accepted": version or f"v{norm_ver}",
                 "terms_accepted_at": firestore.SERVER_TIMESTAMP,
                 "updated_at": firestore.SERVER_TIMESTAMP,
             }, merge=True)

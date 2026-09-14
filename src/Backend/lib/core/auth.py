@@ -71,6 +71,14 @@ def is_security_disabled() -> bool:
     )
 
 
+def is_approval_disabled() -> bool:
+    """Checks whether approval / authorization gating is globally disabled."""
+    return (
+        os.getenv("DISABLE_APPROVAL", "false").lower() in ("true", "1") or
+        (settings and getattr(settings, "disable_approval", False))
+    )
+
+
 async def verify_app_check(x_firebase_appcheck: str = Header(None, alias="X-Firebase-AppCheck")):
     """Verifies the Firebase App Check token to ensure calls originate from the client app."""
     disable_security = (
@@ -162,8 +170,8 @@ async def get_current_user_claims(
             detail=f"Invalid or expired ID token: {e}"
         )
 
-    # 3. Check if user is blocked
-    if claims.get("blocked", False):
+    # 3. Check if user is blocked (bypassed if approval gating is disabled)
+    if claims.get("blocked", False) and not is_approval_disabled():
         user_uid = claims.get("uid") or "unknown"
         gcp_logger.log_event("Blocked User Access Attempt", user_id=user_uid, details={"email": claims.get("email")}, level="WARNING")
         raise HTTPException(
@@ -176,12 +184,17 @@ async def get_current_user_claims(
 async def get_authorized_user(claims: dict = Depends(get_current_user_claims)):
     """
     Verifies that the user has the 'authorized' custom claim set to True.
-    When security is disabled, bypasses authorization check.
+    When security or approval gating is disabled, bypasses authorization check.
     """
     if is_security_disabled():
         res = dict(claims or DEV_MOCK_CLAIMS)
         res["authorized"] = True
         res["role"] = "admin"
+        res["blocked"] = False
+        return res
+    if is_approval_disabled():
+        res = dict(claims or DEV_MOCK_CLAIMS)
+        res["authorized"] = True
         res["blocked"] = False
         return res
     if not claims.get("authorized", False):

@@ -107,6 +107,8 @@ class PricingService:
         whatsapp_paise: int,
         phone_call_paise: int,
         note: str,
+        email_paise: int = 0,
+        discord_paise: int = 0,
     ) -> Dict[str, Any]:
         """
         Atomically supersedes the current pricing config with a new one and records an audit log.
@@ -115,7 +117,7 @@ class PricingService:
         if not note or not note.strip():
             raise ValueError("An explanation note is required when updating notification prices.")
 
-        if sms_paise < 0 or whatsapp_paise < 0 or phone_call_paise < 0:
+        if sms_paise < 0 or whatsapp_paise < 0 or phone_call_paise < 0 or email_paise < 0 or discord_paise < 0:
             raise ValueError("Pricing amounts must be non-negative integer paise.")
 
         if not db:
@@ -145,8 +147,8 @@ class PricingService:
             "sms_paise": int(sms_paise),
             "whatsapp_paise": int(whatsapp_paise),
             "phone_call_paise": int(phone_call_paise),
-            "email_paise": 0,
-            "discord_paise": 0,
+            "email_paise": int(email_paise),
+            "discord_paise": int(discord_paise),
             "is_current": True,
             "effective_from": firestore.SERVER_TIMESTAMP,
             "superseded_at": None,

@@ -162,3 +162,38 @@ async def test_api_config_reports_disable_security(monkeypatch):
         data = res.json()
         assert data["disable_security"] is True
 
+
+@pytest.mark.asyncio
+async def test_disable_approval_bypass(monkeypatch):
+    monkeypatch.setenv("DISABLE_SECURITY", "false")
+    monkeypatch.setenv("DISABLE_APPROVAL", "true")
+    from lib.utils.config import settings
+    if settings:
+        monkeypatch.setattr(settings, "disable_security", False)
+        monkeypatch.setattr(settings, "disable_approval", True)
+
+    from lib.core.auth import is_approval_disabled, get_authorized_user
+
+    assert is_approval_disabled() is True
+
+    # User that is blocked and not authorized
+    unauthorized_claims = {
+        "uid": "blocked-user-456",
+        "email": "blocked@example.com",
+        "authorized": False,
+        "blocked": True,
+        "role": "user"
+    }
+
+    # Under DISABLE_APPROVAL=true, should be allowed through freely
+    auth_user = await get_authorized_user(unauthorized_claims)
+    assert auth_user["authorized"] is True
+    assert auth_user["blocked"] is False
+
+    # Also verify /api/config reports disable_approval
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/config")
+        assert res.status_code == 200
+        assert res.json()["disable_approval"] is True
+

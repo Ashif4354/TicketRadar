@@ -45,6 +45,9 @@ async def record_login_event(
                     "first_login_at": google_firestore.SERVER_TIMESTAMP
                 }, merge=True)
                 background_tasks.add_task(admin_notifier.notify_first_login, user_name, email, photo_url)
+                if email:
+                    from lib.services.notification.user_mailer import send_signup_email
+                    background_tasks.add_task(send_signup_email, email, user_name)
 
             gcp_logger.log_event(
                 "User Logged In",

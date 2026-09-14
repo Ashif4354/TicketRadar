@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { 
   Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, 
   LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock, 
-  ExternalLink, Search, X, DollarSign, Wallet, RotateCcw, FileText, CheckCircle2 
+  ExternalLink, Search, X, DollarSign, Wallet, RotateCcw, FileText, CheckCircle2,
+  ChevronLeft, ChevronRight, Filter
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -24,7 +25,7 @@ interface AdminDashboardProps {
  * Provides an administrative interface for managing access requests, user accounts, and ticket-monitoring jobs.
  */
 export function AdminDashboard({ config }: AdminDashboardProps = {}) {
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs' | 'pricing' | 'wallets' | 'refunds' | 'audit_logs'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs' | 'pricing' | 'wallets' | 'transactions' | 'refunds' | 'audit_logs'>('requests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [requests, setRequests] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -43,9 +44,22 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
   const [smsPaise, setSmsPaise] = useState('50');
   const [whatsappPaise, setWhatsappPaise] = useState('100');
   const [phoneCallPaise, setPhoneCallPaise] = useState('150');
+  const [emailPaise, setEmailPaise] = useState('0');
+  const [discordPaise, setDiscordPaise] = useState('0');
   const [pricingNote, setPricingNote] = useState('');
   const [pricingUpdating, setPricingUpdating] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
+
+  // Global Transactions state
+  const [adminTxns, setAdminTxns] = useState<any[]>([]);
+  const [adminTxnPage, setAdminTxnPage] = useState(1);
+  const [adminTxnTotal, setAdminTxnTotal] = useState(0);
+  const [adminTxnTotalPages, setAdminTxnTotalPages] = useState(1);
+  const [adminTxnFilterUid, setAdminTxnFilterUid] = useState('');
+  const [adminTxnFilterType, setAdminTxnFilterType] = useState('');
+  const [adminTxnFilterDirection, setAdminTxnFilterDirection] = useState('');
+  const [adminTxnSearch, setAdminTxnSearch] = useState('');
+  const [adminTxnLoading, setAdminTxnLoading] = useState(false);
 
   // Wallet states
   const [walletSearchUid, setWalletSearchUid] = useState('');
@@ -114,9 +128,38 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
     }
   }, [paymentsDisabled, activeTab]);
 
+  const fetchAdminTransactions = useCallback(async (page = 1) => {
+    setAdminTxnLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: '20',
+      });
+      if (adminTxnFilterUid.trim()) params.append('uid', adminTxnFilterUid.trim());
+      if (adminTxnFilterType) params.append('txn_type', adminTxnFilterType);
+      if (adminTxnFilterDirection) params.append('direction', adminTxnFilterDirection);
+      if (adminTxnSearch.trim()) params.append('search', adminTxnSearch.trim());
+
+      const res = await authenticatedFetch(`/admin/transactions?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAdminTxns(data.items || []);
+        setAdminTxnTotal(data.total || 0);
+        setAdminTxnPage(data.page || 1);
+        setAdminTxnTotalPages(data.total_pages || 1);
+      } else {
+        setError("Failed to fetch admin transactions.");
+      }
+    } catch (e: any) {
+      setError(e.message || "Error fetching transactions.");
+    } finally {
+      setAdminTxnLoading(false);
+    }
+  }, [adminTxnFilterUid, adminTxnFilterType, adminTxnFilterDirection, adminTxnSearch]);
+
   const fetchData = useCallback(async () => {
     if (securityDisabled) return;
-    if (paymentsDisabled && (activeTab === 'pricing' || activeTab === 'wallets' || activeTab === 'refunds')) {
+    if (paymentsDisabled && (activeTab === 'pricing' || activeTab === 'wallets' || activeTab === 'transactions' || activeTab === 'refunds')) {
       return;
     }
     setLoading(true);
@@ -149,10 +192,14 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
             setSmsPaise(String(data.current.sms_paise ?? 50));
             setWhatsappPaise(String(data.current.whatsapp_paise ?? 100));
             setPhoneCallPaise(String(data.current.phone_call_paise ?? 150));
+            setEmailPaise(String(data.current.email_paise ?? 0));
+            setDiscordPaise(String(data.current.discord_paise ?? 0));
           }
         } else {
           setError("Failed to fetch pricing configuration.");
         }
+      } else if (activeTab === 'transactions') {
+        await fetchAdminTransactions(1);
       } else if (activeTab === 'audit_logs') {
         const res = await authenticatedFetch('/admin/audit-logs');
         if (res.ok) setAuditLogs(await res.json());
@@ -163,7 +210,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, paymentsDisabled, securityDisabled]);
+  }, [activeTab, fetchAdminTransactions, paymentsDisabled, securityDisabled]);
 
   useEffect(() => {
     if (securityDisabled) return;
@@ -276,6 +323,8 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
           sms_paise: parseInt(smsPaise, 10),
           whatsapp_paise: parseInt(whatsappPaise, 10),
           phone_call_paise: parseInt(phoneCallPaise, 10),
+          email_paise: parseInt(emailPaise, 10) || 0,
+          discord_paise: parseInt(discordPaise, 10) || 0,
           note: pricingNote.trim(),
         }),
       });
@@ -537,6 +586,18 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
               >
                 <Wallet className="h-3.5 w-3.5 text-rose-400" />
                 Wallets
+              </Button>
+              <Button
+                onClick={() => {
+                  setActiveTab('transactions');
+                  fetchAdminTransactions(1);
+                }}
+                variant={activeTab === 'transactions' ? 'default' : 'ghost'}
+                size="sm"
+                className="text-xs font-semibold gap-1.5"
+              >
+                <TableIcon className="h-3.5 w-3.5 text-rose-400" />
+                Transactions
               </Button>
               <Button
                 onClick={() => setActiveTab('refunds')}
@@ -1194,7 +1255,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card className="border border-border/80 glassmorphism p-5 rounded-xl">
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">SMS Price</span>
               <span className="text-2xl font-bold text-foreground">₹{((pricingConfig?.sms_paise ?? 50) / 100).toFixed(2)}</span>
@@ -1210,6 +1271,16 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
               <span className="text-2xl font-bold text-rose-400">₹{((pricingConfig?.phone_call_paise ?? 150) / 100).toFixed(2)}</span>
               <span className="text-[11px] text-muted-foreground block">({pricingConfig?.phone_call_paise ?? 150} paise)</span>
             </Card>
+            <Card className="border border-border/80 glassmorphism p-5 rounded-xl">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Email Price</span>
+              <span className="text-2xl font-bold text-blue-400">₹{((pricingConfig?.email_paise ?? 0) / 100).toFixed(2)}</span>
+              <span className="text-[11px] text-muted-foreground block">({pricingConfig?.email_paise ?? 0} paise)</span>
+            </Card>
+            <Card className="border border-border/80 glassmorphism p-5 rounded-xl">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Discord Price</span>
+              <span className="text-2xl font-bold text-indigo-400">₹{((pricingConfig?.discord_paise ?? 0) / 100).toFixed(2)}</span>
+              <span className="text-[11px] text-muted-foreground block">({pricingConfig?.discord_paise ?? 0} paise)</span>
+            </Card>
           </div>
 
           <Card className="border border-border/80 glassmorphism p-6 rounded-2xl">
@@ -1224,7 +1295,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
             </CardHeader>
 
             <form onSubmit={handleUpdatePricing} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-foreground">SMS (paise)</label>
                   <Input
@@ -1263,6 +1334,32 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                   />
                   <span className="text-[10px] text-muted-foreground">₹{((parseInt(phoneCallPaise, 10) || 0) / 100).toFixed(2)}</span>
                 </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Email (paise)</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={emailPaise}
+                    onChange={(e) => setEmailPaise(e.target.value)}
+                    className="h-9 text-xs bg-muted/20"
+                    placeholder="0"
+                  />
+                  <span className="text-[10px] text-muted-foreground">₹{((parseInt(emailPaise, 10) || 0) / 100).toFixed(2)}</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Discord (paise)</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={discordPaise}
+                    onChange={(e) => setDiscordPaise(e.target.value)}
+                    className="h-9 text-xs bg-muted/20"
+                    placeholder="0"
+                  />
+                  <span className="text-[10px] text-muted-foreground">₹{((parseInt(discordPaise, 10) || 0) / 100).toFixed(2)}</span>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -1300,6 +1397,8 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                       <th className="pb-2">SMS</th>
                       <th className="pb-2">WhatsApp</th>
                       <th className="pb-2">Call</th>
+                      <th className="pb-2">Email</th>
+                      <th className="pb-2">Discord</th>
                       <th className="pb-2">Status</th>
                       <th className="pb-2">Audit Reason</th>
                     </tr>
@@ -1313,6 +1412,8 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                         <td className="py-2.5">₹{(item.sms_paise / 100).toFixed(2)}</td>
                         <td className="py-2.5">₹{(item.whatsapp_paise / 100).toFixed(2)}</td>
                         <td className="py-2.5">₹{(item.phone_call_paise / 100).toFixed(2)}</td>
+                        <td className="py-2.5">₹{((item.email_paise ?? 0) / 100).toFixed(2)}</td>
+                        <td className="py-2.5">₹{((item.discord_paise ?? 0) / 100).toFixed(2)}</td>
                         <td className="py-2.5">
                           {item.is_current ? (
                             <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px]">
@@ -1468,6 +1569,221 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                 </div>
               </div>
             )}
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Global Wallet Transactions */}
+      {!paymentsDisabled && activeTab === 'transactions' && (
+        <div className="space-y-6">
+          <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border/40 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <TableIcon className="h-4 w-4 text-rose-400" />
+                  Global Transaction Ledger
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Audit, inspect, and filter wallet transactions across all users.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchAdminTransactions(adminTxnPage)}
+                disabled={adminTxnLoading}
+                className="text-xs gap-1.5 h-8 shrink-0"
+              >
+                <RefreshCw className={`h-3 w-3 ${adminTxnLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">User UID</label>
+                <Input
+                  placeholder="Filter by UID..."
+                  value={adminTxnFilterUid}
+                  onChange={(e) => setAdminTxnFilterUid(e.target.value)}
+                  className="h-8 text-xs bg-muted/20"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Transaction Type</label>
+                <select
+                  value={adminTxnFilterType}
+                  onChange={(e) => setAdminTxnFilterType(e.target.value)}
+                  className="h-8 w-full text-xs rounded-md border border-input bg-background/50 px-2.5 text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">All Types</option>
+                  <option value="TOPUP">TOPUP</option>
+                  <option value="ALERT_DEBIT">ALERT_DEBIT</option>
+                  <option value="ADMIN_ADJUSTMENT">ADMIN_ADJUSTMENT</option>
+                  <option value="REFUND">REFUND</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Direction</label>
+                <select
+                  value={adminTxnFilterDirection}
+                  onChange={(e) => setAdminTxnFilterDirection(e.target.value)}
+                  className="h-8 w-full text-xs rounded-md border border-input bg-background/50 px-2.5 text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">All Directions</option>
+                  <option value="CREDIT">CREDIT (+)</option>
+                  <option value="DEBIT">DEBIT (-)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Search Details</label>
+                <Input
+                  placeholder="Search description, IDs..."
+                  value={adminTxnSearch}
+                  onChange={(e) => setAdminTxnSearch(e.target.value)}
+                  className="h-8 text-xs bg-muted/20"
+                />
+              </div>
+
+              <div className="flex items-end gap-2">
+                <Button
+                  onClick={() => fetchAdminTransactions(1)}
+                  disabled={adminTxnLoading}
+                  size="sm"
+                  className="h-8 text-xs font-semibold bg-rose-500 hover:bg-rose-600 flex-1"
+                >
+                  <Filter className="h-3 w-3 mr-1" />
+                  Filter
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setAdminTxnFilterUid('');
+                    setAdminTxnFilterType('');
+                    setAdminTxnFilterDirection('');
+                    setAdminTxnSearch('');
+                    setAdminTxnLoading(true);
+                    authenticatedFetch('/admin/transactions?page=1&page_size=20')
+                      .then((res) => res.json())
+                      .then((data) => {
+                        setAdminTxns(data.items || []);
+                        setAdminTxnTotal(data.total || 0);
+                        setAdminTxnPage(data.page || 1);
+                        setAdminTxnTotalPages(data.total_pages || 1);
+                      })
+                      .catch((e: any) => setError(e.message))
+                      .finally(() => setAdminTxnLoading(false));
+                  }}
+                  disabled={adminTxnLoading}
+                  size="sm"
+                  className="h-8 text-xs"
+                >
+                  Reset
+                </Button>
+              </div>
+            </div>
+
+            {/* Table */}
+            {adminTxnLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center text-muted-foreground text-xs">
+                <RefreshCw className="h-6 w-6 animate-spin mb-2 text-rose-400" />
+                Loading ledger entries...
+              </div>
+            ) : adminTxns.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground">
+                No transactions found matching the specified filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border/50 text-muted-foreground">
+                      <th className="pb-2 font-medium">Timestamp</th>
+                      <th className="pb-2 font-medium">User UID</th>
+                      <th className="pb-2 font-medium">Type</th>
+                      <th className="pb-2 font-medium">Direction</th>
+                      <th className="pb-2 font-medium text-right">Amount</th>
+                      <th className="pb-2 font-medium text-right">Balance After</th>
+                      <th className="pb-2 font-medium">Description</th>
+                      <th className="pb-2 font-medium">Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {adminTxns.map((tx: any) => (
+                      <tr key={tx.id || Math.random().toString()} className="hover:bg-muted/10">
+                        <td className="py-2.5 text-muted-foreground whitespace-nowrap">
+                          {tx.created_at ? formatTimestamp(tx.created_at) : '—'}
+                        </td>
+                        <td className="py-2.5 font-mono text-[11px] max-w-[120px] truncate" title={tx.uid}>
+                          {tx.uid}
+                        </td>
+                        <td className="py-2.5">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-muted/40">
+                            {tx.type}
+                          </span>
+                        </td>
+                        <td className="py-2.5">
+                          {tx.direction === 'CREDIT' ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px]">
+                              CREDIT
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[9px]">
+                              DEBIT
+                            </Badge>
+                          )}
+                        </td>
+                        <td className={`py-2.5 text-right font-bold whitespace-nowrap ${tx.direction === 'CREDIT' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {tx.direction === 'CREDIT' ? '+' : '-'}₹{(Number(tx.amount_paise || 0) / 100).toFixed(2)}
+                        </td>
+                        <td className="py-2.5 text-right font-mono text-muted-foreground whitespace-nowrap">
+                          ₹{(Number(tx.balance_after_paise || 0) / 100).toFixed(2)}
+                        </td>
+                        <td className="py-2.5 text-foreground max-w-xs truncate" title={tx.description}>
+                          {tx.description || '—'}
+                        </td>
+                        <td className="py-2.5 text-muted-foreground text-[10px] font-mono max-w-[140px] truncate" title={tx.payment_id || tx.job_id || tx.idempotency_key || '—'}>
+                          {tx.payment_id || tx.job_id || tx.idempotency_key || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/40 text-xs text-muted-foreground">
+              <span>
+                Page <span className="font-semibold text-foreground">{adminTxnPage}</span> of <span className="font-semibold text-foreground">{adminTxnTotalPages}</span> ({adminTxnTotal} total)
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchAdminTransactions(adminTxnPage - 1)}
+                  disabled={adminTxnPage <= 1 || adminTxnLoading}
+                  className="h-8 px-2.5 text-xs gap-1"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchAdminTransactions(adminTxnPage + 1)}
+                  disabled={adminTxnPage >= adminTxnTotalPages || adminTxnLoading}
+                  className="h-8 px-2.5 text-xs gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
           </Card>
         </div>
       )}

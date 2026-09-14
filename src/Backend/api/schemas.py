@@ -28,6 +28,8 @@ class CreateJobRequest(BaseModel):
     sms_consent: bool = Field(default=False, description="Consent for SMS alerts")
     whatsapp_consent: bool = Field(default=False, description="Consent for WhatsApp alerts")
     call_consent: bool = Field(default=False, description="Consent for automated phone calls")
+    email_consent: bool = Field(default=False, description="Consent for email alerts")
+    discord_consent: bool = Field(default=False, description="Consent for Discord alerts")
 
 class UpdateJobRequest(BaseModel):
     service_provider: str = "BookMyShow"
@@ -49,6 +51,8 @@ class UpdatePricesRequest(BaseModel):
     sms_paise: int = Field(..., ge=0)
     whatsapp_paise: int = Field(..., ge=0)
     phone_call_paise: int = Field(..., ge=0)
+    email_paise: int = Field(default=0, ge=0)
+    discord_paise: int = Field(default=0, ge=0)
     note: str = Field(..., min_length=3, description="Audit explanation for price change")
 
 class AdminAdjustWalletRequest(BaseModel):
@@ -76,9 +80,13 @@ class UpdateNotificationPreferencesRequest(BaseModel):
     sms_phone: Optional[str] = None
     email_fallback_on_no_answer: Optional[bool] = None
     preferred_medium: Optional[str] = None
+    recaptcha_token: str = Field(default="", description="Google reCAPTCHA token")
 
 class OptInRequest(BaseModel):
     phone_number: Optional[str] = None
+    email_address: Optional[str] = None
+    webhook_url: Optional[str] = None
+    recaptcha_token: str = Field(default="", description="Google reCAPTCHA token")
 
 class AcceptTermsRequest(BaseModel):
     version: str = Field(default="2.0")

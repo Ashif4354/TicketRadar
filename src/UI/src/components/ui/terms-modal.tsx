@@ -64,7 +64,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
             <div className="flex gap-2">
               <CheckCircle2 className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-foreground">User Wallet & Credits:</span> 1 Credit = ₹1.00 (100 paise). Wallet credits are strictly non-withdrawable and non-redeemable for physical cash or payout.
+                <span className="font-semibold text-foreground">User Wallet:</span> Wallet balances are denominated strictly in Indian Rupees (₹) (100 paise = ₹1.00). Wallet funds are strictly non-withdrawable and non-redeemable for physical cash or payout.
               </div>
             </div>
 

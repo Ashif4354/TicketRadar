@@ -79,6 +79,77 @@ class WalletService:
                 return []
 
     @classmethod
+    def get_all_transactions(
+        cls,
+        page: int = 1,
+        page_size: int = 20,
+        uid: Optional[str] = None,
+        txn_type: Optional[str] = None,
+        direction: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Fetch all transactions across users with pagination and filtering for admins.
+        """
+        if not db:
+            return {"items": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
+
+        try:
+            coll = db.collection("wallet_transactions")
+            docs = coll.stream()
+            txns = []
+            for doc in docs:
+                item = doc.to_dict() or {}
+                if "created_at" in item and item["created_at"]:
+                    try:
+                        item["created_at"] = item["created_at"].isoformat()
+                    except Exception:
+                        pass
+                txns.append(item)
+
+            if uid:
+                uid_clean = uid.strip().lower()
+                txns = [t for t in txns if str(t.get("uid", "")).lower() == uid_clean]
+
+            if txn_type:
+                tt_clean = txn_type.strip().lower()
+                txns = [t for t in txns if str(t.get("type", "")).lower() == tt_clean]
+
+            if direction:
+                dir_clean = direction.strip().upper()
+                txns = [t for t in txns if str(t.get("direction", "")).upper() == dir_clean]
+
+            if search:
+                s_clean = search.strip().lower()
+                txns = [
+                    t for t in txns
+                    if s_clean in str(t.get("description", "")).lower()
+                    or s_clean in str(t.get("idempotency_key", "")).lower()
+                    or s_clean in str(t.get("payment_id", "")).lower()
+                    or s_clean in str(t.get("job_id", "")).lower()
+                    or s_clean in str(t.get("uid", "")).lower()
+                ]
+
+            txns.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+
+            total = len(txns)
+            total_pages = (total + page_size - 1) // page_size if page_size > 0 else 1
+            start = (max(1, page) - 1) * page_size
+            end = start + page_size
+            paged_items = txns[start:end]
+
+            return {
+                "items": paged_items,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+            }
+        except Exception as e:
+            logger.error(f"Error fetching all transactions: {e}")
+            return {"items": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
+
+    @classmethod
     def credit(
         cls,
         uid: str,
@@ -242,6 +313,7 @@ class WalletService:
                     return ret_record
 
                 result = _run_in_transaction(db.transaction())
+                cls._dispatch_txn_email(uid, result)
                 return result
 
             except InsufficientFundsError:
@@ -256,3 +328,73 @@ class WalletService:
                     raise InsufficientFundsError(str(e))
                 logger.error(f"Wallet transaction error for uid {uid}: {e}")
                 raise
+
+    @classmethod
+    def _dispatch_txn_email(cls, uid: str, record: Dict[str, Any]):
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        async def _send():
+            try:
+                if not db or not uid:
+                    return
+                user_doc = db.collection("users").document(uid).get()
+                if not user_doc.exists:
+                    return
+                udata = user_doc.to_dict() or {}
+                user_email = udata.get("email")
+                user_name = udata.get("displayName") or "User"
+                if not user_email:
+                    return
+
+                from .notification.user_mailer import (
+                    send_wallet_transaction_email,
+                    send_refund_email,
+                    send_wallet_topup_success_email
+                )
+                amt_inr = round(record.get("amount_paise", 0) / 100.0, 2)
+                bal_inr = round(record.get("balance_after_paise", 0) / 100.0, 2)
+                ttype = record.get("type", "")
+                direction = record.get("direction", "")
+                desc = record.get("description", "")
+                job_id = record.get("job_id", "")
+                payment_id = record.get("payment_id", "")
+
+                if "REFUND" in ttype:
+                    await send_refund_email(
+                        recipient_email=user_email,
+                        user_name=user_name,
+                        amount_inr=amt_inr,
+                        reason=desc or "Refund processed",
+                        job_id=job_id or "",
+                        new_balance_inr=bal_inr
+                    )
+                elif ttype == "WALLET_TOPUP":
+                    await send_wallet_topup_success_email(
+                        recipient_email=user_email,
+                        user_name=user_name,
+                        amount_inr=amt_inr,
+                        new_balance_inr=bal_inr,
+                        order_id=payment_id or record.get("idempotency_key", "")
+                    )
+
+                await send_wallet_transaction_email(
+                    recipient_email=user_email,
+                    user_name=user_name,
+                    txn_type=ttype,
+                    direction=direction,
+                    amount_inr=amt_inr,
+                    new_balance_inr=bal_inr,
+                    description=desc
+                )
+            except Exception as e:
+                logger.debug(f"Async wallet email dispatch error: {e}")
+
+        try:
+            loop.create_task(_send())
+        except Exception:
+            pass
+

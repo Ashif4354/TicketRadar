@@ -2,12 +2,14 @@
 
 from typing import List, Optional
 from .base import NotificationStrategy
+from .templates.message import MessageTemplates
 from ...providers.notification.base import NotificationProviderAdapter
-from ...utils.redact import redact_phone
 
-class SMSNotificationStrategy(NotificationStrategy):
+
+class SMSNotificationStrategy(NotificationStrategy, MessageTemplates):
     """
     Delivers movie ticket availability alerts via SMS using the NotificationProviderAdapter.
+    Inherits template rendering capabilities from MessageTemplates.
     """
 
     def __init__(
@@ -31,17 +33,18 @@ class SMSNotificationStrategy(NotificationStrategy):
         language: str = "",
         format_name: str = ""
     ) -> tuple[bool, str]:
-        theatres_summary = ", ".join(available_theatres[:3])
-        if len(available_theatres) > 3:
-            theatres_summary += f" +{len(available_theatres) - 3} more"
-
-        fmt_desc = f" ({language} {format_name})".strip() if (language or format_name) else ""
-        body = (
-            f"🎬 TicketRadar Alert: Tickets open for {movie_name}{fmt_desc} on {date_str}!\n"
-            f"Cinemas: {theatres_summary}\n"
-            f"Book now: {url}"
+        rendered = self.get_template(
+            "booking_alert",
+            movie_name=movie_name,
+            date_str=date_str,
+            available_theatres=available_theatres,
+            unavailable_theatres=unavailable_theatres,
+            url=url,
+            language=language,
+            format_name=format_name
         )
 
+        body = rendered["body"]
         idempotency_key = f"sms_{self._job_id}_{date_str}"
         result = await self._provider.send_sms(
             to=self._phone_number,

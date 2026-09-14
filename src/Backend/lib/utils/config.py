@@ -48,6 +48,7 @@ class Settings(BaseSettings):
 
     # Security Settings
     disable_security: bool = Field(default=False)
+    disable_approval: bool = Field(default=False)
 
     # Self-hosted / Payments Configuration
     disable_payments: bool = Field(default=False)

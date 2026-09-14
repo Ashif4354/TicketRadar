@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { 
   Film, Calendar, MessageSquare, Clock, 
-  Play, Pause, Trash2, Sliders, Plus, Send, 
-  AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  ExternalLink, RefreshCw, Timer, Power, BookOpen, Pencil, X
+  Play, Pause, Trash2, Sliders, Plus, 
+  AlertTriangle, CheckCircle2, 
+  ExternalLink, RefreshCw, Timer, BookOpen, Pencil, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -89,8 +89,11 @@ export function AppDashboard() {
   const [smsConsent, setSmsConsent] = useState(false);
   const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [callConsent, setCallConsent] = useState(false);
-  const [, setUserProfile] = useState<any>(null);
+  const [emailConsent, setEmailConsent] = useState(false);
+  const [discordConsent, setDiscordConsent] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [userWallet, setUserWallet] = useState<any>(null);
+  const [prices, setPrices] = useState<any>(null);
   const [intervalSec, setIntervalSec] = useState(60);
 
   // New Monitor Form inputs
@@ -100,15 +103,7 @@ export function AppDashboard() {
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
-  // Test alerts connection inputs
-  const [testExpanded, setTestExpanded] = useState(false);
-  const [testMedium, setTestMedium] = useState<"Email" | "Discord Webhook">("Email");
-  const [testTarget, setTestTarget] = useState("");
-  const [testLoading, setTestLoading] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-
   // reCAPTCHA ref
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
   const mainRecaptchaRef = useRef<ReCAPTCHA>(null);
 
   // Edit Job State
@@ -328,6 +323,10 @@ export function AppDashboard() {
         } else {
           setUserWallet(null);
         }
+        authenticatedFetch('/api/payments/prices')
+          .then(r => r.json())
+          .then(p => { if (p && !p.detail) setPrices(p); })
+          .catch(err => console.error("Failed to load prices in dashboard:", err));
       }
     } catch (err) {
       console.error("Failed to fetch API config:", err);
@@ -361,10 +360,16 @@ export function AppDashboard() {
       .then(prof => {
         if (prof && !prof.detail) {
           setUserProfile(prof);
+          const savedEmail = prof.email_medium_address || prof.preferences?.email_address || prof.email || "";
+          const savedDiscord = prof.discord_webhook_url || prof.preferences?.discord_webhook_url || "";
           if (prof.phone_number) setPhoneNumber(prof.phone_number);
+          if (savedEmail) setEmail(savedEmail);
+          if (savedDiscord) setWebhook(savedDiscord);
           if (prof.consents?.sms_consented) setSmsConsent(true);
           if (prof.consents?.whatsapp_consented) setWhatsappConsent(true);
           if (prof.consents?.call_consented) setCallConsent(true);
+          if (prof.consents?.email_consented) setEmailConsent(true);
+          if (prof.consents?.discord_consented) setDiscordConsent(true);
         }
       })
       .catch(err => console.error("Failed to load profile in dashboard:", err));
@@ -386,45 +391,14 @@ export function AppDashboard() {
     return () => clearInterval(intervalId);
   }, [autoRefresh, fetchJobs]);
 
-  // Test alerts connection submit handler
-  const handleTestAlertSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const token = recaptchaRef.current?.getValue() || "";
-    if (!isSecurityDisabled(config) && !token) {
-      setTestResult({ success: false, message: "Complete the reCAPTCHA challenge first." });
-      return;
-    }
-
-    setTestLoading(true);
-    setTestResult(null);
-
-    try {
-      const res = await authenticatedFetch('/api/test-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          medium: testMedium,
-          target: testTarget,
-          recaptcha_token: token
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTestResult({ success: data.success, message: data.message });
-      } else {
-        setTestResult({ success: false, message: data.detail || "An error occurred." });
-      }
-    } catch (err: any) {
-      setTestResult({ success: false, message: err.message || "Failed to reach server." });
-    } finally {
-      setTestLoading(false);
-      try {
-        recaptchaRef.current?.reset();
-      } catch (err) {
-        // ignore error when recaptcha component is not rendered
-      }
-    }
+  const getMediumPricePaise = (m: string) => {
+    if (!prices) return 0;
+    if (m === "SMS") return prices.sms_paise ?? 50;
+    if (m === "WhatsApp") return prices.whatsapp_paise ?? 100;
+    if (m === "Phone Call") return prices.phone_call_paise ?? 150;
+    if (m === "Email") return prices.email_paise ?? 0;
+    if (m === "Discord Webhook") return prices.discord_paise ?? 0;
+    return 0;
   };
 
   const initiateCashfreeJobPayment = async (jobPayload: any) => {
@@ -564,12 +538,22 @@ export function AppDashboard() {
       errors.push(isSmartActive ? "Please search and add at least one theatre." : "At least one theatre name is required.");
     }
 
-    if (medium === "Email" && !email.trim()) {
-      errors.push("Recipient email address is required.");
+    if (medium === "Email") {
+      if (!email.trim()) {
+        errors.push("Recipient email address is required.");
+      }
+      if (!emailConsent) {
+        errors.push("Please check the Email consent box to receive automated email alerts.");
+      }
     }
 
-    if (medium === "Discord Webhook" && !webhook.trim()) {
-      errors.push("Discord Webhook URL is required.");
+    if (medium === "Discord Webhook") {
+      if (!webhook.trim()) {
+        errors.push("Discord Webhook URL is required.");
+      }
+      if (!discordConsent) {
+        errors.push("Please check the Discord consent box to receive automated discord notifications.");
+      }
     }
 
     if (["SMS", "WhatsApp", "Phone Call"].includes(medium)) {
@@ -603,6 +587,8 @@ export function AppDashboard() {
     else if (medium === "Discord Webhook") notifConfig = { webhook_url: webhook.trim() };
     else notifConfig = { phone_number: phoneNumber.trim() };
 
+    const activePricePaise = getMediumPricePaise(medium);
+
     const payload = {
       service_provider: serviceProvider,
       notification_medium: medium,
@@ -611,7 +597,9 @@ export function AppDashboard() {
       sms_consent: medium === "SMS" ? smsConsent : false,
       whatsapp_consent: medium === "WhatsApp" ? whatsappConsent : false,
       call_consent: medium === "Phone Call" ? callConsent : false,
-      payment_method: paymentsDisabled ? "free" : (paymentMethod === "cashfree" ? "cashfree" : "wallet"),
+      email_consent: medium === "Email" ? emailConsent : false,
+      discord_consent: medium === "Discord Webhook" ? discordConsent : false,
+      payment_method: paymentsDisabled || activePricePaise === 0 ? "free" : (paymentMethod === "cashfree" ? "cashfree" : "wallet"),
       check_interval: intervalSec,
       recaptcha_token: token,
       params: {
@@ -623,10 +611,9 @@ export function AppDashboard() {
       }
     };
 
-    if (!paymentsDisabled && ["SMS", "WhatsApp", "Phone Call"].includes(medium)) {
-      const pricePaise = medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150;
+    if (!paymentsDisabled && activePricePaise > 0) {
       const walletPaise = userWallet?.balance_paise || 0;
-      if (paymentMethod === "cashfree" || walletPaise < pricePaise) {
+      if (paymentMethod === "cashfree" || walletPaise < activePricePaise) {
         await initiateCashfreeJobPayment(payload);
         return;
       }
@@ -648,6 +635,7 @@ export function AppDashboard() {
         setSmartEventCode("");
         setSelectedFormat(null);
         setAvailableShowDates([]);
+        setWebhook(userProfile?.discord_webhook_url || userProfile?.preferences?.discord_webhook_url || "");
         fetchJobs();
 
         // Refresh wallet balance
@@ -794,21 +782,6 @@ export function AppDashboard() {
             <CardContent className="pt-5">
               <form onSubmit={handleCreateMonitorSubmit} className="space-y-4">
                 
-                {/* Form Errors Banner */}
-                {formErrors.length > 0 && (
-                  <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3.5 text-xs text-destructive space-y-1">
-                    <div className="font-semibold flex items-center gap-1.5 mb-1 text-[11px] uppercase tracking-wider">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      <span>Registration Failed</span>
-                    </div>
-                    <ul className="list-disc pl-4 space-y-0.5">
-                      {formErrors.map((err, idx) => (
-                        <li key={idx} className="leading-normal">{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
                 {/* Form Success Banner */}
                 {formSuccess && (
                   <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-400 flex gap-2.5">
@@ -950,25 +923,42 @@ export function AppDashboard() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Where should we notify you?</label>
                     <div className="flex gap-1.5 flex-wrap">
-                      {(["Email", "Discord Webhook", "SMS", "WhatsApp", "Phone Call"] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setMedium(m)}
-                          className={`text-[10px] font-bold px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
-                            medium === m
-                              ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
-                              : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
-                          }`}
-                        >
-                          {m === "Discord Webhook" ? "Discord" : m}
-                        </button>
-                      ))}
+                      {(["Email", "Discord Webhook", "SMS", "WhatsApp", "Phone Call"] as const).map((m) => {
+                        const isFree = paymentsDisabled || getMediumPricePaise(m) === 0;
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => {
+                              setMedium(m);
+                              if (m === "Email" && !email) {
+                                const se = userProfile?.email_medium_address || userProfile?.preferences?.email_address || userProfile?.email || "";
+                                if (se) setEmail(se);
+                              } else if (m === "Discord Webhook" && !webhook) {
+                                const sw = userProfile?.discord_webhook_url || userProfile?.preferences?.discord_webhook_url || "";
+                                if (sw) setWebhook(sw);
+                              }
+                            }}
+                            className={`text-[10px] font-bold px-2.5 py-1 rounded-md border transition-all cursor-pointer flex items-center gap-1.5 ${
+                              medium === m
+                                ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
+                                : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
+                            }`}
+                          >
+                            <span>{m === "Discord Webhook" ? "Discord" : m}</span>
+                            {isFree ? (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-400 font-semibold uppercase">Free</span>
+                            ) : (
+                              <span className="text-[9px] opacity-70">₹{(getMediumPricePaise(m) / 100).toFixed(2)}</span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
                   {medium === "Email" && (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2.5">
                       <Input 
                         type="email" 
                         placeholder="your-email@gmail.com" 
@@ -976,11 +966,20 @@ export function AppDashboard() {
                         onChange={(e) => setEmail(e.target.value)}
                         className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
                       />
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={emailConsent}
+                          onChange={(e) => setEmailConsent(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-border text-rose-500"
+                        />
+                        <span>I consent to receiving automated ticket alert emails.</span>
+                      </label>
                     </div>
                   )}
 
                   {medium === "Discord Webhook" && (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2.5">
                       <Input 
                         type="text" 
                         placeholder="Paste your Discord Webhook Link" 
@@ -988,6 +987,15 @@ export function AppDashboard() {
                         onChange={(e) => setWebhook(e.target.value)}
                         className="h-9.5 text-xs bg-muted/10 border-border/80 focus:border-rose-500/40"
                       />
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={discordConsent}
+                          onChange={(e) => setDiscordConsent(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-border text-rose-500"
+                        />
+                        <span>I consent to receiving automated ticket alerts via Discord webhook.</span>
+                      </label>
                     </div>
                   )}
 
@@ -1036,67 +1044,67 @@ export function AppDashboard() {
                           <span>I consent to receiving automated phone calls (Polly.Aditi TTS).</span>
                         </label>
                       )}
+                    </div>
+                  )}
 
-                      {paymentsDisabled ? (
-                        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-xs flex items-center justify-between">
-                          <span className="text-muted-foreground font-medium">Alert Cost:</span>
-                          <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
-                            Free (Self-Hosted Mode)
-                          </Badge>
+                  {paymentsDisabled || getMediumPricePaise(medium) === 0 ? (
+                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-xs flex items-center justify-between">
+                      <span className="text-muted-foreground font-medium">Alert Cost:</span>
+                      <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+                        Free {paymentsDisabled ? "(Self-Hosted Mode)" : ""}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 space-y-2.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground block">Cost & Balance</span>
+                          <span className="font-semibold text-foreground">
+                            ₹{(getMediumPricePaise(medium) / 100).toFixed(2)} / alert
+                          </span>
+                          <span className="text-muted-foreground text-[11px] ml-1.5">
+                            (Wallet: ₹{userWallet ? userWallet.balance_inr.toFixed(2) : "0.00"})
+                          </span>
                         </div>
-                      ) : (
-                        <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 space-y-2.5 text-xs">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-muted-foreground block">Cost & Balance</span>
-                              <span className="font-semibold text-foreground">
-                                {medium === "SMS" ? "₹0.50" : medium === "WhatsApp" ? "₹1.00" : "₹1.50"} / alert
-                              </span>
-                              <span className="text-muted-foreground text-[11px] ml-1.5">
-                                (Wallet: ₹{userWallet ? userWallet.balance_inr.toFixed(2) : "0.00"})
-                              </span>
-                            </div>
-                            <Link to="/profile" className="text-[11px] font-semibold text-rose-400 hover:underline">
-                              Manage Wallet →
-                            </Link>
-                          </div>
+                        <Link to="/profile" className="text-[11px] font-semibold text-rose-400 hover:underline">
+                          Manage Wallet →
+                        </Link>
+                      </div>
 
-                          <div className="border-t border-border/40 pt-2 space-y-1.5">
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground block">Payment Method</span>
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setPaymentMethod("wallet")}
-                                disabled={((userWallet?.balance_paise || 0) < (medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150))}
-                                className={`p-2 rounded-lg border text-left transition-all ${
-                                  paymentMethod === "wallet"
-                                    ? "border-rose-500 bg-rose-500/10 text-rose-400 font-semibold"
-                                    : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40"
-                                } ${((userWallet?.balance_paise || 0) < (medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150)) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                              >
-                                <div className="text-[11px] font-bold">Pay from Wallet</div>
-                                <div className="text-[10px] opacity-80">
-                                  {((userWallet?.balance_paise || 0) < (medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150))
-                                    ? "Insufficient Balance"
-                                    : `₹${(userWallet?.balance_inr || 0).toFixed(2)} available`}
-                                </div>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setPaymentMethod("cashfree")}
-                                className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
-                                  paymentMethod === "cashfree"
-                                    ? "border-rose-500 bg-rose-500/10 text-rose-400 font-semibold"
-                                    : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40"
-                                }`}
-                              >
-                                <div className="text-[11px] font-bold">Pay via Cashfree</div>
-                                <div className="text-[10px] opacity-80">Cards / UPI / Netbanking</div>
-                              </button>
+                      <div className="border-t border-border/40 pt-2 space-y-1.5">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground block">Payment Method</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPaymentMethod("wallet")}
+                            disabled={((userWallet?.balance_paise || 0) < getMediumPricePaise(medium))}
+                            className={`p-2 rounded-lg border text-left transition-all ${
+                              paymentMethod === "wallet"
+                                ? "border-rose-500 bg-rose-500/10 text-rose-400 font-semibold"
+                                : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40"
+                            } ${((userWallet?.balance_paise || 0) < getMediumPricePaise(medium)) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                          >
+                            <div className="text-[11px] font-bold">Pay from Wallet</div>
+                            <div className="text-[10px] opacity-80">
+                              {((userWallet?.balance_paise || 0) < getMediumPricePaise(medium))
+                                ? "Insufficient Balance"
+                                : `₹${(userWallet?.balance_inr || 0).toFixed(2)} available`}
                             </div>
-                          </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentMethod("cashfree")}
+                            className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                              paymentMethod === "cashfree"
+                                ? "border-rose-500 bg-rose-500/10 text-rose-400 font-semibold"
+                                : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40"
+                            }`}
+                          >
+                            <div className="text-[11px] font-bold">Pay via Cashfree</div>
+                            <div className="text-[10px] opacity-80">Cards / UPI / Netbanking</div>
+                          </button>
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1189,6 +1197,21 @@ export function AppDashboard() {
                   </div>
                 )}
 
+                {/* Registration Failed Errors (Relocated right above Start Ticket Alert button) */}
+                {formErrors.length > 0 && (
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3.5 text-xs text-destructive space-y-1">
+                    <div className="font-semibold flex items-center gap-1.5 mb-1 text-[11px] uppercase tracking-wider">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>Registration Failed</span>
+                    </div>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {formErrors.map((err, idx) => (
+                        <li key={idx} className="leading-normal">{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Submit button */}
                 <Button 
                   type="submit" 
@@ -1198,116 +1221,6 @@ export function AppDashboard() {
                   {submittingCashfree ? "Processing Payment..." : "Start Ticket Alert"}
                 </Button>
               </form>
-            </CardContent>
-          </Card>
-
-          {/* Test Alert connection card */}
-          <Card className="border border-border/80 shadow-sm glassmorphism">
-            <CardContent className="p-4">
-              <button
-                onClick={() => setTestExpanded(!testExpanded)}
-                className="w-full flex items-center justify-between text-xs font-bold text-muted-foreground hover:text-foreground transition-colors outline-none cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Power className="h-4 w-4 text-rose-500" />
-                  Send Test Notification
-                </span>
-                {testExpanded ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </button>
-
-              {testExpanded && (
-                <form onSubmit={handleTestAlertSubmit} className="mt-4 space-y-3.5 border-t border-border/30 pt-4 text-left">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Notification Method</span>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setTestMedium("Email")}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
-                          testMedium === "Email" 
-                            ? "bg-rose-500/10 text-rose-400 border-rose-500/25" 
-                            : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
-                        }`}
-                      >
-                        Email
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTestMedium("Discord Webhook")}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
-                          testMedium === "Discord Webhook" 
-                            ? "bg-rose-500/10 text-rose-400 border-rose-500/25" 
-                            : "bg-muted/10 text-muted-foreground border-transparent hover:text-foreground"
-                        }`}
-                      >
-                        Discord
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Input 
-                      type="text" 
-                      placeholder={testMedium === "Email" ? "your-email@gmail.com" : "Paste your Discord Webhook Link"}
-                      value={testTarget}
-                      onChange={(e) => setTestTarget(e.target.value)}
-                      className="h-9 text-xs bg-muted/10 border-border/80"
-                    />
-                  </div>
-
-                  {/* ReCAPTCHA for testing alerts */}
-                  {!isSecurityDisabled(config) && (
-                    <div className="flex flex-col items-center py-1">
-                      <div className="g-recaptcha-premium-container">
-                        <ReCAPTCHA
-                          ref={recaptchaRef}
-                          sitekey={siteKeyVal}
-                          theme="dark"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <Button 
-                    type="submit" 
-                    disabled={testLoading}
-                    className="w-full h-8.5 text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white cursor-pointer"
-                  >
-                    {testLoading ? (
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <>
-                        <Send className="h-3.5 w-3.5" />
-                        Send Test Message
-                      </>
-                    )}
-                  </Button>
-
-                  {testResult && (
-                    <div className={`mt-3 rounded-lg border p-3.5 text-xs flex gap-2.5 leading-relaxed ${
-                      testResult.success 
-                        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' 
-                        : 'border-destructive/20 bg-destructive/10 text-destructive'
-                    }`}>
-                      {testResult.success ? (
-                        <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" />
-                      ) : (
-                        <AlertTriangle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
-                      )}
-                      <div>
-                        <h6 className="font-bold text-[10px] uppercase tracking-wider mb-0.5">
-                          {testResult.success ? 'Success' : 'Failed'}
-                        </h6>
-                        <p>{testResult.message}</p>
-                      </div>
-                    </div>
-                  )}
-                </form>
-              )}
             </CardContent>
           </Card>
 

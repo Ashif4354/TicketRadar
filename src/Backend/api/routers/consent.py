@@ -7,10 +7,14 @@ from google.cloud import firestore
 from lib.core.auth import get_authorized_user, db
 from lib.utils.phone import normalize_indian_phone
 from api.schemas import OptInRequest
+from api.dependencies import verify_recaptcha
 
 logger = logging.getLogger("ticketradar.api.consent")
 
 router = APIRouter(prefix="/api/consent", tags=["Consent"])
+
+VALID_MEDIUMS = ("whatsapp", "sms", "phone_call", "call", "email", "discord", "discord_webhook")
+
 
 @router.post("/{medium}/opt-in")
 async def opt_in_medium(
@@ -19,14 +23,25 @@ async def opt_in_medium(
     payload: OptInRequest = None,
     claims: dict = Depends(get_authorized_user)
 ):
-    """Records explicit consent for a regulated notification channel (WhatsApp, SMS, Call)."""
+    """Records explicit consent for notification channels (WhatsApp, SMS, Call, Email, Discord)."""
     uid = claims.get("uid")
     medium_clean = medium.strip().lower().replace(" ", "_")
-    if medium_clean not in ("whatsapp", "sms", "phone_call", "call"):
+    if medium_clean not in VALID_MEDIUMS:
         raise HTTPException(status_code=400, detail=f"Unsupported consent medium: {medium}")
 
-    consent_key = "call" if medium_clean in ("call", "phone_call") else medium_clean
-    pref_key = "phone_call" if medium_clean in ("call", "phone_call") else medium_clean
+    # Verify reCAPTCHA token (mandatory when security is enabled)
+    await verify_recaptcha(payload.recaptcha_token if payload else None)
+
+    if medium_clean in ("call", "phone_call"):
+        consent_key = "call"
+        pref_key = "phone_call"
+    elif medium_clean in ("discord", "discord_webhook"):
+        consent_key = "discord"
+        pref_key = "discord"
+    else:
+        consent_key = medium_clean
+        pref_key = medium_clean
+
     client_ip = request.client.host if request.client else ""
 
     update_data = {
@@ -39,20 +54,29 @@ async def opt_in_medium(
     }
 
     phone_e164 = None
-    if payload and payload.phone_number:
-        try:
-            phone_e164 = normalize_indian_phone(payload.phone_number)
-            update_data["phone_number"] = phone_e164
-        except ValueError as ve:
-            raise HTTPException(status_code=400, detail=str(ve))
+    pref_update = {
+        f"{pref_key}_enabled": True,
+        "updated_at": firestore.SERVER_TIMESTAMP,
+    }
+
+    if payload:
+        if payload.phone_number and consent_key in ("sms", "whatsapp", "call"):
+            try:
+                phone_e164 = normalize_indian_phone(payload.phone_number)
+                update_data["phone_number"] = phone_e164
+            except ValueError as ve:
+                raise HTTPException(status_code=400, detail=str(ve))
+        elif payload.email_address and consent_key == "email":
+            email_clean = payload.email_address.strip()
+            update_data["email_address"] = email_clean
+            pref_update["email_address"] = email_clean
+        elif payload.webhook_url and consent_key == "discord":
+            hook_clean = payload.webhook_url.strip()
+            update_data["discord_webhook_url"] = hook_clean
+            pref_update["discord_webhook_url"] = hook_clean
 
     if db:
         db.collection("notification_consents").document(uid).set(update_data, merge=True)
-        # Enable channel in preferences
-        pref_update = {
-            f"{pref_key}_enabled": True,
-            "updated_at": firestore.SERVER_TIMESTAMP,
-        }
         if phone_e164:
             if pref_key == "phone_call":
                 pref_update["call_phone"] = phone_e164
@@ -65,6 +89,7 @@ async def opt_in_medium(
     logger.info(f"User {uid} opted in to {pref_key}.")
     return {"success": True, "message": f"Successfully opted in to {pref_key} alerts."}
 
+
 @router.post("/{medium}/opt-out")
 async def opt_out_medium(
     medium: str,
@@ -73,11 +98,18 @@ async def opt_out_medium(
     """Revokes consent for a notification channel."""
     uid = claims.get("uid")
     medium_clean = medium.strip().lower().replace(" ", "_")
-    if medium_clean not in ("whatsapp", "sms", "phone_call", "call"):
+    if medium_clean not in VALID_MEDIUMS:
         raise HTTPException(status_code=400, detail=f"Unsupported consent medium: {medium}")
 
-    consent_key = "call" if medium_clean in ("call", "phone_call") else medium_clean
-    pref_key = "phone_call" if medium_clean in ("call", "phone_call") else medium_clean
+    if medium_clean in ("call", "phone_call"):
+        consent_key = "call"
+        pref_key = "phone_call"
+    elif medium_clean in ("discord", "discord_webhook"):
+        consent_key = "discord"
+        pref_key = "discord"
+    else:
+        consent_key = medium_clean
+        pref_key = medium_clean
 
     update_data = {
         "uid": uid,
@@ -89,7 +121,6 @@ async def opt_out_medium(
 
     if db:
         db.collection("notification_consents").document(uid).set(update_data, merge=True)
-        # Disable channel in preferences
         db.collection("notification_preferences").document(uid).set({
             f"{pref_key}_enabled": False,
             "updated_at": firestore.SERVER_TIMESTAMP,

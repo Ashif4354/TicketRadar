@@ -81,13 +81,13 @@ export function TermsPage() {
           <section className="space-y-2">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-primary inline-block"></span>
-              6. Wallet, Credits & Pricing
+              6. Wallet & Pricing
             </h3>
             <p className="text-muted-foreground">
-              Users may purchase notification credits stored in their digital TicketRadar Wallet. 1 Credit equals ₹1.00 (100 paise). Free channels (Email, Discord) incur ₹0.00 charge. Paid channels (SMS, WhatsApp, Phone Calls) are priced according to the active pricing schedule at job creation.
+              Users may add funds denominated in Indian Rupees (₹) stored in their digital TicketRadar Wallet (100 paise = ₹1.00). Free channels (Email, Discord) incur ₹0.00 charge. Paid channels (SMS, WhatsApp, Phone Calls) are priced according to the active pricing schedule at job creation.
             </p>
             <p className="text-muted-foreground font-semibold">
-              WALLET CREDITS ARE STRICTLY NON-WITHDRAWABLE. Wallet balances cannot be redeemed for physical cash, bank transfers, or UPI payouts under any circumstances.
+              WALLET BALANCES ARE STRICTLY NON-WITHDRAWABLE. Wallet balances cannot be redeemed for physical cash, bank transfers, or UPI payouts under any circumstances.
             </p>
           </section>
 

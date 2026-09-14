@@ -16,3 +16,17 @@ export const isSecurityDisabled = (config?: AppConfig | null): boolean => {
   }
   return false;
 };
+
+export const isApprovalDisabled = (config?: AppConfig | null): boolean => {
+  if (isSecurityDisabled(config)) {
+    return true;
+  }
+  if (import.meta.env.VITE_DISABLE_APPROVAL === 'true' || import.meta.env.DISABLE_APPROVAL === 'true') {
+    return true;
+  }
+  const effectiveConfig = config !== undefined ? config : globalConfig;
+  if (effectiveConfig && effectiveConfig.disable_approval === true) {
+    return true;
+  }
+  return false;
+};

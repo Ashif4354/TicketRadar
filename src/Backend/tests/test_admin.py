@@ -118,3 +118,29 @@ async def test_admin_disabled_when_security_disabled(monkeypatch):
             assert res_post.status_code == 403
             assert res_post.json()["detail"] == "Admin panel is disabled because DISABLE_SECURITY is true"
 
+
+@pytest.mark.asyncio
+async def test_admin_transactions_and_email_discord_pricing(admin_async_client):
+    # 1. Update pricing with email and discord paise
+    update_payload = {
+        "sms_paise": 55,
+        "whatsapp_paise": 105,
+        "phone_call_paise": 155,
+        "email_paise": 10,
+        "discord_paise": 5,
+        "note": "Pricing with email and discord"
+    }
+    res_up = await admin_async_client.post("/admin/pricing", json=update_payload)
+    assert res_up.status_code == 200
+    cfg = res_up.json()["config"]
+    assert cfg["email_paise"] == 10
+    assert cfg["discord_paise"] == 5
+
+    # 2. Get global transactions
+    res_txns = await admin_async_client.get("/admin/transactions?page=1&page_size=10")
+    assert res_txns.status_code == 200
+    data = res_txns.json()
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+

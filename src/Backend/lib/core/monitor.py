@@ -554,6 +554,30 @@ class JobManager:
                                 "date_str": job.date_str
                             }
                         )
+                        # Dispatch notification_sent email if channel is not email
+                        if creator_email and medium_norm not in ("email",):
+                            try:
+                                import asyncio
+                                from ..services.notification.user_mailer import send_notification_sent_email
+                                user_disp = "User"
+                                if job.created_by:
+                                    try:
+                                        from .auth import db
+                                        if db:
+                                            udoc = db.collection("users").document(job.created_by).get()
+                                            if udoc.exists:
+                                                user_disp = (udoc.to_dict() or {}).get("displayName") or user_disp
+                                    except Exception:
+                                        pass
+                                asyncio.create_task(send_notification_sent_email(
+                                    recipient_email=creator_email,
+                                    user_name=user_disp,
+                                    movie_name=job.movie_name,
+                                    notification_medium=job.notification_medium,
+                                    available_theatres=available
+                                ))
+                            except Exception:
+                                pass
                     else:
                         job_logger.error(
                             f"⚠️ Tickets found but alert failed after {job.notification_attempt_count} attempts. Reason: {notif_msg}"
@@ -571,6 +595,7 @@ class JobManager:
                                     description=f"Refund for job #{job.id}: notification delivery failure",
                                     idempotency_key=f"notif_fail_refund_{job.id}",
                                     job_id=job.id,
+                                    created_by="system",
                                 )
                                 job.refund_issued = True
                                 job_logger.info(f"Wallet refund of ₹{job.price_paise/100:.2f} issued for failed job #{job.id}.")
@@ -578,6 +603,34 @@ class JobManager:
                                 job_logger.error(f"Failed to issue failure refund for job #{job.id}: {rerr}")
 
                         self._save_job_to_firestore(job)
+
+                        # Dispatch notification_failed email
+                        if creator_email:
+                            try:
+                                import asyncio
+                                from ..services.notification.user_mailer import send_notification_failed_email
+                                user_disp = "User"
+                                if job.created_by:
+                                    try:
+                                        from .auth import db
+                                        if db:
+                                            udoc = db.collection("users").document(job.created_by).get()
+                                            if udoc.exists:
+                                                user_disp = (udoc.to_dict() or {}).get("displayName") or user_disp
+                                    except Exception:
+                                        pass
+                                asyncio.create_task(send_notification_failed_email(
+                                    recipient_email=creator_email,
+                                    user_name=user_disp,
+                                    job_id=job.id,
+                                    movie_name=job.movie_name,
+                                    notification_medium=job.notification_medium,
+                                    error_message=notif_msg,
+                                    refunded=(job.price_paise > 0 and job.refund_issued)
+                                ))
+                            except Exception:
+                                pass
+
                         gcp_logger.log_event(
                             "Ticket Booking Alert Delivery Failed",
                             user_id=job.created_by or "system",

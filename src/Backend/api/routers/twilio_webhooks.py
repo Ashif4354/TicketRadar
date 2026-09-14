@@ -146,6 +146,34 @@ async def handle_call_status(request: Request):
                         "last_attempt_at": firestore.SERVER_TIMESTAMP,
                     }, merge=True)
 
+                # Send dedicated Call Success email
+                user_email = job.creator_email
+                user_name = "User"
+                if db and job.created_by:
+                    try:
+                        udoc = db.collection("users").document(job.created_by).get()
+                        if udoc.exists:
+                            udata = udoc.to_dict() or {}
+                            user_email = udata.get("email") or user_email
+                            user_name = udata.get("displayName") or user_name
+                    except Exception:
+                        pass
+                if user_email:
+                    from lib.services.notification.user_mailer import send_call_success_email
+                    import asyncio
+                    try:
+                        asyncio.create_task(send_call_success_email(
+                            recipient_email=user_email,
+                            user_name=user_name,
+                            phone_number=job.phone_number or call_record.get("to_number_redacted", ""),
+                            movie_name=job.movie_name,
+                            date_str=job.date_str,
+                            call_duration_seconds=event.get("duration", 0),
+                            url=job.url
+                        ))
+                    except Exception as cse_err:
+                        logger.debug(f"Failed to dispatch call success email: {cse_err}")
+
             elif call_outcome in ("no_answer", "busy"):
                 attempt = job.notification_attempt_count or 1
                 if attempt < 3:
@@ -180,31 +208,38 @@ async def handle_call_status(request: Request):
                             "last_attempt_at": firestore.SERVER_TIMESTAMP,
                         }, merge=True)
 
-                    # Send fallback email
+                    # Send fallback email with dedicated 3x call unanswered template
                     fallback_enabled = True
                     fallback_email = job.creator_email
+                    user_name = "User"
                     if db and job.created_by:
-                        pdoc = db.collection("notification_preferences").document(job.created_by).get()
-                        if pdoc.exists:
-                            pdata = pdoc.to_dict() or {}
-                            fallback_enabled = pdata.get("email_fallback_on_no_answer", True)
-                            if pdata.get("email_address"):
-                                fallback_email = pdata.get("email_address")
+                        try:
+                            pdoc = db.collection("notification_preferences").document(job.created_by).get()
+                            if pdoc.exists:
+                                pdata = pdoc.to_dict() or {}
+                                fallback_enabled = pdata.get("email_fallback_on_no_answer", True)
+                                if pdata.get("email_address"):
+                                    fallback_email = pdata.get("email_address")
+                            udoc = db.collection("users").document(job.created_by).get()
+                            if udoc.exists:
+                                user_name = (udoc.to_dict() or {}).get("displayName") or user_name
+                        except Exception:
+                            pass
 
                     if fallback_enabled and fallback_email:
-                        from lib.services.notification.email_strategy import EmailNotificationStrategy
-                        email_notifier = EmailNotificationStrategy(fallback_email)
+                        from lib.services.notification.user_mailer import send_call_unanswered_email
+                        import asyncio
                         try:
-                            await email_notifier.send_notification(
-                                subject=f"TicketRadar Alert: Booking Open for {job.movie_name} (Call Unanswered)",
+                            asyncio.create_task(send_call_unanswered_email(
+                                recipient_email=fallback_email,
+                                user_name=user_name,
+                                phone_number=job.phone_number or call_record.get("to_number_redacted", ""),
                                 movie_name=job.movie_name,
                                 date_str=job.date_str,
                                 available_theatres=job.theatres,
-                                unavailable_theatres=[],
                                 url=job.url,
-                                language=job.language,
-                                format_name=job.format_name
-                            )
+                                attempt_count=3
+                            ))
                             if db:
                                 db.collection("notification_job_channels").document(job.id).set({
                                     "fallback_email_sent": True

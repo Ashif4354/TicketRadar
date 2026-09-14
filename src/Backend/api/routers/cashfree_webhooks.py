@@ -108,6 +108,33 @@ async def handle_cashfree_webhook(request: Request):
                     )
                     logger.info(f"Credited wallet for uid {uid} with ₹{(event.amount_paise or 0)/100:.2f}.")
 
+                    # Send payment success email
+                    recipient_email = payment_data.get("customer_email")
+                    user_name = "User"
+                    if db and uid:
+                        try:
+                            udoc = db.collection("users").document(uid).get()
+                            if udoc.exists:
+                                udata = udoc.to_dict() or {}
+                                recipient_email = udata.get("email") or recipient_email
+                                user_name = udata.get("displayName") or user_name
+                        except Exception:
+                            pass
+                    if recipient_email:
+                        from lib.services.notification.user_mailer import send_payment_success_email
+                        import asyncio
+                        try:
+                            asyncio.create_task(send_payment_success_email(
+                                recipient_email=recipient_email,
+                                user_name=user_name,
+                                order_id=order_id,
+                                amount_inr=round((event.amount_paise or payment_data.get("amount_paise", 0)) / 100.0, 2),
+                                payment_id=event.payment_id or "",
+                                payment_type="Wallet Top-up"
+                            ))
+                        except Exception as pe_err:
+                            logger.debug(f"Failed to dispatch payment success email: {pe_err}")
+
                 # B. Two-step Job Creation Payment
                 elif payment_type == "JOB_PAYMENT" and uid:
                     job_payload = payment_data.get("job_payload", {})
@@ -132,6 +159,43 @@ async def handle_cashfree_webhook(request: Request):
                             logger.info(f"Two-step Cashfree job #{new_job.id} started successfully.")
                             if db and payment_doc:
                                 payment_doc.reference.update({"job_id": new_job.id})
+
+                            # Dispatch job created & payment success email
+                            recipient_email = payment_data.get("customer_email")
+                            user_name = "User"
+                            if db and uid:
+                                try:
+                                    udoc = db.collection("users").document(uid).get()
+                                    if udoc.exists:
+                                        udata = udoc.to_dict() or {}
+                                        recipient_email = udata.get("email") or recipient_email
+                                        user_name = udata.get("displayName") or user_name
+                                except Exception:
+                                    pass
+                            if recipient_email:
+                                from lib.services.notification.user_mailer import send_payment_success_email, send_job_created_email
+                                import asyncio
+                                try:
+                                    asyncio.create_task(send_payment_success_email(
+                                        recipient_email=recipient_email,
+                                        user_name=user_name,
+                                        order_id=order_id,
+                                        amount_inr=round(payment_data.get("amount_paise", 0) / 100.0, 2),
+                                        payment_id=event.payment_id or "",
+                                        payment_type="Ticket Monitor Job"
+                                    ))
+                                    asyncio.create_task(send_job_created_email(
+                                        recipient_email=recipient_email,
+                                        user_name=user_name,
+                                        job_id=new_job.id,
+                                        movie_name=new_job.movie_name,
+                                        date_str=new_job.date_str,
+                                        theatres=new_job.theatres,
+                                        notification_medium=new_job.notification_medium,
+                                        check_interval=new_job.check_interval
+                                    ))
+                                except Exception as je_err:
+                                    logger.debug(f"Failed to dispatch job created email: {je_err}")
                         else:
                             # Orphan payment fallback: refund to wallet
                             logger.error(f"Failed to start job for payment {payment_id}. Issuing orphan refund to wallet.")
@@ -146,13 +210,55 @@ async def handle_cashfree_webhook(request: Request):
 
         elif event_type == "PAYMENT_FAILED_WEBHOOK":
             logger.info(f"Cashfree PAYMENT_FAILED for order: {order_id}")
+            payment_doc = None
+            payment_data = {}
             if db:
                 docs = list(db.collection("payments").where("gateway_order_id", "==", order_id).limit(1).stream())
                 if docs:
-                    docs[0].reference.update({
+                    payment_doc = docs[0]
+                    payment_data = payment_doc.to_dict() or {}
+                    payment_doc.reference.update({
                         "status": "failed",
                         "updated_at": firestore.SERVER_TIMESTAMP,
                     })
+
+            # Send payment failed email
+            if payment_data:
+                uid = payment_data.get("uid")
+                recipient_email = payment_data.get("customer_email")
+                user_name = "User"
+                if db and uid:
+                    try:
+                        udoc = db.collection("users").document(uid).get()
+                        if udoc.exists:
+                            udata = udoc.to_dict() or {}
+                            recipient_email = udata.get("email") or recipient_email
+                            user_name = udata.get("displayName") or user_name
+                    except Exception:
+                        pass
+                if recipient_email:
+                    from lib.services.notification.user_mailer import send_payment_failed_email, send_wallet_topup_failed_email
+                    import asyncio
+                    amount_inr = round(payment_data.get("amount_paise", 0) / 100.0, 2)
+                    ptype = payment_data.get("type")
+                    try:
+                        if ptype == "WALLET_TOPUP":
+                            asyncio.create_task(send_wallet_topup_failed_email(
+                                recipient_email=recipient_email,
+                                user_name=user_name,
+                                amount_inr=amount_inr,
+                                order_id=order_id,
+                                reason="Payment was declined or cancelled at checkout."
+                            ))
+                        asyncio.create_task(send_payment_failed_email(
+                            recipient_email=recipient_email,
+                            user_name=user_name,
+                            order_id=order_id,
+                            amount_inr=amount_inr,
+                            failure_reason="Payment was declined or cancelled at checkout."
+                        ))
+                    except Exception as fe_err:
+                        logger.debug(f"Failed to dispatch payment failed email: {fe_err}")
 
         # Mark event as processed
         if db:

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Radar, Shield, LogOut, BookOpen, User as UserIcon } from 'lucide-react';
+import { Radar, Shield, LogOut, BookOpen, User as UserIcon, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { logout } from '../../lib/firebase';
@@ -68,6 +68,14 @@ export function Header({ user, claims, config }: HeaderProps) {
               <span>Admin Panel</span>
             </Link>
           )}
+
+          <Link
+            to="/pricing"
+            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/20 hover:bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 transition-colors"
+          >
+            <Tag className="h-3.5 w-3.5 text-rose-400" />
+            <span className="hidden sm:inline">Pricing</span>
+          </Link>
 
           <Link
             to="/instructions"
@@ -149,7 +157,7 @@ export function Header({ user, claims, config }: HeaderProps) {
                       className="flex w-full items-center gap-2 rounded-lg bg-muted/30 hover:bg-muted/60 text-foreground text-xs font-medium px-3 py-2 border border-border/40 transition-colors cursor-pointer"
                     >
                       <UserIcon className="h-3.5 w-3.5 text-rose-400" />
-                      Profile & Channels
+                      Profile
                     </Link>
 
                     <Button
