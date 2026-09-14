@@ -13,12 +13,17 @@ import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp } from '../utils/formatters';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { isPaymentsDisabled } from '../utils/payments';
+import { isSecurityDisabled } from '../utils/security';
 import type { AppConfig } from '../types';
+
+interface AdminDashboardProps {
+  config?: AppConfig | null;
+}
 
 /**
  * Provides an administrative interface for managing access requests, user accounts, and ticket-monitoring jobs.
  */
-export function AdminDashboard() {
+export function AdminDashboard({ config }: AdminDashboardProps = {}) {
   const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs' | 'pricing' | 'wallets' | 'refunds' | 'audit_logs'>('requests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [requests, setRequests] = useState<any[]>([]);
@@ -62,8 +67,10 @@ export function AdminDashboard() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   // App Config & Payment status
-  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
-  const paymentsDisabled = isPaymentsDisabled(appConfig);
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(config || null);
+  const effectiveConfig = config || appConfig;
+  const securityDisabled = isSecurityDisabled(effectiveConfig);
+  const paymentsDisabled = isPaymentsDisabled(effectiveConfig);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -90,9 +97,16 @@ export function AdminDashboard() {
   }, []);
 
   useEffect(() => {
+    if (securityDisabled) return;
     fetchCounts();
-    fetchConfig();
-  }, [fetchCounts, fetchConfig]);
+  }, [fetchCounts, securityDisabled]);
+
+  useEffect(() => {
+    if (securityDisabled) return;
+    if (!config) {
+      fetchConfig();
+    }
+  }, [config, fetchConfig, securityDisabled]);
 
   useEffect(() => {
     if (paymentsDisabled && (activeTab === 'pricing' || activeTab === 'wallets' || activeTab === 'refunds')) {
@@ -101,6 +115,7 @@ export function AdminDashboard() {
   }, [paymentsDisabled, activeTab]);
 
   const fetchData = useCallback(async () => {
+    if (securityDisabled) return;
     if (paymentsDisabled && (activeTab === 'pricing' || activeTab === 'wallets' || activeTab === 'refunds')) {
       return;
     }
@@ -148,11 +163,12 @@ export function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, paymentsDisabled]);
+  }, [activeTab, paymentsDisabled, securityDisabled]);
 
   useEffect(() => {
+    if (securityDisabled) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, securityDisabled]);
 
   const handleApproveRequest = async (uid: string) => {
     setActionLoading(uid);
@@ -398,6 +414,33 @@ export function AdminDashboard() {
   // Derived request buckets
   const pendingRequests = requests.filter((r: any) => r.status !== 'denied');
   const deniedRequests = requests.filter((r: any) => r.status === 'denied');
+
+  if (securityDisabled) {
+    return (
+      <main className="flex-1 flex items-center justify-center px-4 py-16">
+        <Card className="w-full max-w-md border border-amber-500/20 shadow-2xl glassmorphism p-6 rounded-2xl text-center space-y-6">
+          <CardHeader className="space-y-2 p-0">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 shadow-lg mb-2">
+              <Shield className="h-7 w-7" />
+            </div>
+            <CardTitle className="text-2xl font-extrabold tracking-tight">Admin Panel Disabled</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-0">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Admin panel is disabled because DISABLE_SECURITY is true
+            </p>
+            <div className="pt-2">
+              <Link to="/app">
+                <Button className="w-full bg-rose-500 hover:bg-rose-600 text-white font-semibold text-xs h-9 rounded-xl cursor-pointer">
+                  Return to App
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   return (
     <main className="w-full max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 overflow-x-hidden">

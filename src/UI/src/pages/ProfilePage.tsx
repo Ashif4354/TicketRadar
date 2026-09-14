@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, User, Wallet, Bell, Phone, Mail, MessageSquare, PhoneCall,
@@ -10,13 +10,18 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { authenticatedFetch } from '../utils/api';
 import { isPaymentsDisabled } from '../utils/payments';
+import { isSecurityDisabled } from '../utils/security';
 import type { UserProfileData, WalletBalance, WalletTransaction, AppConfig } from '../types';
 
-export function ProfilePage() {
+interface ProfilePageProps {
+  config?: AppConfig | null;
+}
+
+export function ProfilePage({ config }: ProfilePageProps = {}) {
   const [profile, setProfile] = useState<UserProfileData | null>(null);
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
-  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(config || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -41,17 +46,24 @@ export function ProfilePage() {
   // Test Alert State
   const [testingMedium, setTestingMedium] = useState<string | null>(null);
 
-  const fetchProfileData = async () => {
+  const effectiveConfig = config || appConfig;
+  const securityDisabled = isSecurityDisabled(effectiveConfig);
+  const paymentsDisabled = isPaymentsDisabled(effectiveConfig);
+  const hideWallet = securityDisabled || paymentsDisabled;
+
+  const fetchProfileData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
       // 1. Fetch App Config
-      const configRes = await authenticatedFetch('/api/config');
-      let cfg: AppConfig | null = null;
-      if (configRes.ok) {
-        cfg = await configRes.json();
-        setAppConfig(cfg);
+      let cfg: AppConfig | null = config || appConfig;
+      if (!config) {
+        const configRes = await authenticatedFetch('/api/config');
+        if (configRes.ok) {
+          cfg = await configRes.json();
+          setAppConfig(cfg);
+        }
       }
 
       // 2. Fetch User Profile
@@ -62,9 +74,10 @@ export function ProfilePage() {
       setPhoneInput(profData.phone_number || '');
       setDiscordInput(profData.discord_webhook_url || '');
 
-      // 3. Fetch Wallet data if payments are enabled
-      const paymentsDisabled = isPaymentsDisabled(cfg) || profRes.headers.get('x-payments-disabled') === 'true';
-      if (!paymentsDisabled) {
+      // 3. Fetch Wallet data if payments and security are enabled
+      const isSecDisabled = isSecurityDisabled(cfg || effectiveConfig);
+      const isPayDisabled = isPaymentsDisabled(cfg || effectiveConfig) || profRes.headers.get('x-payments-disabled') === 'true';
+      if (!isSecDisabled && !isPayDisabled) {
         const wRes = await authenticatedFetch('/api/wallet/balance');
         if (wRes.ok) {
           const wData = await wRes.json();
@@ -85,11 +98,11 @@ export function ProfilePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [config, appConfig, effectiveConfig]);
 
   useEffect(() => {
     fetchProfileData();
-  }, []);
+  }, [fetchProfileData]);
 
   const handleSaveContactDetails = async () => {
     setUpdatingProfile(true);
@@ -179,8 +192,8 @@ export function ProfilePage() {
   };
 
   const handleTopup = async () => {
-    if (isPaymentsDisabled(appConfig)) {
-      setError('Payment features are disabled in self-hosted mode.');
+    if (hideWallet) {
+      setError('Payment features are disabled.');
       return;
     }
     const amountNum = parseFloat(topupAmount);
@@ -258,8 +271,6 @@ export function ProfilePage() {
     );
   }
 
-  const paymentsDisabled = isPaymentsDisabled(appConfig);
-
   return (
     <main className="flex-1 container mx-auto max-w-5xl px-4 py-10 sm:px-6 space-y-8">
       <div className="flex items-center justify-between">
@@ -314,7 +325,7 @@ export function ProfilePage() {
             </div>
           </div>
 
-          {!paymentsDisabled && wallet && (
+          {!hideWallet && wallet && (
             <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-4 p-4 rounded-xl border border-rose-500/20 bg-rose-500/5">
               <div>
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Wallet Balance</span>
@@ -611,8 +622,8 @@ export function ProfilePage() {
         </Card>
       </div>
 
-      {/* Wallet Transaction Ledger (when payments enabled) */}
-      {!paymentsDisabled && (
+      {/* Wallet Transaction Ledger (when payments and security are enabled) */}
+      {!hideWallet && (
         <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -664,7 +675,7 @@ export function ProfilePage() {
       )}
 
       {/* Top-Up Modal */}
-      {!paymentsDisabled && topupModalOpen && (
+      {!hideWallet && topupModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-md rounded-2xl border border-rose-500/30 bg-[#121217] p-6 shadow-2xl text-left space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-border/50">

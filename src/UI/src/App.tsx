@@ -115,7 +115,7 @@ export default function App() {
         <Header user={user} claims={claims} config={config} />
         <TermsModal isOpen={!securityDisabled && termsPending} onAccept={handleAcceptTerms} />
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<LandingPage config={config} />} />
           <Route path="/tc" element={<TermsPage />} />
           <Route path="/pp" element={<PrivacyPage />} />
           <Route path="/instructions" element={<InstructionsPage />} />
@@ -127,7 +127,7 @@ export default function App() {
             (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
             isBlocked ? <BlockedPage /> :
             !isAuthorized ? <UnauthorizedPage /> :
-            <ProfilePage />
+            <ProfilePage config={config} />
           } />
           <Route path="/app" element={
             (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
@@ -138,7 +138,7 @@ export default function App() {
           <Route path="/admin" element={
             (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
             !isAdmin ? <Navigate to="/app" replace /> :
-            <AdminDashboard />
+            <AdminDashboard config={config} />
           } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

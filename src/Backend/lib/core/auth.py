@@ -194,14 +194,13 @@ async def get_authorized_user(claims: dict = Depends(get_current_user_claims)):
 async def get_admin_user(claims: dict = Depends(get_current_user_claims)):
     """
     Verifies that the user has the 'admin' role custom claim.
-    When security is disabled, bypasses admin role check.
+    When security is disabled, admin panel is disabled.
     """
     if is_security_disabled():
-        res = dict(claims or DEV_MOCK_CLAIMS)
-        res["authorized"] = True
-        res["role"] = "admin"
-        res["blocked"] = False
-        return res
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin panel is disabled because DISABLE_SECURITY is true"
+        )
     if claims.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

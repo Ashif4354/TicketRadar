@@ -38,9 +38,11 @@ async def test_auth_bypass_dependencies_when_security_disabled(monkeypatch):
     auth_user = await get_authorized_user(claims)
     assert auth_user["authorized"] is True
 
-    # 3. get_admin_user allows through
-    admin_user = await get_admin_user(claims)
-    assert admin_user["role"] == "admin"
+    # 3. get_admin_user rejects with 403 when security is disabled
+    with pytest.raises(HTTPException) as exc_info_admin:
+        await get_admin_user(claims)
+    assert exc_info_admin.value.status_code == 403
+    assert exc_info_admin.value.detail == "Admin panel is disabled because DISABLE_SECURITY is true"
 
 
 @pytest.mark.asyncio
@@ -56,9 +58,10 @@ async def test_auth_bypass_unauthenticated_requests(monkeypatch):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # Admin counts endpoint protected by Depends(get_admin_user)
+        # Admin counts endpoint protected by Depends(get_admin_user) rejects with 403
         res_admin = await client.get("/admin/counts")
-        assert res_admin.status_code == 200
+        assert res_admin.status_code == 403
+        assert res_admin.json()["detail"] == "Admin panel is disabled because DISABLE_SECURITY is true"
 
         # Profile endpoint protected by Depends(get_authorized_user)
         res_profile = await client.get("/api/profile")
@@ -124,8 +127,10 @@ async def test_auth_bypass_overrides_non_admin_and_blocked_claims(monkeypatch):
     assert auth_user["authorized"] is True
     assert auth_user["role"] == "admin"
 
-    admin_user = await get_admin_user(claims)
-    assert admin_user["role"] == "admin"
+    with pytest.raises(HTTPException) as exc_info_admin:
+        await get_admin_user(claims)
+    assert exc_info_admin.value.status_code == 403
+    assert exc_info_admin.value.detail == "Admin panel is disabled because DISABLE_SECURITY is true"
 
 
 @pytest.mark.asyncio

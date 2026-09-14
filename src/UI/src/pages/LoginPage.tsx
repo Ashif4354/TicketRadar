@@ -62,21 +62,14 @@ export function LoginPage({ config }: LoginPageProps = {}) {
                 <span>Security Bypassed</span>
               </div>
               <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                Authentication and authorization checks are disabled. You can enter the dashboard or admin panel directly without signing in.
+                Authentication and authorization checks are disabled. You can enter the dashboard directly without signing in.
               </p>
               <div className="flex items-center gap-2 pt-1">
                 <Button
                   onClick={() => navigate('/app')}
-                  className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs h-8 cursor-pointer rounded-lg"
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs h-8 cursor-pointer rounded-lg"
                 >
                   Enter App
-                </Button>
-                <Button
-                  onClick={() => navigate('/admin')}
-                  variant="outline"
-                  className="flex-1 border-amber-500/40 text-amber-300 hover:bg-amber-500/20 font-bold text-xs h-8 cursor-pointer rounded-lg"
-                >
-                  Admin Panel
                 </Button>
               </div>
             </div>

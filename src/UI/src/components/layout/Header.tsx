@@ -29,7 +29,7 @@ export function Header({ user, claims, config }: HeaderProps) {
   }, []);
 
   const securityDisabled = isSecurityDisabled(config);
-  const isAdmin = securityDisabled || claims?.role === 'admin';
+  const isAdmin = !securityDisabled && claims?.role === 'admin';
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border glassmorphism">
@@ -166,16 +166,17 @@ export function Header({ user, claims, config }: HeaderProps) {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              {securityDisabled && (
+              {securityDisabled ? (
                 <Badge className="hidden sm:inline-flex bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
                   NO AUTH
                 </Badge>
+              ) : (
+                <Link to="/login">
+                  <Button size="sm" className="h-9 px-4 text-xs font-semibold bg-rose-500 hover:bg-rose-600 cursor-pointer">
+                    Sign In
+                  </Button>
+                </Link>
               )}
-              <Link to="/login">
-                <Button size="sm" className="h-9 px-4 text-xs font-semibold bg-rose-500 hover:bg-rose-600 cursor-pointer">
-                  Sign In
-                </Button>
-              </Link>
             </div>
           )}
         </div>

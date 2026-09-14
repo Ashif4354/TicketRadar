@@ -1,9 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { Radar, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { isSecurityDisabled } from '../utils/security';
+import type { AppConfig } from '../types';
 
-export function LandingPage() {
+export function LandingPage({ config }: { config?: AppConfig | null } = {}) {
   const navigate = useNavigate();
+  const securityDisabled = isSecurityDisabled(config);
 
   const handleGetStarted = () => {
     navigate('/app');
@@ -33,7 +36,7 @@ export function LandingPage() {
             size="lg"
             className="h-13 px-8 text-sm font-bold bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-xl shadow-rose-500/25 gap-2 group cursor-pointer rounded-xl"
           >
-            Get Started
+            {securityDisabled ? 'Launch App' : 'Get Started'}
             <Radar className="h-4.5 w-4.5 group-hover:animate-ping" />
           </Button>
           <a
