@@ -4,9 +4,10 @@ import { Radar, Shield, LogOut, BookOpen, User as UserIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { logout } from '../../lib/firebase';
+import { isSecurityDisabled } from '../../utils/security';
 import type { HeaderProps } from '../../types';
 
-export function Header({ user, claims }: HeaderProps) {
+export function Header({ user, claims, config }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -27,7 +28,8 @@ export function Header({ user, claims }: HeaderProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const isAdmin = claims?.role === 'admin';
+  const securityDisabled = isSecurityDisabled(config);
+  const isAdmin = securityDisabled || claims?.role === 'admin';
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border glassmorphism">
@@ -47,6 +49,26 @@ export function Header({ user, claims }: HeaderProps) {
         </Link>
 
         <div className="flex items-center gap-3">
+          {(user || securityDisabled) && (
+            <Link
+              to="/app"
+              className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/20 hover:bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 transition-colors"
+            >
+              <Radar className="h-3.5 w-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+          )}
+
+          {isAdmin && (
+            <Link
+              to="/admin"
+              className="flex items-center gap-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg border border-rose-500/30 transition-colors"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              <span>Admin Panel</span>
+            </Link>
+          )}
+
           <Link
             to="/instructions"
             className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/20 hover:bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 transition-colors"
@@ -54,6 +76,16 @@ export function Header({ user, claims }: HeaderProps) {
             <BookOpen className="h-3.5 w-3.5 text-rose-400" />
             <span className="hidden sm:inline">Instructions</span>
           </Link>
+
+          {securityDisabled && !user && (
+            <Link
+              to="/profile"
+              className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/20 hover:bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 transition-colors"
+            >
+              <UserIcon className="h-3.5 w-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Profile</span>
+            </Link>
+          )}
 
           {user ? (
             <div className="relative" ref={dropdownRef}>
@@ -133,11 +165,18 @@ export function Header({ user, claims }: HeaderProps) {
               )}
             </div>
           ) : (
-            <Link to="/login">
-              <Button size="sm" className="h-9 px-4 text-xs font-semibold bg-rose-500 hover:bg-rose-600 cursor-pointer">
-                Sign In
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              {securityDisabled && (
+                <Badge className="hidden sm:inline-flex bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  NO AUTH
+                </Badge>
+              )}
+              <Link to="/login">
+                <Button size="sm" className="h-9 px-4 text-xs font-semibold bg-rose-500 hover:bg-rose-600 cursor-pointer">
+                  Sign In
+                </Button>
+              </Link>
+            </div>
           )}
         </div>
       </div>

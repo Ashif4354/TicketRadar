@@ -2,7 +2,7 @@
 
 import logging
 from google.cloud import firestore
-from ..core.auth import db
+from ..core.auth import db, is_security_disabled
 from ..utils.config import settings
 
 logger = logging.getLogger("ticketradar.services.terms")
@@ -21,7 +21,7 @@ class TermsService:
         """
         Returns True if the user has accepted the current terms version.
         """
-        if not db or not uid:
+        if is_security_disabled() or not db or not uid or uid == "dev-user-001":
             return True
 
         current_ver = cls.get_current_version()

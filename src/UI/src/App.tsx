@@ -19,14 +19,31 @@ import { TermsModal } from './components/ui/terms-modal';
 
 import { auth } from './lib/firebase';
 import { authenticatedFetch } from './utils/api';
+import { isSecurityDisabled, setSecurityConfig } from './utils/security';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { User } from 'firebase/auth';
+import type { AppConfig } from './types';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [claims, setClaims] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
   const [termsPending, setTermsPending] = useState(false);
+
+  useEffect(() => {
+    authenticatedFetch('/api/config')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) {
+          setConfig(data);
+          setSecurityConfig(data);
+        }
+      })
+      .catch(err => console.error("Error fetching config:", err))
+      .finally(() => setConfigLoading(false));
+  }, []);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (currentUser) => {
@@ -73,7 +90,9 @@ export default function App() {
     setTermsPending(false);
   };
 
-  if (authLoading) {
+  const securityDisabled = isSecurityDisabled(config);
+
+  if (!securityDisabled && (authLoading || configLoading)) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
         <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-500 text-white shadow-xl shadow-rose-500/20">
@@ -86,15 +105,15 @@ export default function App() {
     );
   }
 
-  const isAuthorized = claims?.authorized === true;
-  const isAdmin = claims?.role === 'admin';
-  const isBlocked = claims?.blocked === true;
+  const isAuthorized = securityDisabled || claims?.authorized === true;
+  const isAdmin = securityDisabled || claims?.role === 'admin';
+  const isBlocked = !securityDisabled && claims?.blocked === true;
 
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-background text-foreground flex flex-col antialiased">
-        <Header user={user} claims={claims} />
-        <TermsModal isOpen={termsPending} onAccept={handleAcceptTerms} />
+        <Header user={user} claims={claims} config={config} />
+        <TermsModal isOpen={!securityDisabled && termsPending} onAccept={handleAcceptTerms} />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/tc" element={<TermsPage />} />
@@ -102,22 +121,22 @@ export default function App() {
           <Route path="/instructions" element={<InstructionsPage />} />
           <Route path="/instruction" element={<InstructionsPage />} />
           <Route path="/login" element={
-            user ? <Navigate to="/" replace /> : <LoginPage />
+            user ? <Navigate to="/app" replace /> : <LoginPage config={config} />
           } />
           <Route path="/profile" element={
-            !user ? <Navigate to="/login" replace /> :
+            (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
             isBlocked ? <BlockedPage /> :
             !isAuthorized ? <UnauthorizedPage /> :
             <ProfilePage />
           } />
           <Route path="/app" element={
-            !user ? <Navigate to="/login" replace /> :
+            (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
             isBlocked ? <BlockedPage /> :
             !isAuthorized ? <UnauthorizedPage /> :
             <AppDashboard />
           } />
           <Route path="/admin" element={
-            !user ? <Navigate to="/login" replace /> :
+            (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
             !isAdmin ? <Navigate to="/app" replace /> :
             <AdminDashboard />
           } />

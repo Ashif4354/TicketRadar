@@ -50,12 +50,32 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize Firestore client: {e}")
 
+DEV_MOCK_CLAIMS = {
+    "uid": "dev-user-001",
+    "email": "dev@ticketradar.local",
+    "name": "Dev Admin",
+    "displayName": "Dev Admin",
+    "picture": "",
+    "photoUrl": "",
+    "authorized": True,
+    "role": "admin",
+    "blocked": False,
+}
+
+
+def is_security_disabled() -> bool:
+    """Checks whether security verification is globally disabled."""
+    return (
+        os.getenv("DISABLE_SECURITY", "false").lower() in ("true", "1") or
+        (settings and getattr(settings, "disable_security", False))
+    )
+
+
 async def verify_app_check(x_firebase_appcheck: str = Header(None, alias="X-Firebase-AppCheck")):
     """Verifies the Firebase App Check token to ensure calls originate from the client app."""
     disable_security = (
-        os.getenv("DISABLE_SECURITY", "false").lower() in ("true", "1") or
-        os.getenv("DISABLE_APP_CHECK", "false").lower() in ("true", "1") or
-        (settings and getattr(settings, "disable_security", False))
+        is_security_disabled() or
+        os.getenv("DISABLE_APP_CHECK", "false").lower() in ("true", "1")
     )
     is_dev = os.getenv("ENVIRONMENT", "development").lower() == "development"
 
@@ -91,7 +111,36 @@ async def get_current_user_claims(
     """
     Verifies App Check, checks authentication, and returns user claims.
     Blocks users if the 'blocked' custom claim is True.
+    When security is disabled, bypasses token verification and provides mock admin claims.
     """
+    if is_security_disabled():
+        logger.debug("Bypassing authentication as security is disabled.")
+        claims = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization.split("Bearer ")[1].strip()
+            if token:
+                try:
+                    claims = auth.verify_id_token(token)
+                    claims = dict(claims)
+                except Exception:
+                    try:
+                        import jwt
+                        decoded = jwt.decode(token, options={"verify_signature": False})
+                        if isinstance(decoded, dict) and (decoded.get("uid") or decoded.get("user_id") or decoded.get("sub")):
+                            claims = dict(decoded)
+                            if "uid" not in claims:
+                                claims["uid"] = claims.get("user_id") or claims.get("sub")
+                    except Exception:
+                        pass
+
+        if not claims:
+            claims = DEV_MOCK_CLAIMS.copy()
+        else:
+            claims["authorized"] = True
+            claims["role"] = "admin"
+            claims["blocked"] = False
+        return claims
+
     # 1. Enforce App Check
     await verify_app_check(x_firebase_appcheck)
 
@@ -127,7 +176,14 @@ async def get_current_user_claims(
 async def get_authorized_user(claims: dict = Depends(get_current_user_claims)):
     """
     Verifies that the user has the 'authorized' custom claim set to True.
+    When security is disabled, bypasses authorization check.
     """
+    if is_security_disabled():
+        res = dict(claims or DEV_MOCK_CLAIMS)
+        res["authorized"] = True
+        res["role"] = "admin"
+        res["blocked"] = False
+        return res
     if not claims.get("authorized", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -138,7 +194,14 @@ async def get_authorized_user(claims: dict = Depends(get_current_user_claims)):
 async def get_admin_user(claims: dict = Depends(get_current_user_claims)):
     """
     Verifies that the user has the 'admin' role custom claim.
+    When security is disabled, bypasses admin role check.
     """
+    if is_security_disabled():
+        res = dict(claims or DEV_MOCK_CLAIMS)
+        res["authorized"] = True
+        res["role"] = "admin"
+        res["blocked"] = False
+        return res
     if claims.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -72,6 +72,7 @@ export interface UserClaims {
 export interface HeaderProps {
   user: User | null;
   claims: UserClaims | null;
+  config?: AppConfig | null;
 }
 
 export interface WalletBalance {

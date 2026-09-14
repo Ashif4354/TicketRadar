@@ -3,7 +3,7 @@
 import logging
 from fastapi import APIRouter, HTTPException, Depends
 from lib.utils.config import settings, config_error
-from lib.core.auth import get_authorized_user
+from lib.core.auth import get_authorized_user, is_security_disabled
 from lib.services.notification.factory import NotificationStrategyFactory
 from lib.services.gcp_logger import gcp_logger
 from api.schemas import TestAlertRequest
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api", tags=["Config"])
 async def get_config():
     """Retrieve application configuration and validation error status."""
     import os
-    disable_sec = os.getenv("DISABLE_SECURITY", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_security", False))
+    disable_sec = is_security_disabled()
     disable_pay = os.getenv("DISABLE_PAYMENTS", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_payments", False))
     return {
         "config_error": config_error,

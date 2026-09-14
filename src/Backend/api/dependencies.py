@@ -4,7 +4,14 @@ import logging
 import httpx
 from fastapi import HTTPException
 from lib.utils.config import settings
-from lib.core.auth import auth as firebase_auth
+from lib.core.auth import (
+    auth as firebase_auth,
+    get_current_user_claims,
+    get_authorized_user,
+    get_admin_user,
+    DEV_MOCK_CLAIMS,
+    is_security_disabled,
+)
 
 logger = logging.getLogger("ticketradar.api")
 
@@ -21,6 +28,13 @@ def get_user_details(uid: str = None, claims: dict = None) -> tuple[str, str, st
         photo_url = claims.get("picture", "") or claims.get("photoUrl", "")
         if not uid:
             uid = claims.get("uid")
+
+    if is_security_disabled():
+        if uid == "dev-user-001" or (claims and claims.get("uid") == "dev-user-001"):
+            return name or "Dev Admin", email or "dev@ticketradar.local", photo_url or ""
+        email = email or (f"{uid}@ticketradar.local" if uid else "dev@ticketradar.local")
+        name = name or (email.split("@")[0] if email else "Dev User")
+        return name, email, photo_url or ""
 
     if uid and (not name or not email or not photo_url):
         try:
@@ -41,8 +55,7 @@ def get_user_details(uid: str = None, claims: dict = None) -> tuple[str, str, st
 
 async def verify_recaptcha(token: str):
     """Verifies a reCAPTCHA v2 token with Google's siteverify API."""
-    import os
-    if os.getenv("DISABLE_SECURITY", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_security", False)):
+    if is_security_disabled():
         logger.debug("reCAPTCHA verification bypassed as security is disabled.")
         return True
 
@@ -86,8 +99,7 @@ def require_payments_enabled():
 
 async def require_terms_accepted(claims: dict = None):
     """Checks that user has accepted current terms version before proceeding."""
-    import os
-    if os.getenv("DISABLE_SECURITY", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_security", False)):
+    if is_security_disabled():
         return True
 
     from lib.services.terms import TermsService
