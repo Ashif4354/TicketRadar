@@ -16,8 +16,11 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - LOGS_DIR=/app/logs
     env_file:
       - ./src/Backend/.env
+    volumes:
+      - ./src/Backend/logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 30s

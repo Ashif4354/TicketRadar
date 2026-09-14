@@ -41,6 +41,20 @@ class FrameworkLogFilter(logging.Filter):
         record.json_fields["task_id"] = str(task_id)
         record.json_fields["task_creator"] = str(task_creator)
 
+        # Enrich log record with Atatus APM trace context if present
+        trace_id = getattr(record, "atatus_trace_id", None)
+        span_id = getattr(record, "atatus_span_id", None)
+        tx_id = getattr(record, "atatus_transaction_id", None)
+        if trace_id:
+            record._labels["trace_id"] = str(trace_id)
+            record.json_fields["trace_id"] = str(trace_id)
+        if span_id:
+            record._labels["span_id"] = str(span_id)
+            record.json_fields["span_id"] = str(span_id)
+        if tx_id:
+            record._labels["transaction_id"] = str(tx_id)
+            record.json_fields["transaction_id"] = str(tx_id)
+
         return True
 
 class GCPLoggingService:
@@ -109,7 +123,8 @@ class GCPLoggingService:
             handler.setLevel(logging.INFO)  # Suppresses uvicorn/fastapi INFO via filter, passes application file loggers & warning+
             
             root_logger = logging.getLogger()
-            root_logger.addHandler(handler)
+            if not any(isinstance(h, CloudLoggingHandler) for h in root_logger.handlers):
+                root_logger.addHandler(handler)
 
         except Exception as e:
             logger.error(f"Failed to initialize Google Cloud Logging: {e}")

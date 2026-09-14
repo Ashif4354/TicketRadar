@@ -17,7 +17,11 @@ dist/
 .venv
 .env
 
+# logs
 logs/
+src/Backend/logs/*.log
+src/Backend/logs/*.log.*
+!src/Backend/logs/.gitkeep
 prompt
 
 .playwright-mcp/

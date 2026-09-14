@@ -17,4 +17,7 @@ dist/
 .venv
 .env
 
-logs/
+# logs
+logs/*.log
+logs/*.log.*
+!logs/.gitkeep
