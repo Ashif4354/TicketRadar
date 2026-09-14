@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # Application Environment ('development', 'production', 'test')
     environment: str = Field(default="development")
 
+    # Atatus APM Configuration
+    atatus_license_key: str = Field(default="")
+    atatus_app_name: str = Field(default="TicketRadar")
+
     # SMTP Configuration
     smtp_server: str = Field(default="smtp.gmail.com")
     smtp_port: int = Field(default=587)

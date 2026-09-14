@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from lib.utils.config import settings
 from lib.core.monitor import JobManager
 from api.routers import (
     config,
@@ -37,6 +38,65 @@ from api.routers import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ticketradar.api")
 
+# Determine application version from pyproject.toml
+def get_app_version(default: str = "2.0.0") -> str:
+    candidate_paths = [
+        os.path.join(backend_dir, "pyproject.toml"),
+        os.path.join(root_dir, "pyproject.toml"),
+        os.path.join(root_dir, "src", "Backend", "pyproject.toml"),
+    ]
+    for path in candidate_paths:
+        if os.path.exists(path):
+            try:
+                import tomllib
+                with open(path, "rb") as f:
+                    data = tomllib.load(f)
+                    version = data.get("project", {}).get("version")
+                    if version:
+                        return str(version)
+            except Exception:
+                pass
+    try:
+        from importlib.metadata import version
+        return version("ticketradar")
+    except Exception:
+        pass
+    return default
+
+APP_VERSION = get_app_version()
+
+# Environment taken from settings
+ENVIRONMENT = settings.environment if settings else "development"
+
+# Initialize Atatus APM Agent if license key is provided in settings.
+# Note: Initialization should be done before "app = FastAPI()", and not in lifespan.
+atatus_client = None
+if settings and settings.atatus_license_key:
+    try:
+        import atatus
+        from atatus.contrib.starlette import create_client
+
+        atatus_client = atatus.get_client()
+        if atatus_client is None:
+            app_name = settings.atatus_app_name if (settings and settings.atatus_app_name) else "TicketRadar"
+
+            atatus_client = create_client({
+                "APP_NAME": app_name,
+                "LICENSE_KEY": settings.atatus_license_key,
+                "APP_VERSION": APP_VERSION,
+                "ENVIRONMENT": ENVIRONMENT,
+                "TRACING": True,
+                "ANALYTICS": True,
+                "ANALYTICS_CAPTURE_OUTGOING": True,
+                "LOG_BODY": "all",
+            })
+            logger.info("Atatus APM agent initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize Atatus APM client: {e}")
+        atatus_client = None
+else:
+    logger.info("Atatus license key not provided in settings; Atatus instrumentation is disabled.")
+
 manager = JobManager()
 
 
@@ -46,12 +106,17 @@ async def lifespan(app: FastAPI):
     # Shutdown: Signal all running job loops to stop gracefully for server shutdown
     logger.info("Shutting down backend app...")
     manager.stop_all_jobs_for_shutdown()
+    if atatus_client is not None:
+        try:
+            atatus_client.close()
+        except Exception:
+            pass
 
 
 app = FastAPI(
     title="TicketRadar API",
     description="Backend API for TicketRadar movie ticket monitoring",
-    version="0.1.0",
+    version=APP_VERSION,
     lifespan=lifespan
 )
 
@@ -63,6 +128,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add Atatus middleware
+# Note: Make sure to add Atatus middleware as the last middleware in your app
+if atatus_client is not None:
+    from atatus.contrib.starlette import Atatus
+    app.add_middleware(Atatus, client=atatus_client)
 
 # Register API Routers
 app.include_router(config.router)
@@ -92,7 +163,7 @@ async def root():
 async def health():
     return JSONResponse(
         status_code=200,
-        content={"status": "ok", "service": "TicketRadar API", "version": "0.1.0"}
+        content={"status": "ok", "service": "TicketRadar API", "version": APP_VERSION}
     )
 
 
