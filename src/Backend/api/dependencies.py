@@ -63,7 +63,10 @@ async def verify_recaptcha(token: str):
         raise HTTPException(status_code=400, detail="reCAPTCHA token is required.")
 
     recaptcha_url = "https://www.google.com/recaptcha/api/siteverify"
-    secret_key = settings.recaptcha_secret if settings else "6LfUdl0tAAAAAAjyjVtoGRY2cY52NJUOhc4R3mLu"
+    secret_key = (settings.recaptcha_secret if settings else "") or os.getenv("RECAPTCHA_SECRET", "")
+    if not secret_key:
+        logger.error("RECAPTCHA_SECRET is not configured on the backend server.")
+        raise HTTPException(status_code=500, detail="Server security configuration error (reCAPTCHA secret missing).")
 
     try:
         async with httpx.AsyncClient() as client:

@@ -86,9 +86,8 @@ class Settings(BaseSettings):
     # Terms and Privacy Policy Version
     current_terms_version: str = Field(default="2.0")
 
-    # reCAPTCHA Configuration
-    recaptcha_site: str = Field(default="6LfUdl0tAAAAALD21Jd3geQFRavY8xeWMbadKybZ")
-    recaptcha_secret: str = Field(default="6LfUdl0tAAAAAAjyjVtoGRY2cY52NJUOhc4R3mLu")
+    # reCAPTCHA Secret Key (used solely by the backend to verify tokens via Google siteverify API)
+    recaptcha_secret: str = Field(default="")
 
     # Firebase Configuration
     firebase_type: str = Field(default="")

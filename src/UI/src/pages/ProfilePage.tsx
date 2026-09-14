@@ -52,7 +52,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
   const securityDisabled = isSecurityDisabled(effectiveConfig);
   const paymentsDisabled = isPaymentsDisabled(effectiveConfig);
   const hideWallet = securityDisabled || paymentsDisabled;
-  const siteKeyVal = effectiveConfig?.recaptcha_site || import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY;
+  const siteKeyVal = import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY;
 
   const consentRecaptchaRef = useRef<ReCAPTCHA>(null);
   const testAlertRecaptchaRef = useRef<ReCAPTCHA>(null);

@@ -713,7 +713,7 @@ export function AppDashboard() {
     return 'warning';
   };
 
-  const siteKeyVal = config?.recaptcha_site || import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY;
+  const siteKeyVal = import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY;
 
   return (
     <main className="flex-1 container mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

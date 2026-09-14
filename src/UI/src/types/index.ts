@@ -52,7 +52,6 @@ export interface AppConfig {
   smtp_server: string | null;
   smtp_email: string | null;
   default_check_interval: number;
-  recaptcha_site?: string;
   disable_security?: boolean;
   disable_approval?: boolean;
   disable_payments?: boolean;
