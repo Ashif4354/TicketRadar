@@ -1,9 +1,9 @@
 # src/Backend/lib/services/notification/discord_strategy.py
 
-import httpx
 from typing import List
 from .base import NotificationStrategy
 from .templates.discord import DiscordTemplates
+from .DiscordEmbed import DiscordEmbed
 
 
 class DiscordWebhookNotificationStrategy(NotificationStrategy, DiscordTemplates):
@@ -45,12 +45,4 @@ class DiscordWebhookNotificationStrategy(NotificationStrategy, DiscordTemplates)
             format_name=format_name
         )
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(self.webhook_url, json=payload, timeout=10.0)
-                if response.status_code in (200, 204):
-                    return True, "Discord notification sent successfully."
-                else:
-                    return False, f"Discord Webhook returned code {response.status_code}: {response.text}"
-        except Exception as e:
-            return False, f"Failed to send Discord notification: {str(e)}"
+        return await DiscordEmbed.send_payload(self.webhook_url, payload)

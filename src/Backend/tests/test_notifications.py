@@ -342,3 +342,82 @@ async def test_whatsapp_stop_reply_revokes_consent(async_client):
     assert doc.exists
     assert doc.to_dict()["whatsapp_consented"] is False
 
+
+@pytest.mark.asyncio
+async def test_discord_embed_builder():
+    from lib.services.notification.DiscordEmbed import DiscordEmbed
+
+    embed = (
+        DiscordEmbed(title="Test Title", description="Test Description", color=0x10B981)
+        .add_field("Field 1", "Value 1", inline=True)
+        .set_thumbnail("https://example.com/thumb.png")
+        .set_footer("Footer text", "https://example.com/icon.png")
+    )
+    d = embed.to_dict()
+    assert d["title"] == "Test Title"
+    assert d["description"] == "Test Description"
+    assert d["color"] == 0x10B981
+    assert len(d["fields"]) == 1
+    assert d["fields"][0]["name"] == "Field 1"
+    assert d["thumbnail"]["url"] == "https://example.com/thumb.png"
+    assert d["footer"]["text"] == "Footer text"
+
+    payload = embed.to_payload()
+    assert "embeds" in payload
+    assert len(payload["embeds"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_discord_embed_test_env_suppression(monkeypatch):
+    from lib.services.notification.DiscordEmbed import DiscordEmbed
+
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    success, msg = await DiscordEmbed.send_payload("https://discord.com/api/webhooks/test/123", {"embeds": []})
+    assert success is True
+    assert "Skipped in test environment" in msg
+
+    # Missing webhook url
+    success, msg = await DiscordEmbed.send_payload("", {"embeds": []})
+    assert success is False
+    assert "missing" in msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_discord_embed_dispatch_success(monkeypatch):
+    from unittest.mock import patch, MagicMock
+    from lib.services.notification.DiscordEmbed import DiscordEmbed
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 204
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        success, msg = await DiscordEmbed.send_embed(
+            webhook_url="https://discord.com/api/webhooks/123/abc",
+            title="Production Alert",
+            description="All systems nominal"
+        )
+        assert success is True
+        assert "successfully" in msg
+        mock_post.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_admin_notifier_uses_discord_embed(monkeypatch):
+    from unittest.mock import patch
+    from lib.services.notification.admin_notifier import send_admin_discord_embed
+
+    monkeypatch.setattr("lib.services.notification.admin_notifier.settings.admin_discord_webhook_url", "https://discord.com/api/webhooks/123/test")
+    with patch("lib.services.notification.DiscordEmbed.DiscordEmbed.send_embed", new_callable=AsyncMock) as mock_send:
+        mock_send.return_value = (True, "OK")
+        await send_admin_discord_embed(
+            title="Test Admin Alert",
+            description="Testing discord embed dispatch",
+            color=0x7C3AED
+        )
+        mock_send.assert_awaited_once()
+
+
+

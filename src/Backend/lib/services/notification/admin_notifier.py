@@ -1,10 +1,10 @@
 # src/Backend/lib/services/notification/admin_notifier.py
 
 import logging
-import httpx
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from ...utils.config import settings
+from .DiscordEmbed import DiscordEmbed
 
 logger = logging.getLogger("ticketradar.admin_notifier")
 
@@ -20,50 +20,16 @@ async def send_admin_discord_embed(
     """
     Sends a formatted embed notification to ADMIN_DISCORD_WEBHOOK_URL.
     """
-    import os
-    env = (os.getenv("ENVIRONMENT") or (getattr(settings, "environment", "") if settings else "")).strip().lower()
-    if env == "test":
-        logger.debug("Test environment detected. Skipping admin Discord notification.")
-        return True, "Skipped in test environment."
-
     webhook_url = getattr(settings, "admin_discord_webhook_url", "") if settings else ""
-    if not webhook_url or not webhook_url.strip():
-        logger.debug("ADMIN_DISCORD_WEBHOOK_URL is not configured. Skipping admin notification.")
-        return False, "Webhook URL not configured."
-
-    embed: Dict[str, Any] = {
-        "title": title,
-        "description": description,
-        "color": color,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "footer": {
-            "text": "TicketRadar Admin Alerts"
-        }
-    }
-
-    if fields:
-        embed["fields"] = fields
-
-    avatar = thumbnail_url.strip() if thumbnail_url and thumbnail_url.startswith("http") else None
-    if avatar:
-        embed["thumbnail"] = {"url": avatar}
-
-    payload = {"embeds": [embed]}
-
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(webhook_url, json=payload, timeout=10.0)
-            if resp.status_code in (200, 204):
-                logger.info(f"Admin Discord notification sent: {title}")
-                return True, "Notification sent successfully."
-            else:
-                err_msg = f"Discord webhook status {resp.status_code}: {resp.text}"
-                logger.error(err_msg)
-                return False, err_msg
-    except Exception as e:
-        err_msg = f"Failed to send admin Discord notification: {e}"
-        logger.error(err_msg)
-        return False, err_msg
+    return await DiscordEmbed.send_embed(
+        webhook_url=webhook_url,
+        title=title,
+        description=description,
+        color=color,
+        fields=fields,
+        thumbnail_url=thumbnail_url,
+        footer_text="TicketRadar Admin Alerts"
+    )
 
 
 # 1. New User Registered and First Login
