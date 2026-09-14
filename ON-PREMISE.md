@@ -153,7 +153,7 @@ PAYMENT_GATEWAY=cashfree
 CASHFREE_APP_ID=your_cf_app_id
 CASHFREE_SECRET_KEY=your_cf_secret_key
 CASHFREE_ENVIRONMENT=sandbox       # Use 'production' for live payments
-CASHFREE_WEBHOOK_SECRET=your_cf_webhook_secret
+CASHFREE_WEBHOOK_SECRET=            # Leave empty; automatically defaults to CASHFREE_SECRET_KEY
 CURRENT_TERMS_VERSION=v2.0
 ```
 
@@ -262,8 +262,7 @@ When `DISABLE_PAYMENTS=false`:
 3. Obtain API Keys from **Developers → API Keys** (App ID & Secret Key).
 4. Configure the Webhook Endpoint in the Cashfree Dashboard:
    - URL: `https://your-domain.com/api/cashfree/webhook`
-   - Subscribed Events: `PAYMENT_SUCCESS_WEBHOOK`, `PAYMENT_FAILED_WEBHOOK`, `REFUND_STATUS_WEBHOOK`
-5. Copy the **Webhook Secret** into `CASHFREE_WEBHOOK_SECRET`.
+5. Leave `CASHFREE_WEBHOOK_SECRET=` empty in `.env` (Cashfree signs webhooks with your `CASHFREE_SECRET_KEY`, which TicketRadar automatically uses as fallback).
 
 ---
 
