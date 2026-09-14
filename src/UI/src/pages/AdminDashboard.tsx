@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp } from '../utils/formatters';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
+import { isPaymentsDisabled } from '../utils/payments';
+import type { AppConfig } from '../types';
 
 /**
  * Provides an administrative interface for managing access requests, user accounts, and ticket-monitoring jobs.
@@ -59,6 +61,10 @@ export function AdminDashboard() {
   // Audit logs
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
+  // App Config & Payment status
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+  const paymentsDisabled = isPaymentsDisabled(appConfig);
+
   const fetchCounts = useCallback(async () => {
     try {
       const res = await authenticatedFetch('/admin/counts');
@@ -66,16 +72,38 @@ export function AdminDashboard() {
         const data = await res.json();
         setCounts(data);
       }
-    } catch (e) {
+    } catch {
       // ignore count fetch error
+    }
+  }, []);
+
+  const fetchConfig = useCallback(async () => {
+    try {
+      const res = await authenticatedFetch('/api/config');
+      if (res.ok) {
+        const data: AppConfig = await res.json();
+        setAppConfig(data);
+      }
+    } catch {
+      // ignore config fetch error
     }
   }, []);
 
   useEffect(() => {
     fetchCounts();
-  }, [fetchCounts]);
+    fetchConfig();
+  }, [fetchCounts, fetchConfig]);
+
+  useEffect(() => {
+    if (paymentsDisabled && (activeTab === 'pricing' || activeTab === 'wallets' || activeTab === 'refunds')) {
+      setActiveTab('requests');
+    }
+  }, [paymentsDisabled, activeTab]);
 
   const fetchData = useCallback(async () => {
+    if (paymentsDisabled && (activeTab === 'pricing' || activeTab === 'wallets' || activeTab === 'refunds')) {
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -120,7 +148,7 @@ export function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, paymentsDisabled]);
 
   useEffect(() => {
     fetchData();
@@ -447,33 +475,37 @@ export function AdminDashboard() {
             <Film className="h-3.5 w-3.5" />
             Ticket Trackers ({jobs.length > 0 ? jobs.length : (counts ? counts.jobs : 0)})
           </Button>
-          <Button
-            onClick={() => setActiveTab('pricing')}
-            variant={activeTab === 'pricing' ? 'default' : 'ghost'}
-            size="sm"
-            className="text-xs font-semibold gap-1.5"
-          >
-            <DollarSign className="h-3.5 w-3.5 text-rose-400" />
-            Pricing
-          </Button>
-          <Button
-            onClick={() => setActiveTab('wallets')}
-            variant={activeTab === 'wallets' ? 'default' : 'ghost'}
-            size="sm"
-            className="text-xs font-semibold gap-1.5"
-          >
-            <Wallet className="h-3.5 w-3.5 text-rose-400" />
-            Wallets
-          </Button>
-          <Button
-            onClick={() => setActiveTab('refunds')}
-            variant={activeTab === 'refunds' ? 'default' : 'ghost'}
-            size="sm"
-            className="text-xs font-semibold gap-1.5"
-          >
-            <RotateCcw className="h-3.5 w-3.5 text-rose-400" />
-            Refunds
-          </Button>
+          {!paymentsDisabled && (
+            <>
+              <Button
+                onClick={() => setActiveTab('pricing')}
+                variant={activeTab === 'pricing' ? 'default' : 'ghost'}
+                size="sm"
+                className="text-xs font-semibold gap-1.5"
+              >
+                <DollarSign className="h-3.5 w-3.5 text-rose-400" />
+                Pricing
+              </Button>
+              <Button
+                onClick={() => setActiveTab('wallets')}
+                variant={activeTab === 'wallets' ? 'default' : 'ghost'}
+                size="sm"
+                className="text-xs font-semibold gap-1.5"
+              >
+                <Wallet className="h-3.5 w-3.5 text-rose-400" />
+                Wallets
+              </Button>
+              <Button
+                onClick={() => setActiveTab('refunds')}
+                variant={activeTab === 'refunds' ? 'default' : 'ghost'}
+                size="sm"
+                className="text-xs font-semibold gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5 text-rose-400" />
+                Refunds
+              </Button>
+            </>
+          )}
           <Button
             onClick={() => setActiveTab('audit_logs')}
             variant={activeTab === 'audit_logs' ? 'default' : 'ghost'}
@@ -1110,7 +1142,7 @@ export function AdminDashboard() {
       )}
 
       {/* Tab: Pricing Configuration */}
-      {activeTab === 'pricing' && (
+      {!paymentsDisabled && activeTab === 'pricing' && (
         <div className="space-y-6">
           {pricingMsg && (
             <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
@@ -1261,7 +1293,7 @@ export function AdminDashboard() {
       )}
 
       {/* Tab: User Wallets & Adjustments */}
-      {activeTab === 'wallets' && (
+      {!paymentsDisabled && activeTab === 'wallets' && (
         <div className="space-y-6">
           <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
             <h3 className="text-sm font-bold text-foreground">User Wallet Lookup & Adjustment</h3>
@@ -1398,7 +1430,7 @@ export function AdminDashboard() {
       )}
 
       {/* Tab: Cashfree Refunds */}
-      {activeTab === 'refunds' && (
+      {!paymentsDisabled && activeTab === 'refunds' && (
         <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
           <CardHeader className="p-0 pb-4 border-b border-border/40">
             <CardTitle className="text-base font-bold flex items-center gap-2">

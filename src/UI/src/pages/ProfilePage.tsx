@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { authenticatedFetch } from '../utils/api';
+import { isPaymentsDisabled } from '../utils/payments';
 import type { UserProfileData, WalletBalance, WalletTransaction, AppConfig } from '../types';
 
 export function ProfilePage() {
@@ -47,8 +48,9 @@ export function ProfilePage() {
 
       // 1. Fetch App Config
       const configRes = await authenticatedFetch('/api/config');
+      let cfg: AppConfig | null = null;
       if (configRes.ok) {
-        const cfg = await configRes.json();
+        cfg = await configRes.json();
         setAppConfig(cfg);
       }
 
@@ -61,7 +63,7 @@ export function ProfilePage() {
       setDiscordInput(profData.discord_webhook_url || '');
 
       // 3. Fetch Wallet data if payments are enabled
-      const paymentsDisabled = profRes.headers.get('x-payments-disabled') === 'true';
+      const paymentsDisabled = isPaymentsDisabled(cfg) || profRes.headers.get('x-payments-disabled') === 'true';
       if (!paymentsDisabled) {
         const wRes = await authenticatedFetch('/api/wallet/balance');
         if (wRes.ok) {
@@ -74,6 +76,9 @@ export function ProfilePage() {
           const tData = await tRes.json();
           setTransactions(tData);
         }
+      } else {
+        setWallet(null);
+        setTransactions([]);
       }
     } catch (err: any) {
       setError(err?.message || 'Error loading profile data');
@@ -174,6 +179,10 @@ export function ProfilePage() {
   };
 
   const handleTopup = async () => {
+    if (isPaymentsDisabled(appConfig)) {
+      setError('Payment features are disabled in self-hosted mode.');
+      return;
+    }
     const amountNum = parseFloat(topupAmount);
     if (isNaN(amountNum) || amountNum < 1) {
       setError('Minimum top-up amount is ₹1.00');
@@ -249,7 +258,7 @@ export function ProfilePage() {
     );
   }
 
-  const paymentsDisabled = appConfig?.disable_payments === true;
+  const paymentsDisabled = isPaymentsDisabled(appConfig);
 
   return (
     <main className="flex-1 container mx-auto max-w-5xl px-4 py-10 sm:px-6 space-y-8">
@@ -655,7 +664,7 @@ export function ProfilePage() {
       )}
 
       {/* Top-Up Modal */}
-      {topupModalOpen && (
+      {!paymentsDisabled && topupModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-md rounded-2xl border border-rose-500/30 bg-[#121217] p-6 shadow-2xl text-left space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-border/50">

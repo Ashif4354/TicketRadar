@@ -13,7 +13,7 @@ This comprehensive guide details everything needed to self-host and run TicketRa
    - [4. Frontend Installation](#4-frontend-installation)
 3. [Environment Configuration](#environment-configuration)
    - [Required Variables (Always)](#required-variables-always)
-   - [Optional: Self-Hosted Mode (`DISABLE_PAYMENTS`)](#optional-self-hosted-mode-disable_payments)
+   - [Optional: Self-Hosted Mode (`DISABLE_PAYMENTS` & `VITE_DISABLE_PAYMENTS`)](#optional-self-hosted-mode-disable_payments--vite_disable_payments)
    - [Optional: Cashfree Payment Gateway](#optional-cashfree-payment-gateway)
    - [Optional: WhatsApp Template Setup](#optional-whatsapp-template-setup)
 4. [Twilio Setup (Single Phone Number)](#twilio-setup-single-phone-number)
@@ -73,6 +73,9 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 cd ../UI
 cp .env.example .env
 
+# For free self-hosted mode (optional):
+# Set VITE_DISABLE_PAYMENTS=true in src/UI/.env
+
 # Install dependencies and build
 npm install
 npm run build
@@ -115,14 +118,21 @@ TWILIO_PHONE_NUMBER=+919876543210
 APP_BASE_URL=https://your-domain.com
 ```
 
-### Optional: Self-Hosted Mode (`DISABLE_PAYMENTS`)
+### Optional: Self-Hosted Mode (`DISABLE_PAYMENTS` & `VITE_DISABLE_PAYMENTS`)
 
-TicketRadar has a first-class self-hosted mode toggled via `DISABLE_PAYMENTS`:
+TicketRadar has a first-class self-hosted mode toggled via `DISABLE_PAYMENTS` in the backend and `VITE_DISABLE_PAYMENTS` in the frontend:
 
-| Setting | Mode | Behavior |
-|---|---|---|
-| `DISABLE_PAYMENTS=true` | **Free Self-Hosted Mode** | All notification mediums (Email, Discord, SMS, WhatsApp, Voice Calls) are free for all users. The wallet tab, balance widgets, top-ups, pricing configs, and payment gates are completely hidden in the UI and skipped in the API. No Cashfree credentials needed. |
-| `DISABLE_PAYMENTS=false` | **Commercial Service Mode** | Wallet, pricing schedules, Cashfree PG integration, and atomic credit transactions are strictly enforced. SMS, WhatsApp, and Voice calls require user wallet balance or Cashfree checkout. |
+- **Backend (`src/Backend/.env`)**: Set `DISABLE_PAYMENTS=true`. The backend reports this setting via `/api/config` and `/api/profile`, bypasses payment deductions during job creation, and rejects payment/wallet endpoints with a `503 Service Unavailable` response.
+- **Frontend (`src/UI/.env`)**: Set `VITE_DISABLE_PAYMENTS=true`. When either `VITE_DISABLE_PAYMENTS === 'true'` OR the backend `config.disable_payments === true`:
+  - The wallet balance widget, top-up modal, and immutable transaction ledger are hidden in the Profile and Dashboard.
+  - Job creation payment step and Cashfree checkout options are bypassed/hidden, defaulting all alerts to free submission.
+  - Pricing display reflects free alerts (`Free (Self-Hosted Mode)`).
+  - Admin Pricing Schedule, User Wallets, and Cashfree Refunds tabs and management panels are completely hidden.
+
+| Backend (`DISABLE_PAYMENTS`) | Frontend (`VITE_DISABLE_PAYMENTS`) | Mode | Behavior |
+|---|---|---|---|
+| `true` | `true` | **Free Self-Hosted Mode** | All notification mediums (Email, Discord, SMS, WhatsApp, Voice Calls) are free for all users. The wallet tab, balance widgets, top-ups, pricing configs, and payment gates are completely hidden across the UI and skipped in the API. No Cashfree credentials needed. |
+| `false` | `false` | **Commercial Service Mode** | Wallet, pricing schedules, Cashfree PG integration, and atomic credit transactions are strictly enforced. SMS, WhatsApp, and Voice calls require user wallet balance or Cashfree checkout. |
 
 ### Optional: Cashfree Payment Gateway
 *(Only needed if `DISABLE_PAYMENTS=false`)*
@@ -242,7 +252,7 @@ npm run build
 | **SMS/Calls not updating to Delivered** | Twilio webhook callback URL not reaching server | Check ngrok/domain tunnel; verify status callback URL in Twilio Console |
 | **WhatsApp message fails to send** | Missing or unapproved WhatsApp template Content SID | Verify `TWILIO_WHATSAPP_CONTENT_SID` or use Twilio WhatsApp Sandbox for dev |
 | **Payment webhooks not crediting wallet** | Webhook signature verification mismatch | Verify `CASHFREE_WEBHOOK_SECRET` matches Cashfree merchant dashboard |
-| **"Payment features are disabled" (400)** | `DISABLE_PAYMENTS=true` in `.env` | Set `DISABLE_PAYMENTS=false` and configure Cashfree credentials |
+| **"Payment features are disabled" (503)** | `DISABLE_PAYMENTS=true` in backend `.env` or `VITE_DISABLE_PAYMENTS=true` in frontend `.env` | Set `DISABLE_PAYMENTS=false` and `VITE_DISABLE_PAYMENTS=false`, and configure Cashfree credentials |
 | **Terms Modal appearing repeatedly** | Terms v2.0 not recorded in user profile | Click "Accept & Continue" in UI or verify Firestore write permissions on `users/{uid}` |
 | **Phone number rejected** | Number not under Indian numbering plan (+91) | Enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9 |
 | **Polly.Aditi Voice call synthesis** | Twilio Programmable Voice permissions | Ensure voice calls are enabled for destination geography in Twilio Voice Geo-Permissions |

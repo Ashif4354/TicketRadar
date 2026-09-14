@@ -19,6 +19,7 @@ import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { authenticatedFetch } from '../utils/api';
 import { formatBmsDate, formatTimestamp, formatInterval } from '../utils/formatters';
 import { isSecurityDisabled } from '../utils/security';
+import { isPaymentsDisabled } from '../utils/payments';
 import type { Job, AppConfig, UserClaims } from '../types';
 import { auth } from '../lib/firebase';
 import { hasProviderSearch } from '../utils/providerSearch';
@@ -74,6 +75,7 @@ export function AppDashboard() {
 
   // App Config and Jobs state
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const paymentsDisabled = isPaymentsDisabled(config);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
@@ -318,6 +320,14 @@ export function AppDashboard() {
         if (data.default_check_interval) {
           setIntervalSec(Math.max(60, data.default_check_interval));
         }
+        if (!isPaymentsDisabled(data)) {
+          authenticatedFetch('/api/wallet/balance')
+            .then(r => r.json())
+            .then(w => { if (w && !w.detail) setUserWallet(w); })
+            .catch(err => console.error("Failed to load wallet in dashboard:", err));
+        } else {
+          setUserWallet(null);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch API config:", err);
@@ -358,13 +368,6 @@ export function AppDashboard() {
         }
       })
       .catch(err => console.error("Failed to load profile in dashboard:", err));
-
-    authenticatedFetch('/api/wallet/balance')
-      .then(res => res.json())
-      .then(w => {
-        if (w && !w.detail) setUserWallet(w);
-      })
-      .catch(err => console.error("Failed to load wallet in dashboard:", err));
     
     // Set default date picker value to today
     const today = new Date();
@@ -608,7 +611,7 @@ export function AppDashboard() {
       sms_consent: medium === "SMS" ? smsConsent : false,
       whatsapp_consent: medium === "WhatsApp" ? whatsappConsent : false,
       call_consent: medium === "Phone Call" ? callConsent : false,
-      payment_method: config?.disable_payments ? "free" : (paymentMethod === "cashfree" ? "cashfree" : "wallet"),
+      payment_method: paymentsDisabled ? "free" : (paymentMethod === "cashfree" ? "cashfree" : "wallet"),
       check_interval: intervalSec,
       recaptcha_token: token,
       params: {
@@ -620,7 +623,7 @@ export function AppDashboard() {
       }
     };
 
-    if (!config?.disable_payments && ["SMS", "WhatsApp", "Phone Call"].includes(medium)) {
+    if (!paymentsDisabled && ["SMS", "WhatsApp", "Phone Call"].includes(medium)) {
       const pricePaise = medium === "SMS" ? 50 : medium === "WhatsApp" ? 100 : 150;
       const walletPaise = userWallet?.balance_paise || 0;
       if (paymentMethod === "cashfree" || walletPaise < pricePaise) {
@@ -648,10 +651,12 @@ export function AppDashboard() {
         fetchJobs();
 
         // Refresh wallet balance
-        authenticatedFetch('/api/wallet/balance')
-          .then(r => r.json())
-          .then(w => { if (w && !w.detail) setUserWallet(w); })
-          .catch(() => {});
+        if (!paymentsDisabled) {
+          authenticatedFetch('/api/wallet/balance')
+            .then(r => r.json())
+            .then(w => { if (w && !w.detail) setUserWallet(w); })
+            .catch(() => {});
+        }
       } else {
         setFormErrors([data.detail || "Failed to create monitoring job."]);
       }
@@ -694,10 +699,12 @@ export function AppDashboard() {
       const res = await authenticatedFetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchJobs();
-        authenticatedFetch('/api/wallet/balance')
-          .then(r => r.json())
-          .then(w => { if (w && !w.detail) setUserWallet(w); })
-          .catch(() => {});
+        if (!paymentsDisabled) {
+          authenticatedFetch('/api/wallet/balance')
+            .then(r => r.json())
+            .then(w => { if (w && !w.detail) setUserWallet(w); })
+            .catch(() => {});
+        }
       }
     } catch (err) {
       console.error("Failed to delete job:", err);
@@ -1030,7 +1037,14 @@ export function AppDashboard() {
                         </label>
                       )}
 
-                      {!config?.disable_payments && (
+                      {paymentsDisabled ? (
+                        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-xs flex items-center justify-between">
+                          <span className="text-muted-foreground font-medium">Alert Cost:</span>
+                          <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+                            Free (Self-Hosted Mode)
+                          </Badge>
+                        </div>
+                      ) : (
                         <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 space-y-2.5 text-xs">
                           <div className="flex items-center justify-between">
                             <div>
@@ -1410,7 +1424,7 @@ export function AppDashboard() {
                                 Failed
                               </Badge>
                             ) : null}
-                            {job.refund_issued && (
+                            {job.refund_issued && !paymentsDisabled && (
                               <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold px-2 py-0.5">
                                 ₹{((job.price_paise || 0)/100).toFixed(2)} Refunded
                               </Badge>
@@ -1754,7 +1768,7 @@ export function AppDashboard() {
         description={
           <>
             Are you sure you want to remove ticket tracker <strong className="text-foreground font-mono">#{jobToDelete?.id}</strong> ({jobToDelete?.movie_name})? This action cannot be undone.
-            {jobToDelete?.price_paise && jobToDelete.price_paise > 0 && jobToDelete.notification_status !== 'delivered' && jobToDelete.notification_status !== 'sent' && (
+            {!paymentsDisabled && jobToDelete?.price_paise && jobToDelete.price_paise > 0 && jobToDelete.notification_status !== 'delivered' && jobToDelete.notification_status !== 'sent' && (
               <span className="block mt-2 font-medium text-emerald-400">
                 💰 Cancelling before booking opens will immediately refund ₹{(jobToDelete.price_paise / 100).toFixed(2)} to your wallet.
               </span>
