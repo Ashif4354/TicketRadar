@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Radar, Shield, LogOut, BookOpen, User as UserIcon, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ export function Header({ user, claims, config }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = async () => {
     setDropdownOpen(false);
@@ -30,6 +31,7 @@ export function Header({ user, claims, config }: HeaderProps) {
 
   const securityDisabled = isSecurityDisabled(config);
   const isAdmin = !securityDisabled && claims?.role === 'admin';
+  const isAppPage = location.pathname === '/app' || location.pathname === '/app/';
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border glassmorphism">
@@ -49,23 +51,13 @@ export function Header({ user, claims, config }: HeaderProps) {
         </Link>
 
         <div className="flex items-center gap-3">
-          {(user || securityDisabled) && (
+          {(user || securityDisabled) && !isAppPage && (
             <Link
               to="/app"
               className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/20 hover:bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 transition-colors"
             >
               <Radar className="h-3.5 w-3.5 text-rose-400" />
               <span className="hidden sm:inline">Dashboard</span>
-            </Link>
-          )}
-
-          {isAdmin && (
-            <Link
-              to="/admin"
-              className="flex items-center gap-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg border border-rose-500/30 transition-colors"
-            >
-              <Shield className="h-3.5 w-3.5" />
-              <span>Admin Panel</span>
             </Link>
           )}
 
