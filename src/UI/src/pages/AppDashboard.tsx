@@ -115,8 +115,8 @@ export function AppDashboard() {
   const [editEmail, setEditEmail] = useState("");
   const [editWebhook, setEditWebhook] = useState("");
   const [editPhone, setEditPhone] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"wallet" | "cashfree">("wallet");
-  const [submittingCashfree, setSubmittingCashfree] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"wallet" | "gateway">("wallet");
+  const [submittingPayment, setSubmittingPayment] = useState(false);
   const [editIntervalSec, setEditIntervalSec] = useState(60);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -401,22 +401,27 @@ export function AppDashboard() {
     return 0;
   };
 
-  const initiateCashfreeJobPayment = async (jobPayload: any) => {
-    setSubmittingCashfree(true);
+  const initiateGatewayJobPayment = async (jobPayload: any) => {
+    setSubmittingPayment(true);
     setFormErrors([]);
     try {
       const res = await authenticatedFetch('/api/payments/job/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...jobPayload, payment_method: 'cashfree' }),
+        body: JSON.stringify({ ...jobPayload, payment_method: 'gateway' }),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.detail || 'Failed to initiate Cashfree payment.');
+        throw new Error(data.detail || 'Failed to initiate online payment.');
       }
 
       const sessionToken = data.session_token || data.gateway_session_id;
       const paymentId = data.payment_id;
+
+      if (data.checkout_url && !sessionToken) {
+        window.location.href = data.checkout_url;
+        return;
+      }
 
       const launchModal = (sessId: string) => {
         const isDev = config?.environment === 'development';
@@ -429,7 +434,7 @@ export function AppDashboard() {
         }).then((result: any) => {
           if (result.error) {
             setFormErrors([result.error.message || 'Payment window closed or cancelled.']);
-            setSubmittingCashfree(false);
+            setSubmittingPayment(false);
           } else {
             setFormSuccess('Payment submitted! Verifying transaction and starting ticket tracker...');
             let attempts = 0;
@@ -450,12 +455,12 @@ export function AppDashboard() {
                     setSelectedFormat(null);
                     setAvailableShowDates([]);
                     fetchJobs();
-                    setSubmittingCashfree(false);
+                    setSubmittingPayment(false);
                     return;
                   } else if (sData.status === 'failed') {
                     clearInterval(pollInterval);
                     setFormErrors(['Payment failed on gateway.']);
-                    setSubmittingCashfree(false);
+                    setSubmittingPayment(false);
                     return;
                   }
                 }
@@ -465,7 +470,7 @@ export function AppDashboard() {
               if (attempts > 12) {
                 clearInterval(pollInterval);
                 fetchJobs();
-                setSubmittingCashfree(false);
+                setSubmittingPayment(false);
               }
             }, 2000);
           }
@@ -481,8 +486,8 @@ export function AppDashboard() {
         launchModal(sessionToken);
       }
     } catch (err: any) {
-      setFormErrors([err?.message || 'Error processing Cashfree job payment.']);
-      setSubmittingCashfree(false);
+      setFormErrors([err?.message || 'Error processing online job payment.']);
+      setSubmittingPayment(false);
     }
   };
 
@@ -599,7 +604,7 @@ export function AppDashboard() {
       call_consent: medium === "Phone Call" ? callConsent : false,
       email_consent: medium === "Email" ? emailConsent : false,
       discord_consent: medium === "Discord Webhook" ? discordConsent : false,
-      payment_method: paymentsDisabled || activePricePaise === 0 ? "free" : (paymentMethod === "cashfree" ? "cashfree" : "wallet"),
+      payment_method: paymentsDisabled || activePricePaise === 0 ? "free" : (paymentMethod === "gateway" ? "gateway" : "wallet"),
       check_interval: intervalSec,
       recaptcha_token: token,
       params: {
@@ -613,8 +618,8 @@ export function AppDashboard() {
 
     if (!paymentsDisabled && activePricePaise > 0) {
       const walletPaise = userWallet?.balance_paise || 0;
-      if (paymentMethod === "cashfree" || walletPaise < activePricePaise) {
-        await initiateCashfreeJobPayment(payload);
+      if (paymentMethod === "gateway" || walletPaise < activePricePaise) {
+        await initiateGatewayJobPayment(payload);
         return;
       }
     }
@@ -1029,7 +1034,7 @@ export function AppDashboard() {
                             onChange={(e) => setWhatsappConsent(e.target.checked)}
                             className="h-3.5 w-3.5 rounded border-border text-rose-500"
                           />
-                          <span>I consent to receiving automated WhatsApp ticket alerts via template.</span>
+                          <span>I consent to receiving automated WhatsApp ticket alerts via registered business templates.</span>
                         </label>
                       )}
 
@@ -1093,15 +1098,19 @@ export function AppDashboard() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setPaymentMethod("cashfree")}
+                            onClick={() => setPaymentMethod("gateway")}
                             className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
-                              paymentMethod === "cashfree"
+                              paymentMethod === "gateway"
                                 ? "border-rose-500 bg-rose-500/10 text-rose-400 font-semibold"
                                 : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40"
                             }`}
                           >
-                            <div className="text-[11px] font-bold">Pay via Cashfree</div>
-                            <div className="text-[10px] opacity-80">Cards / UPI / Netbanking</div>
+                            <div className="text-[11px] font-bold">
+                              {config?.payment_gateway
+                                ? `Pay Online via ${config.payment_gateway.charAt(0).toUpperCase() + config.payment_gateway.slice(1)}`
+                                : "Pay Online (UPI / Cards / Netbanking)"}
+                            </div>
+                            <div className="text-[10px] opacity-80">UPI / Cards / Netbanking</div>
                           </button>
                         </div>
                       </div>
@@ -1215,10 +1224,10 @@ export function AppDashboard() {
                 {/* Submit button */}
                 <Button 
                   type="submit" 
-                  disabled={submittingCashfree}
+                  disabled={submittingPayment}
                   className="w-full h-10 text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white cursor-pointer rounded-lg mt-2"
                 >
-                  {submittingCashfree ? "Processing Payment..." : "Start Ticket Alert"}
+                  {submittingPayment ? "Processing Payment..." : "Start Ticket Alert"}
                 </Button>
               </form>
             </CardContent>

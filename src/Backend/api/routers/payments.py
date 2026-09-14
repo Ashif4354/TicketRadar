@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from google.cloud import firestore
 
 from lib.core.auth import get_authorized_user, db
+from lib.utils.config import settings
 from lib.services.pricing import PricingService
 from lib.providers.payment.factory import PaymentGatewayFactory
 from api.dependencies import require_payments_enabled, get_user_details, require_terms_accepted
@@ -60,6 +61,7 @@ async def initiate_job_payment(
     # Store pending payment with embedded job request parameters
     if db:
         try:
+            active_gw = (settings.payment_gateway if settings else "cashfree").strip().lower()
             job_payload_dict = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
             db.collection("payments").document(payment_id).set({
                 "id": payment_id,
@@ -68,8 +70,8 @@ async def initiate_job_payment(
                 "amount_paise": price_paise,
                 "price_config_id": config_id,
                 "status": "pending",
-                "payment_method": "cashfree",
-                "gateway_name": "cashfree",
+                "payment_method": payload.payment_method or "gateway",
+                "gateway_name": active_gw,
                 "gateway_order_id": idempotency_key,
                 "idempotency_key": idempotency_key,
                 "job_payload": job_payload_dict,
@@ -107,7 +109,7 @@ async def initiate_job_payment(
             "amount_inr": round(price_paise / 100.0, 2),
         }
     except Exception as e:
-        logger.error(f"Error creating Cashfree order for job payment: {e}")
+        logger.error(f"Error creating payment order for job: {e}")
         if db:
             db.collection("payments").document(payment_id).update({"status": "failed"})
         raise HTTPException(status_code=500, detail=f"Failed to create payment order: {str(e)}")

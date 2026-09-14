@@ -85,3 +85,35 @@ def test_wallet_idempotency_replay():
     # Must return same record, no double-credit
     assert res2["id"] == res1["id"]
     assert WalletService.get_balance(uid) == 250
+
+
+@pytest.mark.asyncio
+async def test_wallet_topup_initiate_dynamic_gateway(async_client, monkeypatch):
+    from unittest.mock import AsyncMock, patch
+    from lib.providers.payment.base import OrderResult
+    from lib.core import auth
+    from lib.utils.config import settings
+
+    if settings:
+        monkeypatch.setattr(settings, "payment_gateway", "cashfree")
+
+    with patch("lib.providers.payment.cashfree_gateway.CashfreePaymentGateway.create_order", new_callable=AsyncMock) as mock_create:
+        mock_create.return_value = OrderResult(
+            order_id="order_123",
+            session_token="sess_123",
+            checkout_url="https://checkout.example.com",
+        )
+        res = await async_client.post("/api/wallet/topup/initiate", json={"amount_paise": 500})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["order_id"] == "order_123"
+        assert data["session_token"] == "sess_123"
+        assert data["checkout_url"] == "https://checkout.example.com"
+
+        payment_id = data["payment_id"]
+        doc = auth.db.collection("payments").document(payment_id).get()
+        assert doc.exists
+        pdata = doc.to_dict()
+        assert pdata["gateway_name"] == "cashfree"
+        assert pdata["payment_method"] == "gateway"
+

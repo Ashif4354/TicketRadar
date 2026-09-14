@@ -73,6 +73,26 @@ async def test_admin_cashfree_refund(admin_async_client, monkeypatch):
         assert res.json()["success"] is True
         assert res.json()["provider_refund_id"] == "cf_ref_999"
 
+@pytest.mark.asyncio
+async def test_admin_gateway_refund(admin_async_client, monkeypatch):
+    with patch("lib.providers.payment.cashfree_gateway.CashfreePaymentGateway.create_refund", new_callable=AsyncMock) as mock_refund:
+        mock_refund.return_value = RefundResult(
+            success=True,
+            refund_id="ref_gw_123",
+            provider_refund_id="gw_ref_888",
+            error_message=None
+        )
+
+        payload = {
+            "order_id": "ord_gw_123",
+            "amount_paise": 1500,
+            "reason": "Administrative gateway refund"
+        }
+        res = await admin_async_client.post("/admin/refunds/gateway", json=payload)
+        assert res.status_code == 200
+        assert res.json()["success"] is True
+        assert res.json()["provider_refund_id"] == "gw_ref_888"
+
 
 @pytest.mark.asyncio
 async def test_admin_disabled_when_security_disabled(monkeypatch):

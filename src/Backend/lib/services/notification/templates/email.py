@@ -483,6 +483,9 @@ class EmailTemplates:
     ) -> Dict[str, str]:
         amt = _safe_float(amount_inr)
         bal = _safe_float(kwargs.get("balance_inr") if kwargs.get("balance_inr") is not None else new_balance_inr)
+        from lib.utils.config import settings
+        gw_name = kwargs.get("gateway_name") or kwargs.get("payment_gateway") or (settings.payment_gateway if settings else None)
+        gw_label = f"via {gw_name.capitalize()}" if gw_name else "via Online Payment"
         subject = f"Wallet Credited: ₹{amt:.2f} added to your account"
         body_html = f"""
         <p style="margin-top: 0; font-size: 15px;">Hi <strong>{html.escape(user_name)}</strong>,</p>
@@ -490,7 +493,7 @@ class EmailTemplates:
         <div style="margin: 20px 0; padding: 18px; background-color: #111827; border: 1px solid #2d3748; border-radius: 10px; text-align: center;">
           <div style="font-size: 12px; color: #9ca3af; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Current Wallet Balance</div>
           <div style="font-size: 32px; font-weight: 800; color: #34d399; margin: 6px 0;">₹{bal:.2f}</div>
-          <div style="font-size: 12px; color: #d1d5db;">Added: <span style="color: #34d399; font-weight: 700;">+₹{amt:.2f}</span> via Cashfree (Order #{html.escape(order_id)})</div>
+          <div style="font-size: 12px; color: #d1d5db;">Added: <span style="color: #34d399; font-weight: 700;">+₹{amt:.2f}</span> {gw_label} (Order #{html.escape(order_id)})</div>
         </div>
         """
 

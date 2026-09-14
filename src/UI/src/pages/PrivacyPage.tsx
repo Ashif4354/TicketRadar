@@ -46,7 +46,7 @@ export function PrivacyPage() {
               2. User Account Data Collected
             </h3>
             <p className="text-muted-foreground">
-              When you authenticate with TicketRadar via Google OAuth, we collect limited profile data necessary to establish your account identity and personalize your experience:
+              When you authenticate with TicketRadar via Google OAuth (managed through Google Firebase Authentication), we collect limited profile data necessary to establish your account identity and personalize your experience:
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
               <div className="bg-muted/20 border border-border/50 rounded-xl p-3.5 space-y-1">
@@ -86,7 +86,7 @@ export function PrivacyPage() {
               <ul className="list-disc pl-5 space-y-1 text-xs">
                 <li><strong>Indian Phone Numbers:</strong> We collect and normalize your phone number under the E.164 standard (+91). Phone numbers are stored in encrypted format and redacted in administrative logs (e.g. `+91 98*** **210`).</li>
                 <li><strong>Consent Logging:</strong> In compliance with TRAI and telecom guidelines, we record immutable consent timestamps and IP metadata for opt-in and opt-out actions in our `notification_consents` collection.</li>
-                <li><strong>Delivery Telemetry:</strong> Transmission to carrier networks is brokered securely via Twilio Inc. Calls and messages contain strictly ticket availability information. We never record your personal voice or conversation.</li>
+                <li><strong>Delivery Telemetry:</strong> Transmission to carrier networks is brokered securely via authorized telecommunications & notification providers (Twilio, as well as future telecommunication options like Plivo). Calls and messages contain strictly ticket availability information. We never record your personal voice or conversation.</li>
               </ul>
             </div>
           </section>
@@ -102,7 +102,7 @@ export function PrivacyPage() {
                 TicketRadar does <strong>NOT collect, store, or process raw payment instrument details</strong> such as credit/debit card numbers, CVVs, or UPI PINs.
               </p>
               <ul className="list-disc pl-5 space-y-1 text-xs">
-                <li>All payment checkouts and card transactions are handled directly by <strong>Cashfree Payments India Pvt. Ltd.</strong>, a PCI-DSS compliant, RBI-authorized payment aggregator.</li>
+                <li>All payment checkouts and card transactions are handled directly by <strong>authorized third-party payment gateways (Cashfree, as well as future integration options like Razorpay and Stripe)</strong>, compliant with PCI-DSS standards.</li>
                 <li>TicketRadar only stores payment references (gateway order ID, payment transaction ID, timestamp, and amount in paise) to credit your digital wallet or verify job payments.</li>
                 <li>Internal wallet balances and transactions are tracked via an immutable append-only ledger in our database.</li>
               </ul>
@@ -132,18 +132,37 @@ export function PrivacyPage() {
           <section className="space-y-3">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <Database className="h-4 w-4 text-emerald-400" />
-              6. Data Storage & Security Safeguards
+              6. Data Storage & Cloud Infrastructure Safeguards
             </h3>
             <p className="text-muted-foreground">
-              All stored user profiles, wallet records, and task configurations are secured using Google Cloud Firestore infrastructure with robust security rules and role-based access control. All communication between your client and our API is encrypted via HTTPS/TLS 1.3.
+              All stored user profiles, wallet records, and task configurations are secured using Google Cloud Platform and Google Firebase infrastructure (including Cloud Firestore database and Firebase Authentication) with robust security rules and role-based access control. All communication between your client and our API is encrypted via HTTPS/TLS 1.3.
             </p>
           </section>
 
           {/* Section 7 */}
           <section className="space-y-3">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              7. Authorized Third-Party Service Providers
+            </h3>
+            <p className="text-muted-foreground">
+              To deliver our monitoring services, automated alerts, and wallet features, TicketRadar works with authorized third-party service partners. User payments, SMS, WhatsApp, and phone call alerts may be processed via these authorized third-party service partners in compliance with their respective service terms and privacy guidelines:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
+              <li><strong>Payment Processors:</strong> Cashfree, as well as future integration options like Razorpay and Stripe, for processing top-ups and checkout payments under PCI-DSS standards.</li>
+              <li><strong>Telecommunications / Notification Providers:</strong> Twilio, as well as future telecommunication options like Plivo, for routing SMS messages, WhatsApp alerts, and automated phone calls.</li>
+              <li><strong>Authentication & Cloud Infrastructure:</strong> Google Firebase and Google Cloud Platform for user authentication, cloud functions, and database storage.</li>
+              <li><strong>Speech Synthesis:</strong> Amazon Web Services (AWS Polly) for synthesized Indian English voice calls.</li>
+              <li><strong>Webhook Integrations:</strong> Discord (Discord Inc.) for dispatching alert embeds to configured Discord channels.</li>
+              <li><strong>Email Delivery Providers:</strong> SMTP mail delivery services (such as Google Gmail SMTP and standard relay agents) for alert emails and transactional system notices.</li>
+            </ul>
+          </section>
+
+          {/* Section 8 */}
+          <section className="space-y-3">
+            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <Trash2 className="h-4 w-4 text-emerald-400" />
-              7. Your Rights & Data Deletion
+              8. Your Rights & Data Deletion
             </h3>
             <p className="text-muted-foreground">
               You maintain full control over your personal data:

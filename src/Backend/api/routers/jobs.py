@@ -297,10 +297,10 @@ async def create_job(
                     debited_wallet = True
                 except InsufficientFundsError as ife:
                     raise HTTPException(status_code=402, detail=str(ife))
-            elif payment_method == "cashfree":
+            elif payment_method in ("cashfree", "gateway"):
                 raise HTTPException(
                     status_code=400,
-                    detail="For Cashfree direct payment, initiate checkout via /api/payments/job/initiate."
+                    detail="For direct online gateway payment, initiate checkout via /api/payments/job/initiate."
                 )
             else:
                 payment_method = "wallet"

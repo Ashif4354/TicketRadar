@@ -64,7 +64,7 @@ export function TermsPage() {
               4. Multi-Channel Notifications
             </h3>
             <p className="text-muted-foreground">
-              TicketRadar supports multiple delivery mediums: Email, Discord Webhooks, SMS, WhatsApp messages, and Automated Voice Calls. Automated voice calls use Text-to-Speech (TTS) Indian English synthesis (Polly.Aditi) and Twilio voice networks. Notifications are sent only to numbers validated under Indian numbering plans (+91 E.164).
+              TicketRadar supports multiple delivery mediums: Email, Discord Webhooks, SMS, WhatsApp messages, and Automated Voice Calls. Automated voice calls and messaging alerts use Text-to-Speech (TTS) Indian English synthesis (Polly.Aditi) and authorized telecommunications carrier networks (including Twilio, as well as future telecommunication options like Plivo). Notifications are sent only to numbers validated under Indian numbering plans (+91 E.164).
             </p>
           </section>
 
@@ -84,7 +84,7 @@ export function TermsPage() {
               6. Wallet & Pricing
             </h3>
             <p className="text-muted-foreground">
-              Users may add funds denominated in Indian Rupees (₹) stored in their digital TicketRadar Wallet (100 paise = ₹1.00). Free channels (Email, Discord) incur ₹0.00 charge. Paid channels (SMS, WhatsApp, Phone Calls) are priced according to the active pricing schedule at job creation.
+              Users may add funds denominated in Indian Rupees (₹) stored in their digital TicketRadar Wallet (100 paise = ₹1.00) via authorized third-party payment processors (Cashfree, as well as future integration options like Razorpay and Stripe). Free channels (Email, Discord) incur ₹0.00 charge. Paid channels (SMS, WhatsApp, Phone Calls) are priced according to the active pricing schedule at job creation.
             </p>
             <p className="text-muted-foreground font-semibold">
               WALLET BALANCES ARE STRICTLY NON-WITHDRAWABLE. Wallet balances cannot be redeemed for physical cash, bank transfers, or UPI payouts under any circumstances.
@@ -100,23 +100,29 @@ export function TermsPage() {
               <li><strong>Pre-Notification Cancellation:</strong> If you delete or cancel a monitoring job before tickets open and notifications are dispatched, 100% of the price is immediately refunded to your TicketRadar Wallet.</li>
               <li><strong>Delivery Failure:</strong> If notification delivery fails after 3 immediate retry attempts, 100% of the price is automatically refunded to your TicketRadar Wallet.</li>
               <li><strong>Unanswered/Busy Calls (Policy-Exempt):</strong> If an automated voice call is placed and goes unanswered, busy, or rejected across 3 immediate attempts, the system logs the alert as a policy-exempt completed delivery, sends an emergency fallback email notification, and NO refund is issued due to telecom termination charges incurred.</li>
-              <li><strong>Gateway Refunds:</strong> In the event of duplicate billing or administrative review, refunds for Cashfree payments can only be processed back to the original payment method by system administrators.</li>
+              <li><strong>Gateway Refunds:</strong> In the event of duplicate billing or administrative review, refunds for online gateway payments can only be processed back to the original payment method via authorized third-party payment gateways (Cashfree, as well as future integration options like Razorpay and Stripe) by system administrators.</li>
             </ul>
           </section>
 
           <section className="space-y-2">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-primary inline-block"></span>
-              8. Third-Party Infrastructure
+              8. Third-Party Infrastructure & Service Providers
             </h3>
             <p className="text-muted-foreground">
-              TicketRadar utilizes third-party infrastructure for message delivery and payment gateway processing:
+              TicketRadar utilizes trusted third-party infrastructure and service partners for message delivery, payment gateway processing, authentication, and cloud hosting:
             </p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-              <li><strong>Twilio Inc.</strong> for SMS, WhatsApp business API, and Voice programmable telephony.</li>
-              <li><strong>Cashfree Payments India Pvt. Ltd.</strong> for PCI-DSS compliant Indian payment processing (UPI, Netbanking, Cards).</li>
-              <li><strong>Amazon Web Services (AWS Polly)</strong> for Indian English neural text-to-speech synthesis.</li>
+              <li><strong>Payment Processors:</strong> Cashfree, as well as future integration options like Razorpay and Stripe, for PCI-DSS compliant Indian and international payment processing (UPI, Netbanking, Cards).</li>
+              <li><strong>Telecommunications / Notification Providers:</strong> Twilio, as well as future telecommunication options like Plivo, for SMS, WhatsApp business API, and Voice programmable telephony.</li>
+              <li><strong>Authentication & Cloud Infrastructure:</strong> Google Firebase and Google Cloud Platform for secure user authentication, managed serverless compute, and distributed Firestore database storage.</li>
+              <li><strong>Amazon Web Services (AWS Polly):</strong> For Indian English neural text-to-speech voice synthesis.</li>
+              <li><strong>Webhook & Platform Integrations:</strong> Discord (Discord Inc.) for delivering real-time showtime alerts to Discord channels.</li>
+              <li><strong>Email Delivery Providers:</strong> SMTP email services (including Google Gmail and standard SMTP relay infrastructure) for transactional notifications and account alerts.</li>
             </ul>
+            <p className="text-muted-foreground mt-2">
+              User payments, SMS, WhatsApp, and phone call alerts may be processed via these authorized third-party service partners in compliance with their respective service terms and privacy guidelines.
+            </p>
           </section>
 
           <section className="space-y-2">

@@ -164,6 +164,22 @@ async def test_api_config_reports_disable_security(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_api_config_reports_providers(monkeypatch):
+    from lib.utils.config import settings
+    if settings:
+        monkeypatch.setattr(settings, "payment_gateway", "cashfree")
+        monkeypatch.setattr(settings, "notification_provider", "twilio")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/config")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["payment_gateway"] == "cashfree"
+        assert data["notification_provider"] == "twilio"
+
+
+@pytest.mark.asyncio
 async def test_disable_approval_bypass(monkeypatch):
     monkeypatch.setenv("DISABLE_SECURITY", "false")
     monkeypatch.setenv("DISABLE_APPROVAL", "true")

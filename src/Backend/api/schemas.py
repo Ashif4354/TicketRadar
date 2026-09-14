@@ -23,7 +23,7 @@ class CreateJobRequest(BaseModel):
     params: JobParams
     recaptcha_token: str = Field(default="", description="Google reCAPTCHA token")
     # Payment & Multi-channel configuration
-    payment_method: str = Field(default="wallet", description="Payment method: 'wallet', 'cashfree', or 'free'")
+    payment_method: str = Field(default="wallet", description="Payment method: 'wallet', 'cashfree', 'gateway', or 'free'")
     phone_number: Optional[str] = Field(default=None, description="E.164 phone number for SMS, WhatsApp, or Phone Call")
     sms_consent: bool = Field(default=False, description="Consent for SMS alerts")
     whatsapp_consent: bool = Field(default=False, description="Consent for WhatsApp alerts")
@@ -60,11 +60,13 @@ class AdminAdjustWalletRequest(BaseModel):
     direction: str = Field(..., pattern="^(CREDIT|DEBIT)$")
     reason: str = Field(..., min_length=3, description="Mandatory audit explanation for balance adjustment")
 
-class AdminCashfreeRefundRequest(BaseModel):
-    order_id: str = Field(..., description="Cashfree order ID")
+class AdminGatewayRefundRequest(BaseModel):
+    order_id: str = Field(..., description="Payment gateway order ID")
     amount_paise: int = Field(..., gt=0)
     reason: str = Field(..., min_length=3)
     job_id: Optional[str] = None
+
+AdminCashfreeRefundRequest = AdminGatewayRefundRequest
 
 class UpdateNotificationPreferencesRequest(BaseModel):
     phone_number: Optional[str] = None

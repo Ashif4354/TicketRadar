@@ -98,11 +98,13 @@ async def handle_cashfree_webhook(request: Request):
                 # A. Wallet Top-up
                 if payment_type == "WALLET_TOPUP" and uid:
                     credit_key = f"topup_credit_{order_id}"
+                    active_gw = payment_data.get("gateway_name") or "gateway"
+                    gw_title = active_gw.capitalize()
                     WalletService.credit(
                         uid=uid,
                         amount_paise=event.amount_paise or payment_data.get("amount_paise", 0),
                         txn_type="WALLET_TOPUP",
-                        description=f"Wallet top-up via Cashfree (Payment #{event.payment_id or order_id})",
+                        description=f"Wallet top-up via {gw_title} (Payment #{event.payment_id or order_id})",
                         idempotency_key=credit_key,
                         payment_id=payment_id,
                     )
@@ -149,7 +151,7 @@ async def handle_cashfree_webhook(request: Request):
                             phone_number=job_payload.get("phone_number"),
                             sms_consent=job_payload.get("sms_consent", False),
                             call_consent=job_payload.get("call_consent", False),
-                            payment_method="cashfree",
+                            payment_method=job_payload.get("payment_method", "gateway"),
                             payment_id=payment_id,
                             price_paise=payment_data.get("amount_paise", 0),
                             price_config_id=payment_data.get("price_config_id"),

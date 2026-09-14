@@ -70,7 +70,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
   const [walletAdjusting, setWalletAdjusting] = useState(false);
   const [walletMsg, setWalletMsg] = useState<string | null>(null);
 
-  // Cashfree refund states
+  // Gateway refund states
   const [refundOrderId, setRefundOrderId] = useState('');
   const [refundAmountPaise, setRefundAmountPaise] = useState('');
   const [refundReason, setRefundReason] = useState('');
@@ -396,16 +396,16 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
     }
   };
 
-  const handleProcessCashfreeRefund = async (e: React.FormEvent) => {
+  const handleProcessGatewayRefund = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!refundOrderId.trim() || !refundReason.trim()) {
-      setRefundMsg("Cashfree Order ID and audit reason are required.");
+      setRefundMsg("Gateway Order ID and audit reason are required.");
       return;
     }
     setRefunding(true);
     setRefundMsg(null);
     try {
-      const res = await authenticatedFetch('/admin/refunds/cashfree', {
+      const res = await authenticatedFetch('/admin/refunds/gateway', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -606,7 +606,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
                 className="text-xs font-semibold gap-1.5"
               >
                 <RotateCcw className="h-3.5 w-3.5 text-rose-400" />
-                Refunds
+                Gateway Refunds
               </Button>
             </>
           )}
@@ -1788,16 +1788,16 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
         </div>
       )}
 
-      {/* Tab: Cashfree Refunds */}
+      {/* Tab: Gateway Refunds */}
       {!paymentsDisabled && activeTab === 'refunds' && (
         <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
           <CardHeader className="p-0 pb-4 border-b border-border/40">
             <CardTitle className="text-base font-bold flex items-center gap-2">
               <RotateCcw className="h-4 w-4 text-rose-400" />
-              Initiate Cashfree Gateway Refund
+              Initiate Payment Gateway Refund
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Directly refunds a customer's original payment method via Cashfree API.
+              Directly refunds a customer's original payment method via the payment gateway API.
             </p>
           </CardHeader>
 
@@ -1808,10 +1808,10 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
             </div>
           )}
 
-          <form onSubmit={handleProcessCashfreeRefund} className="space-y-4">
+          <form onSubmit={handleProcessGatewayRefund} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Cashfree Order ID</label>
+                <label className="text-xs font-semibold text-foreground">Gateway Order ID</label>
                 <Input
                   value={refundOrderId}
                   onChange={(e) => setRefundOrderId(e.target.value)}

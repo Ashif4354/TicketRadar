@@ -283,16 +283,21 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
         throw new Error('No checkout session token returned by gateway.');
       }
 
-      // Load Cashfree SDK dynamically if not loaded
+      if (data.checkout_url && !paymentSessionId) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+
+      // Load gateway SDK dynamically if not loaded
       if (typeof (window as any).Cashfree === 'undefined') {
         const script = document.createElement('script');
         script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
         script.onload = () => {
-          initiateCashfreeCheckout(paymentSessionId);
+          initiateGatewayCheckout(paymentSessionId);
         };
         document.body.appendChild(script);
       } else {
-        initiateCashfreeCheckout(paymentSessionId);
+        initiateGatewayCheckout(paymentSessionId);
       }
     } catch (err: any) {
       setError(err?.message || 'Error processing top-up');
@@ -300,7 +305,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
     }
   };
 
-  const initiateCashfreeCheckout = (paymentSessionId: string) => {
+  const initiateGatewayCheckout = (paymentSessionId: string) => {
     try {
       const isDev = appConfig?.environment === 'development';
       const cashfree = (window as any).Cashfree({
@@ -320,7 +325,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
         setTopupLoading(false);
       });
     } catch (err: any) {
-      setError('Error initiating Cashfree modal: ' + err?.message);
+      setError('Error initiating payment modal: ' + err?.message);
       setTopupLoading(false);
     }
   };
@@ -669,7 +674,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs">
-              <span className="text-muted-foreground">Pre-approved templates</span>
+              <span className="text-muted-foreground">Registered business templates</span>
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
@@ -705,7 +710,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Automated Phone Call</h3>
                   <p className="text-[11px] text-muted-foreground font-mono">
-                    {profile?.phone_number || 'Phone not set'} • Polly.Aditi Indian English TTS
+                    {profile?.phone_number || 'Phone not set'} • Automated voice carrier network (Polly.Aditi TTS)
                   </p>
                 </div>
               </div>
@@ -721,7 +726,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs">
-              <span className="text-muted-foreground">3 immediate retry attempts on failure. Unanswered calls logged as policy-exempt.</span>
+              <span className="text-muted-foreground">Automated voice carrier network with 3 immediate retry attempts on failure. Unanswered calls logged as policy-exempt.</span>
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
@@ -864,7 +869,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Add funds to your wallet via Cashfree (UPI, Netbanking, Cards). Funds are non-withdrawable and used exclusively for ticket notification alerts.
+              Add funds to your wallet via online payment (UPI, Netbanking, Cards). Funds are non-withdrawable and used exclusively for ticket notification alerts.
             </p>
 
             <div className="grid grid-cols-4 gap-2 pt-1">

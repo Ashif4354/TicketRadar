@@ -35,7 +35,7 @@ export interface Job {
   sms_consent?: boolean;
   whatsapp_consent?: boolean;
   call_consent?: boolean;
-  payment_method?: string; // 'wallet', 'cashfree', 'free'
+  payment_method?: string; // 'wallet', 'cashfree', 'gateway', 'free'
   payment_id?: string;
   price_paise?: number;
   price_config_id?: string;

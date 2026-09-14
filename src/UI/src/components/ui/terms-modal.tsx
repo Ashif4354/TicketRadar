@@ -29,8 +29,8 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl rounded-2xl border border-rose-500/30 bg-[#121217] p-6 shadow-2xl text-left overflow-hidden">
-        <div className="flex items-center gap-3 pb-4 border-b border-border/50">
+      <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-2xl border border-rose-500/30 bg-[#121217] p-6 shadow-2xl text-left overflow-hidden">
+        <div className="flex items-center gap-3 pb-4 border-b border-border/50 shrink-0">
           <div className="h-10 w-10 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 flex items-center justify-center">
             <ShieldCheck className="h-5 w-5" />
           </div>
@@ -40,7 +40,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
           </div>
         </div>
 
-        <div className="mt-4 space-y-3 max-h-[60vh] overflow-y-auto pr-1 text-xs text-muted-foreground leading-relaxed">
+        <div className="mt-4 space-y-3 flex-1 overflow-y-auto pr-1 text-xs text-muted-foreground leading-relaxed">
           <p>
             TicketRadar has introduced multi-channel notifications (SMS, WhatsApp, and Automated Phone Calls) and an integrated user wallet.
             Before continuing, please review these key policy terms:
@@ -50,7 +50,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
             <div className="flex gap-2">
               <CheckCircle2 className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-foreground">Multi-Channel Alerts:</span> Alerts are delivered via Email, Discord, SMS, WhatsApp, and Voice calls powered by Twilio and Amazon Polly.
+                <span className="font-semibold text-foreground">Multi-Channel Alerts & Telecommunications:</span> Alerts are delivered via Email, Discord, SMS, WhatsApp, and Voice calls. Telecommunications / Notification Providers include Twilio, as well as future telecommunication options like Plivo, and Amazon Polly.
               </div>
             </div>
 
@@ -64,7 +64,21 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
             <div className="flex gap-2">
               <CheckCircle2 className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-foreground">User Wallet:</span> Wallet balances are denominated strictly in Indian Rupees (₹) (100 paise = ₹1.00). Wallet funds are strictly non-withdrawable and non-redeemable for physical cash or payout.
+                <span className="font-semibold text-foreground">User Wallet & Payment Processors:</span> Wallet balances are denominated strictly in Indian Rupees (₹) (100 paise = ₹1.00) and are non-withdrawable. Online top-ups are processed via authorized Payment Processors: Cashfree, as well as future integration options like Razorpay and Stripe.
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <CheckCircle2 className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-foreground">Authentication & Cloud Infrastructure:</span> User authentication, compute, and database hosting are secured via Google Firebase and Google Cloud Platform.
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <CheckCircle2 className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-foreground">Authorized Third-Party Service Partners:</span> User payments, SMS, WhatsApp, and phone call alerts may be processed via these authorized third-party service partners in compliance with their respective service terms and privacy guidelines.
               </div>
             </div>
 
@@ -97,12 +111,12 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
         </div>
 
         {error && (
-          <div className="mt-3 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+          <div className="mt-3 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs shrink-0">
             {error}
           </div>
         )}
 
-        <div className="mt-6 pt-4 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-4 pt-4 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
           <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer select-none">
             <input
               type="checkbox"

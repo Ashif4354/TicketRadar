@@ -18,6 +18,7 @@ from api.schemas import (
     UpdateRoleRequest,
     UpdatePricesRequest,
     AdminAdjustWalletRequest,
+    AdminGatewayRefundRequest,
     AdminCashfreeRefundRequest,
 )
 from api.dependencies import get_user_details, require_payments_enabled
@@ -566,18 +567,19 @@ async def admin_adjust_wallet(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/refunds/gateway", dependencies=[Depends(require_payments_enabled)])
 @router.post("/refunds/cashfree", dependencies=[Depends(require_payments_enabled)])
-async def admin_cashfree_refund(
-    payload: AdminCashfreeRefundRequest,
+async def admin_gateway_refund(
+    payload: AdminGatewayRefundRequest,
     admin_claims: dict = Depends(get_admin_user)
 ):
     """
-    Initiates an admin-directed refund back to the user's original payment method via Cashfree.
-    Requires an existing Cashfree order ID.
+    Initiates an admin-directed refund back to the user's original payment method via the configured gateway.
+    Requires an existing gateway order ID.
     """
     admin_uid = admin_claims.get("uid")
     admin_email = admin_claims.get("email", "")
-    refund_id = f"cf_ref_{str(uuid.uuid4())[:8]}"
+    refund_id = f"ref_{str(uuid.uuid4())[:8]}"
 
     try:
         gateway = PaymentGatewayFactory.create()
@@ -589,7 +591,7 @@ async def admin_cashfree_refund(
         )
 
         if not result.success:
-            raise HTTPException(status_code=400, detail=result.error_message or "Cashfree refund failed.")
+            raise HTTPException(status_code=400, detail=result.error_message or "Payment gateway refund failed.")
 
         # Record refund doc in refunds collection
         if db:
@@ -621,6 +623,7 @@ async def admin_cashfree_refund(
                 "metadata": {
                     "order_id": payload.order_id,
                     "refund_id": refund_id,
+                    "gateway_refund_id": result.provider_refund_id,
                     "cf_refund_id": result.provider_refund_id,
                 },
                 "created_at": google_firestore.SERVER_TIMESTAMP,
@@ -635,7 +638,7 @@ async def admin_cashfree_refund(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing Cashfree refund: {e}")
+        logger.error(f"Error processing payment gateway refund: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

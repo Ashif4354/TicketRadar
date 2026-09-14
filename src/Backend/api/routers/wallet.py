@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from google.cloud import firestore
 
 from lib.core.auth import get_authorized_user, db
+from lib.utils.config import settings
 from lib.services.wallet import WalletService
 from lib.providers.payment.factory import PaymentGatewayFactory
 from api.dependencies import require_payments_enabled, get_user_details, require_terms_accepted
@@ -49,8 +50,8 @@ async def initiate_topup(
     claims: dict = Depends(get_authorized_user)
 ):
     """
-    Creates a Cashfree payment order for topping up the user's wallet.
-    Upon successful payment, the Cashfree webhook will credit the wallet.
+    Creates a payment order via the active payment gateway for topping up the user's wallet.
+    Upon successful payment, the gateway webhook will credit the wallet.
     """
     await require_terms_accepted(claims)
     uid = claims.get("uid")
@@ -66,14 +67,15 @@ async def initiate_topup(
     # Record pending payment in Firestore
     if db:
         try:
+            active_gw = (settings.payment_gateway if settings else "cashfree").strip().lower()
             db.collection("payments").document(payment_id).set({
                 "id": payment_id,
                 "uid": uid,
                 "type": "WALLET_TOPUP",
                 "amount_paise": amount_paise,
                 "status": "pending",
-                "payment_method": "cashfree",
-                "gateway_name": "cashfree",
+                "payment_method": "gateway",
+                "gateway_name": active_gw,
                 "gateway_order_id": idempotency_key,
                 "idempotency_key": idempotency_key,
                 "created_at": firestore.SERVER_TIMESTAMP,

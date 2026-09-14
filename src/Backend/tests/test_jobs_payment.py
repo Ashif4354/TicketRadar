@@ -211,3 +211,46 @@ async def test_job_price_locked_at_creation(async_client):
     assert job.price_paise == 50
     manager.delete_job(job_id)
 
+@pytest.mark.asyncio
+async def test_job_create_gateway_payment_direct_rejected(async_client):
+    payload = {
+        "service_provider": "BookMyShow",
+        "notification_medium": "SMS",
+        "notification_config": {"phone_number": "+919876543210"},
+        "phone_number": "+919876543210",
+        "sms_consent": True,
+        "payment_method": "gateway",
+        "check_interval": 60,
+        "params": {
+            "url": "https://in.bookmyshow.com/movies/chennai/the-odyssey/buytickets/ET00480917/20260730",
+            "date_str": "20260730",
+            "theatres": ["PVR Grand Mall"]
+        }
+    }
+
+    res = await async_client.post("/api/jobs", json=payload)
+    assert res.status_code == 400
+    assert "initiate checkout via /api/payments/job/initiate" in res.json().get("detail", "")
+
+@pytest.mark.asyncio
+async def test_job_create_cashfree_payment_direct_rejected(async_client):
+    payload = {
+        "service_provider": "BookMyShow",
+        "notification_medium": "SMS",
+        "notification_config": {"phone_number": "+919876543210"},
+        "phone_number": "+919876543210",
+        "sms_consent": True,
+        "payment_method": "cashfree",
+        "check_interval": 60,
+        "params": {
+            "url": "https://in.bookmyshow.com/movies/chennai/the-odyssey/buytickets/ET00480917/20260730",
+            "date_str": "20260730",
+            "theatres": ["PVR Grand Mall"]
+        }
+    }
+
+    res = await async_client.post("/api/jobs", json=payload)
+    assert res.status_code == 400
+    assert "initiate checkout via /api/payments/job/initiate" in res.json().get("detail", "")
+
+

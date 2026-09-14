@@ -31,6 +31,8 @@ async def get_config():
         "disable_security": disable_sec,
         "disable_payments": disable_pay,
         "disable_approval": disable_appr,
+        "payment_gateway": settings.payment_gateway if settings else "cashfree",
+        "notification_provider": settings.notification_provider if settings else "twilio",
     }
 
 
