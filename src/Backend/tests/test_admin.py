@@ -207,3 +207,35 @@ async def test_admin_start_job_free_of_charge(admin_async_client):
         del manager.jobs[test_job.id]
 
 
+@pytest.mark.asyncio
+async def test_admin_receipts_endpoints(admin_async_client):
+    user_uid = "receipt-test-user-111"
+    WalletService.credit(user_uid, 5000, "WALLET_TOPUP", "Test Topup for Receipt", "rec_idem_key_111")
+    
+    # 1. Fetch receipts filtered by UID
+    res = await admin_async_client.get(f"/admin/receipts?uid={user_uid}")
+    assert res.status_code == 200
+    data = res.json()
+    assert "items" in data
+    assert len(data["items"]) >= 1
+    target = data["items"][0]
+    assert target["uid"] == user_uid
+    assert target["amount_inr"] == 50.0
+    rec_id = target["receipt_id"]
+
+    # 2. Search receipts with search query
+    res_search = await admin_async_client.get(f"/admin/receipts?search={rec_id}")
+    assert res_search.status_code == 200
+    assert len(res_search.json()["items"]) >= 1
+
+    # 3. Render receipt dynamic HTML
+    res_render = await admin_async_client.get(f"/admin/receipts/{rec_id}/render")
+    assert res_render.status_code == 200
+    render_data = res_render.json()
+    assert "html" in render_data
+    assert "₹50.00" in render_data["html"]
+    assert rec_id in render_data["html"]
+    assert "darkglance.developer@gmail.com" in render_data["html"]
+
+
+

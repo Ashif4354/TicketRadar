@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TicketRadar - Payment Receipt Preview</title>
+  <style>
+    /* Interactive Preview Bar (Hidden during Print) */
+    .preview-bar {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      border-bottom: 1px solid #334155;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+    }
+    .preview-bar .tabs {
+      display: flex;
+      gap: 8px;
+    }
+    .preview-bar button {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #475569;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+    .preview-bar button:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+    .preview-bar button.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #3b82f6;
+    }
+    .preview-bar .actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .preview-bar .btn-print {
+      background: #10b981;
+      color: #ffffff;
+      border: none;
+      padding: 6px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .preview-bar .btn-print:hover {
+      background: #059669;
+    }
+
+    /* Print Styles: Hide preview controls & format for crisp PDF print */
+    @media print {
+      .preview-bar {
+        display: none !important;
+      }
+      body {
+        background-color: #ffffff !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .email-wrapper {
+        padding: 0 !important;
+      }
+      .invoice-card {
+        border: none !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        border-radius: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
+
+  <!-- TOP PREVIEW CONTROLLER (For testing in browser) -->
+  <div class="preview-bar no-print">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <strong style="color: #38bdf8; font-size: 14px;">TicketRadar</strong>
+      <span style="color: #64748b;">|</span>
+      <span>Receipt Template Preview</span>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchInvoice('wallet_topup', this)">Wallet Top-up</button>
+      <button class="tab-btn" onclick="switchInvoice('payment', this)">Service Payment</button>
+      <button class="tab-btn" onclick="switchInvoice('refund', this)">Refund Receipt</button>
+      <button class="tab-btn" onclick="switchInvoice('payment_failed', this)">Payment Failed Notice</button>
+    </div>
+    <div class="actions">
+      <button class="btn-print" onclick="window.print()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        Print / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- EMAIL MAIN WRAPPER (Universal Email Client Compatible) -->
+  <div class="email-wrapper" style="width: 100%; padding: 40px 15px; box-sizing: border-box; background-color: #f1f5f9;">
+    <table align="center" cellpadding="0" cellspacing="0" border="0" style="max-width: 660px; width: 100%; margin: 0 auto;">
+      <tr>
+        <td>
+
+          <!-- INVOICE / RECEIPT CARD -->
+          <div class="invoice-card" style="background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04); overflow: hidden;">
+            
+            <!-- TOP ACCENT BAR -->
+            <div id="accent-bar" style="height: 6px; background: linear-gradient(90deg, #10b981, #06b6d4);"></div>
+
+            <div style="padding: 36px 36px 28px 36px;">
+
+              <!-- HEADER: BRAND & RECEIPT META -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 28px;">
+                <tr>
+                  <td valign="top" style="vertical-align: top;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="display: inline-block; width: 34px; height: 34px; line-height: 34px; background: linear-gradient(135deg, #2563eb, #1d4ed8); border-radius: 8px; text-align: center; color: #ffffff; font-size: 18px; font-weight: 800;">⚡</span>
+                      <span style="font-size: 22px; font-weight: 800; letter-spacing: -0.03em; color: #0f172a; margin-left: 8px;">Ticket<span style="color: #2563eb;">Radar</span></span>
+                    </div>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: #64748b; line-height: 1.4;">
+                      Automated Cinema Tracker & Alerts<br>
+                      darkglance.developer@gmail.com • <a href="https://ticketradar.darkglance.in" target="_blank" style="color: #2563eb; text-decoration: none;">ticketradar.darkglance.in</a>
+                    </p>
+                  </td>
+                  <td valign="top" align="right" style="vertical-align: top; text-align: right;">
+                    <span id="badge-status" style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background-color: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;">
+                      ● PAID
+                    </span>
+                    <h2 id="invoice-doc-title" style="margin: 8px 0 2px 0; font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">PAYMENT RECEIPT</h2>
+                    <p id="invoice-id-display" style="margin: 0; font-size: 12px; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; color: #64748b; font-weight: 600;">
+                      REC-TR-2026-091401
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- DIVIDER -->
+              <div style="height: 1px; background-color: #f1f5f9; margin-bottom: 24px;"></div>
+
+              <!-- ALERT BANNER (For Failed Notices / Auto-refund guarantee) -->
+              <div id="alert-banner-container" style="display: none;"></div>
+
+              <!-- BILLED TO / DETAILS GRID -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 28px; font-size: 13px;">
+                <tr>
+                  <!-- BILLED TO -->
+                  <td width="50%" valign="top" style="vertical-align: top; padding-right: 15px;">
+                    <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 6px;">Customer Details</div>
+                    <div id="customer-name" style="font-weight: 700; color: #0f172a; font-size: 14px;">JohnDoe</div>
+                    <div id="customer-email" style="color: #475569; margin-top: 2px;">johndoe@example.com</div>
+                    <div id="customer-phone" style="color: #64748b; margin-top: 2px; font-size: 12px;">+91 98765 43210</div>
+                    <div style="color: #94a3b8; margin-top: 4px; font-size: 11px;">Account ID: <span id="customer-uid" style="font-family: monospace; color: #64748b;">USR-882914</span></div>
+                  </td>
+                  
+                  <!-- TRANSACTION METADATA -->
+                  <td width="50%" valign="top" style="vertical-align: top; padding-left: 15px; border-left: 1px solid #f1f5f9;">
+                    <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 6px;">Transaction Details</div>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 12px; line-height: 1.8;">
+                      <tr>
+                        <td style="color: #64748b;">Issue Date:</td>
+                        <td align="right" id="meta-date" style="color: #0f172a; font-weight: 600;">14 Sep 2026, 01:25 PM</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #64748b;">Order / Job ID:</td>
+                        <td align="right" id="meta-order-id" style="font-family: monospace; color: #0f172a; font-weight: 600;">ORD_981724</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #64748b;">Payment Ref:</td>
+                        <td align="right" id="meta-payment-id" style="font-family: monospace; color: #0f172a; font-weight: 600;">cf_pay_908231</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #64748b;">Payment Method:</td>
+                        <td align="right" id="meta-payment-method" style="color: #0f172a; font-weight: 600;">UPI (Cashfree PG)</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- LINE ITEMS TABLE -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: separate; border-spacing: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 24px; font-size: 13px;">
+                <thead>
+                  <tr style="background-color: #f8fafc; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                    <th align="left" style="padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0;">Description</th>
+                    <th align="center" style="padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0; width: 60px;">Qty</th>
+                    <th align="right" style="padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0; width: 90px;">Rate</th>
+                    <th align="right" style="padding: 10px 14px; font-weight: 700; border-bottom: 1px solid #e2e8f0; width: 100px;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="invoice-items-body">
+                  <!-- Injected via JavaScript for preview switcher -->
+                </tbody>
+              </table>
+
+              <!-- SUMMARY & TOTALS SECTION -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 28px;">
+                <tr>
+                  <!-- WALLET BALANCE LEDGER CALLOUT -->
+                  <td width="55%" valign="top" style="vertical-align: top; padding-right: 15px;">
+                    <div id="wallet-ledger-box" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+                      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <span>💳</span> TicketRadar Wallet Impact
+                      </div>
+                      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 12px; line-height: 1.8;">
+                        <tr>
+                          <td style="color: #64748b;">Previous Balance:</td>
+                          <td align="right" id="ledger-prev-bal" style="color: #475569; font-weight: 500;">₹50.00</td>
+                        </tr>
+                        <tr>
+                          <td id="ledger-action-label" style="color: #64748b;">Credit Amount:</td>
+                          <td align="right" id="ledger-impact-amt" style="color: #059669; font-weight: 700;">+₹500.00</td>
+                        </tr>
+                        <tr style="border-top: 1px dashed #cbd5e1;">
+                          <td style="color: #0f172a; font-weight: 700; padding-top: 4px;">Updated Balance:</td>
+                          <td align="right" id="ledger-new-bal" style="color: #059669; font-weight: 800; font-size: 13px; padding-top: 4px;">₹550.00</td>
+                        </tr>
+                      </table>
+                    </div>
+                  </td>
+
+                  <!-- FINANCIAL TOTALS BREAKDOWN -->
+                  <td width="45%" valign="top" style="vertical-align: top;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 13px; line-height: 2;">
+                      <tr>
+                        <td style="color: #64748b;">Subtotal:</td>
+                        <td align="right" id="summary-subtotal" style="color: #1e293b; font-weight: 600;">₹500.00</td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="padding-top: 6px; padding-bottom: 6px;">
+                          <div style="height: 2px; background-color: #0f172a;"></div>
+                        </td>
+                      </tr>
+                      <tr style="font-size: 15px;">
+                        <td id="total-label" style="color: #0f172a; font-weight: 800;">Total Paid:</td>
+                        <td align="right" id="summary-grand-total" style="color: #0f172a; font-weight: 800; font-size: 18px;">₹500.00</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- ACTION BAR IN EMAIL (Print button / Dashboard link) -->
+              <div class="no-print" style="text-align: center; margin: 30px 0 10px 0;">
+                <table align="center" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" style="border-radius: 8px; background: #2563eb;">
+                      <a href="#" onclick="window.print(); return false;" style="display: inline-block; padding: 12px 28px; font-size: 13px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 8px;">
+                        🖨️ Download / Print Receipt (PDF)
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin: 10px 0 0 0; font-size: 11px; color: #94a3b8;">
+                  Manage monitors and view transaction history on your <a href="https://ticketradar.darkglance.in/dashboard" target="_blank" style="color: #2563eb; text-decoration: underline;">TicketRadar Dashboard</a>.
+                </p>
+              </div>
+
+              <!-- DIVIDER -->
+              <div style="height: 1px; background-color: #f1f5f9; margin: 24px 0;"></div>
+
+              <!-- INVOICE FOOTER & LEGAL NOTES -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 11px; color: #94a3b8; line-height: 1.5;">
+                <tr>
+                  <td>
+                    <p style="margin: 0 0 4px 0; font-weight: 600; color: #64748b;">Terms & Information:</p>
+                    <p style="margin: 0 0 4px 0;">
+                      • This is an electronic payment receipt; no physical signature is required.<br>
+                      • Wallet top-ups are credited immediately and used to maintain continuous cinema tracking jobs.<br>
+                      • Unspent wallet balance is eligible for refund as per TicketRadar Refund Terms.
+                    </p>
+                    <p style="margin: 8px 0 0 0; color: #64748b;">
+                      TicketRadar • <a href="https://ticketradar.darkglance.in" target="_blank" style="color: #64748b; text-decoration: none;">ticketradar.darkglance.in</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </div>
+
+            <!-- CARD BOTTOM ACCENT -->
+            <div style="background-color: #0f172a; padding: 14px 36px; text-align: center; font-size: 11px; color: #94a3b8;">
+              Questions regarding this transaction? Contact <a href="mailto:darkglance.developer@gmail.com" style="color: #38bdf8; text-decoration: none;">darkglance.developer@gmail.com</a>
+            </div>
+
+          </div>
+          <!-- END RECEIPT CARD -->
+
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- SCRIPT FOR PREVIEW SWITCHER -->
+  <script>
+    const dataModes = {
+      wallet_topup: {
+        accent: 'linear-gradient(90deg, #10b981, #06b6d4)',
+        statusText: '● PAID & CREDITED',
+        statusBg: '#ecfdf5',
+        statusColor: '#059669',
+        statusBorder: '#a7f3d0',
+        docTitle: 'PAYMENT RECEIPT',
+        invoiceId: 'REC-TR-2026-091401',
+        orderId: 'ORD_TOPUP_882194',
+        paymentRef: 'cf_pay_99812401',
+        paymentMethod: 'UPI (Google Pay / Cashfree)',
+        items: [
+          {
+            desc: '<strong>TicketRadar Wallet Recharge</strong><br><span style="color: #64748b; font-size: 11px;">Instant wallet credits for real-time cinema ticket alerts & phone calls</span>',
+            qty: 1,
+            rate: '₹500.00',
+            amount: '₹500.00'
+          }
+        ],
+        subtotal: '₹500.00',
+        totalLabel: 'Total Paid:',
+        grandTotal: '₹500.00',
+        grandTotalColor: '#0f172a',
+        ledger: {
+          show: true,
+          label: 'TicketRadar Wallet Impact',
+          prevBal: '₹50.00',
+          actionLabel: 'Amount Credited:',
+          impactAmt: '+₹500.00',
+          impactColor: '#059669',
+          newBal: '₹550.00'
+        }
+      },
+      payment: {
+        accent: 'linear-gradient(90deg, #2563eb, #8b5cf6)',
+        statusText: '● PAYMENT SUCCESSFUL',
+        statusBg: '#eff6ff',
+        statusColor: '#1d4ed8',
+        statusBorder: '#bfdbfe',
+        docTitle: 'PAYMENT RECEIPT',
+        invoiceId: 'REC-TR-2026-091402',
+        orderId: 'ORD_JOB_552109',
+        paymentRef: 'cf_pay_88192033',
+        paymentMethod: 'Credit Card (HDFC Visa)',
+        items: [
+          {
+            desc: '<strong>Automated Cinema Tracker - Priority Tier</strong><br><span style="color: #64748b; font-size: 11px;">Movie: <em>Avengers: Secret Wars</em> (IMAX 3D) • Date: 20 Sep 2026<br>Channels: Instant Voice Call Notification + Email + SMS</span>',
+            qty: 1,
+            rate: '₹100.00',
+            amount: '₹100.00'
+          }
+        ],
+        subtotal: '₹100.00',
+        totalLabel: 'Total Paid:',
+        grandTotal: '₹100.00',
+        grandTotalColor: '#0f172a',
+        ledger: {
+          show: false
+        }
+      },
+      refund: {
+        accent: 'linear-gradient(90deg, #f59e0b, #ef4444)',
+        statusText: '● REFUND PROCESSED',
+        statusBg: '#fef3c7',
+        statusColor: '#d97706',
+        statusBorder: '#fde68a',
+        docTitle: 'REFUND RECEIPT',
+        invoiceId: 'RFND-TR-2026-091403',
+        orderId: 'ORD_JOB_552109',
+        paymentRef: 'cf_rfnd_772183',
+        paymentMethod: 'Credited to Wallet Balance',
+        items: [
+          {
+            desc: '<strong>Job Cancellation / Service Refund</strong><br><span style="color: #64748b; font-size: 11px;">Reason: User cancelled tracker before booking opened • Job #TK-552109</span>',
+            qty: 1,
+            rate: '₹100.00',
+            amount: '₹100.00'
+          }
+        ],
+        subtotal: '₹100.00',
+        totalLabel: 'Net Refunded:',
+        grandTotal: '₹100.00',
+        grandTotalColor: '#d97706',
+        ledger: {
+          show: true,
+          label: 'Wallet Refund Impact',
+          prevBal: '₹50.00',
+          actionLabel: 'Refund Credited:',
+          impactAmt: '+₹100.00',
+          impactColor: '#059669',
+          newBal: '₹150.00'
+        }
+      },
+      payment_failed: {
+        accent: 'linear-gradient(90deg, #ef4444, #f97316)',
+        statusText: '● PAYMENT FAILED',
+        statusBg: '#fef2f2',
+        statusColor: '#dc2626',
+        statusBorder: '#fecaca',
+        docTitle: 'PAYMENT FAILED NOTICE',
+        invoiceId: 'FAIL-TR-2026-091404',
+        orderId: 'ORD_TOPUP_991823',
+        paymentRef: 'cf_pay_declined_910',
+        paymentMethod: 'UPI / Payment Gateway',
+        alertBanner: `
+          <div style="margin: 0 0 24px 0; padding: 16px 18px; background-color: #fff7ed; border: 1px solid #fdba74; border-left: 5px solid #ea580c; border-radius: 8px;">
+            <div style="font-size: 13px; font-weight: 700; color: #9a3412; margin-bottom: 6px;">
+              ⚠️ Was money deducted from your bank account?
+            </div>
+            <p style="margin: 0; font-size: 12px; color: #7c2d12; line-height: 1.6;">
+              If any amount was debited from your bank account, card, or UPI wallet during this attempt, <strong>please do not worry</strong>. Your payment was not received by TicketRadar, and <strong>your money will be automatically refunded by your bank/payment provider to the original payment source within 3 to 5 business days</strong>.
+            </p>
+            <p style="margin: 6px 0 0 0; font-size: 11px; color: #9a3412;">
+              Failure reason: <strong>Bank network timeout / transaction declined</strong>. No manual claim is needed. If your refund does not reflect after 5 business days, reach us at <a href="mailto:darkglance.developer@gmail.com" style="color: #ea580c; font-weight: 600; text-decoration: underline;">darkglance.developer@gmail.com</a> with Order ID <strong>#ORD_TOPUP_991823</strong>.
+            </p>
+          </div>
+        `,
+        items: [
+          {
+            desc: '<strong>Payment Attempt Unsuccessful - Wallet Top-up</strong><br><span style="color: #ef4444; font-size: 11px;">Status: Transaction declined or cancelled at payment gateway</span>',
+            qty: 1,
+            rate: '₹200.00',
+            amount: '₹200.00'
+          }
+        ],
+        subtotal: '₹200.00',
+        totalLabel: 'Attempted Amount:',
+        grandTotal: '₹200.00',
+        grandTotalColor: '#dc2626',
+        ledger: {
+          show: false
+        }
+      }
+    };
+
+    function switchInvoice(modeKey, btn) {
+      const mode = dataModes[modeKey];
+      if (!mode) return;
+
+      // Update button state
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      // Accent bar
+      document.getElementById('accent-bar').style.background = mode.accent;
+
+      // Status badge
+      const badge = document.getElementById('badge-status');
+      badge.textContent = mode.statusText;
+      badge.style.backgroundColor = mode.statusBg;
+      badge.style.color = mode.statusColor;
+      badge.style.borderColor = mode.statusBorder;
+
+      // Metadata
+      document.getElementById('invoice-doc-title').textContent = mode.docTitle;
+      document.getElementById('invoice-id-display').textContent = mode.invoiceId;
+      document.getElementById('meta-order-id').textContent = mode.orderId;
+      document.getElementById('meta-payment-id').textContent = mode.paymentRef;
+      document.getElementById('meta-payment-method').textContent = mode.paymentMethod;
+
+      // Alert Banner
+      const bannerContainer = document.getElementById('alert-banner-container');
+      if (mode.alertBanner) {
+        bannerContainer.innerHTML = mode.alertBanner;
+        bannerContainer.style.display = 'block';
+      } else {
+        bannerContainer.innerHTML = '';
+        bannerContainer.style.display = 'none';
+      }
+
+      // Line items
+      const tbody = document.getElementById('invoice-items-body');
+      tbody.innerHTML = '';
+      mode.items.forEach((item, idx) => {
+        const tr = document.createElement('tr');
+        tr.style.backgroundColor = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        tr.innerHTML = `
+          <td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; color: #1e293b; line-height: 1.5;">${item.desc}</td>
+          <td align="center" style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; color: #475569;">${item.qty}</td>
+          <td align="right" style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; color: #475569;">${item.rate}</td>
+          <td align="right" style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #0f172a;">${item.amount}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Totals
+      document.getElementById('summary-subtotal').textContent = mode.subtotal;
+      document.getElementById('total-label').textContent = mode.totalLabel;
+      const gTot = document.getElementById('summary-grand-total');
+      gTot.textContent = mode.grandTotal;
+      gTot.style.color = mode.grandTotalColor;
+
+      // Ledger Box
+      const ledgerBox = document.getElementById('wallet-ledger-box');
+      if (mode.ledger.show) {
+        ledgerBox.style.display = 'block';
+        document.getElementById('ledger-prev-bal').textContent = mode.ledger.prevBal;
+        document.getElementById('ledger-action-label').textContent = mode.ledger.actionLabel;
+        const impact = document.getElementById('ledger-impact-amt');
+        impact.textContent = mode.ledger.impactAmt;
+        impact.style.color = mode.ledger.impactColor;
+        document.getElementById('ledger-new-bal').textContent = mode.ledger.newBal;
+      } else {
+        ledgerBox.style.display = 'none';
+      }
+    }
+
+    // Initialize with wallet_topup on load
+    switchInvoice('wallet_topup', document.querySelector('.tab-btn.active'));
+  </script>
+</body>
+</html>

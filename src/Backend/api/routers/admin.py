@@ -1,6 +1,9 @@
 import logging
 import uuid
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+import html
+from datetime import datetime, timezone
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Query, Response
+from fastapi.responses import HTMLResponse
 from google.cloud import firestore as google_firestore
 
 from lib.core.auth import get_admin_user, db, auth as firebase_auth
@@ -10,6 +13,7 @@ from lib.services.notification import (
     send_user_access_granted_email,
 )
 from lib.services.notification.user_mailer import send_admin_pricing_changed_email
+from lib.services.notification.templates.email import EmailTemplates
 from lib.services.gcp_logger import gcp_logger
 from lib.services.pricing import PricingService
 from lib.services.wallet import WalletService
@@ -728,4 +732,427 @@ async def admin_get_audit_logs(limit: int = 50):
             return items[:limit]
         except Exception:
             return []
+
+
+def _build_all_receipts():
+    """Gathers and standardizes financial transactions into receipts enriched with customer metadata."""
+    user_map = {}
+    if firebase_auth:
+        try:
+            page = firebase_auth.list_users()
+            if hasattr(page, "users"):
+                for u in page.users:
+                    u_email = getattr(u, "email", "") or ""
+                    u_name = getattr(u, "display_name", None) or (u_email.split("@")[0] if u_email else "User")
+                    u_phone = getattr(u, "phone_number", "") or ""
+                    user_map[u.uid] = {
+                        "user_name": u_name,
+                        "email": u_email,
+                        "phone": u_phone,
+                    }
+        except Exception as e:
+            logger.debug(f"Could not list users from firebase_auth: {e}")
+
+    if db is not None:
+        try:
+            req_docs = db.collection("access_requests").stream()
+            for rd in req_docs:
+                rdata = rd.to_dict() or {}
+                ruid = rdata.get("uid") or rd.id
+                if ruid not in user_map:
+                    user_map[ruid] = {
+                        "user_name": rdata.get("name") or rdata.get("user_name") or "User",
+                        "email": rdata.get("email") or "",
+                        "phone": rdata.get("phone") or rdata.get("phone_number") or "",
+                    }
+                else:
+                    if not user_map[ruid].get("phone") and (rdata.get("phone") or rdata.get("phone_number")):
+                        user_map[ruid]["phone"] = rdata.get("phone") or rdata.get("phone_number")
+        except Exception as fe:
+            logger.debug(f"Could not fetch access_requests for user map: {fe}")
+
+    receipts_list = []
+    seen_payment_ids = set()
+
+    if db is not None:
+        try:
+            tx_docs = db.collection("wallet_transactions").stream()
+            for doc in tx_docs:
+                data = doc.to_dict() or {}
+                t_id = doc.id
+                u_id = data.get("uid", "")
+                uinfo = user_map.get(u_id, {})
+                amt_paise = int(data.get("amount_paise", 0))
+                bal_paise = int(data.get("balance_paise", 0))
+                amt_inr = round(amt_paise / 100.0, 2)
+                bal_inr = round(bal_paise / 100.0, 2)
+                ttype = str(data.get("type", "TRANSACTION")).upper()
+                dirn = str(data.get("direction", "CREDIT")).upper()
+
+                created_at = data.get("created_at")
+                if hasattr(created_at, "isoformat"):
+                    created_at_iso = created_at.isoformat()
+                else:
+                    created_at_iso = str(created_at or "")
+
+                date_compact = created_at_iso[:10].replace("-", "") if created_at_iso else "20260914"
+                short_hash = f"{abs(hash(t_id)) % 100000:05d}"
+                rec_id = data.get("receipt_id") or f"REC-TR-{date_compact}-{short_hash}"
+
+                pay_ref = data.get("payment_id") or data.get("refund_id") or ""
+                ord_ref = data.get("idempotency_key") or data.get("job_id") or pay_ref or t_id
+                if pay_ref:
+                    seen_payment_ids.add(pay_ref)
+                if data.get("idempotency_key"):
+                    seen_payment_ids.add(data.get("idempotency_key"))
+
+                method = data.get("payment_method")
+                if not method:
+                    if ttype in ("TOPUP", "WALLET_TOPUP"):
+                        method = "UPI / Gateway"
+                    elif ttype == "REFUND":
+                        method = "Wallet Balance Credit"
+                    elif dirn == "DEBIT":
+                        method = "TicketRadar Wallet"
+                    else:
+                        method = "Online Payment"
+
+                prev_bal_inr = round(max(0, bal_paise - amt_paise) / 100.0, 2) if dirn == "CREDIT" else round((bal_paise + amt_paise) / 100.0, 2)
+
+                receipts_list.append({
+                    "receipt_id": rec_id,
+                    "id": t_id,
+                    "uid": u_id,
+                    "user_name": uinfo.get("user_name") or "Valued Customer",
+                    "email": uinfo.get("email") or "",
+                    "phone": uinfo.get("phone") or "",
+                    "type": ttype,
+                    "direction": dirn,
+                    "status": "SUCCESS",
+                    "amount_paise": amt_paise,
+                    "amount_inr": amt_inr,
+                    "balance_inr": bal_inr,
+                    "prev_balance_inr": prev_bal_inr,
+                    "order_id": ord_ref,
+                    "job_id": data.get("job_id") or "",
+                    "payment_id": pay_ref,
+                    "payment_method": method,
+                    "description": data.get("description") or f"TicketRadar {ttype.replace('_', ' ').title()}",
+                    "created_at": created_at_iso,
+                    "source": "wallet_transactions",
+                })
+        except Exception as e:
+            logger.error(f"Error reading wallet_transactions for receipts: {e}")
+
+        try:
+            pay_docs = db.collection("payments").stream()
+            for doc in pay_docs:
+                data = doc.to_dict() or {}
+                p_id = doc.id
+                gw_order = data.get("gateway_order_id") or data.get("idempotency_key") or ""
+                gw_pay = data.get("gateway_payment_id") or ""
+                if p_id in seen_payment_ids or (gw_order and gw_order in seen_payment_ids) or (gw_pay and gw_pay in seen_payment_ids):
+                    continue
+
+                status = str(data.get("status", "")).upper()
+                # Include completed payments and failed transaction notices (excluding pending/abandoned checkouts)
+                if status not in ("SUCCESS", "PAID", "FAILED"):
+                    continue
+
+                u_id = data.get("uid", "")
+                uinfo = user_map.get(u_id, {})
+                amt_paise = int(data.get("amount_paise", 0))
+                amt_inr = round(amt_paise / 100.0, 2)
+                ttype = str(data.get("type", "PAYMENT")).upper()
+
+                created_at = data.get("created_at") or data.get("completed_at")
+                if hasattr(created_at, "isoformat"):
+                    created_at_iso = created_at.isoformat()
+                else:
+                    created_at_iso = str(created_at or "")
+
+                date_compact = created_at_iso[:10].replace("-", "") if created_at_iso else "20260914"
+                short_hash = f"{abs(hash(p_id)) % 100000:05d}"
+                rec_id = data.get("receipt_id") or f"REC-TR-{date_compact}-{short_hash}"
+
+                gw_name = (data.get("gateway_name") or "Cashfree").capitalize()
+                method = data.get("payment_method") or f"{gw_name} PG"
+
+                receipts_list.append({
+                    "receipt_id": rec_id,
+                    "id": p_id,
+                    "uid": u_id,
+                    "user_name": uinfo.get("user_name") or "Valued Customer",
+                    "email": uinfo.get("email") or "",
+                    "phone": uinfo.get("phone") or "",
+                    "type": ttype,
+                    "direction": "CREDIT" if ttype in ("TOPUP", "WALLET_TOPUP") else "DEBIT",
+                    "status": status,
+                    "amount_paise": amt_paise,
+                    "amount_inr": amt_inr,
+                    "balance_inr": None,
+                    "prev_balance_inr": None,
+                    "order_id": gw_order or p_id,
+                    "job_id": data.get("job_id") or "",
+                    "payment_id": gw_pay or p_id,
+                    "payment_method": method,
+                    "description": f"TicketRadar {ttype.replace('_', ' ').title()}",
+                    "created_at": created_at_iso,
+                    "source": "payments",
+                })
+        except Exception as e:
+            logger.error(f"Error reading payments collection for receipts: {e}")
+
+    return receipts_list
+
+
+@router.get("/receipts", dependencies=[Depends(require_payments_enabled)])
+async def admin_get_receipts(
+    page: int = 1,
+    page_size: int = 20,
+    search: str | None = None,
+    receipt_id: str | None = None,
+    uid: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+    order_id: str | None = None,
+    payment_id: str | None = None,
+    payment_method: str | None = None,
+    receipt_type: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    admin_claims: dict = Depends(get_admin_user),
+):
+    """Retrieves paginated, searchable receipts filtered by any metadata."""
+    all_receipts = _build_all_receipts()
+    filtered = []
+
+    for r in all_receipts:
+        if search and search.strip():
+            s = search.strip().lower()
+            searchable_fields = [
+                r.get("receipt_id", ""),
+                r.get("uid", ""),
+                r.get("user_name", ""),
+                r.get("email", ""),
+                r.get("phone", ""),
+                r.get("order_id", ""),
+                r.get("job_id", ""),
+                r.get("payment_id", ""),
+                r.get("payment_method", ""),
+                r.get("type", ""),
+                r.get("status", ""),
+                r.get("description", ""),
+                f"₹{r.get('amount_inr', 0)}",
+                str(r.get("amount_inr", "")),
+            ]
+            if not any(s in str(f).lower() for f in searchable_fields if f):
+                continue
+
+        if receipt_id and receipt_id.strip():
+            if receipt_id.strip().lower() not in r.get("receipt_id", "").lower():
+                continue
+
+        if uid and uid.strip():
+            if uid.strip().lower() != r.get("uid", "").lower():
+                continue
+
+        if email and email.strip():
+            if email.strip().lower() not in r.get("email", "").lower():
+                continue
+
+        if phone and phone.strip():
+            p_clean = phone.strip().replace(" ", "").replace("-", "")
+            r_phone = r.get("phone", "").replace(" ", "").replace("-", "")
+            if p_clean not in r_phone:
+                continue
+
+        if order_id and order_id.strip():
+            oid = order_id.strip().lower()
+            if oid not in r.get("order_id", "").lower() and oid not in r.get("job_id", "").lower():
+                continue
+
+        if payment_id and payment_id.strip():
+            pid = payment_id.strip().lower()
+            if pid not in r.get("payment_id", "").lower():
+                continue
+
+        if payment_method and payment_method.strip():
+            pm = payment_method.strip().lower()
+            if pm != "all" and pm not in r.get("payment_method", "").lower():
+                continue
+
+        if receipt_type and receipt_type.strip():
+            rt = receipt_type.strip().upper()
+            if rt != "ALL" and rt not in r.get("type", "").upper():
+                continue
+
+        c_at = r.get("created_at", "")
+        if start_date and start_date.strip():
+            if c_at and c_at[:10] < start_date.strip()[:10]:
+                continue
+        if end_date and end_date.strip():
+            if c_at and c_at[:10] > end_date.strip()[:10]:
+                continue
+
+        filtered.append(r)
+
+    filtered.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+
+    total = len(filtered)
+    total_pages = (total + page_size - 1) // page_size if page_size > 0 else 1
+    start = (max(1, page) - 1) * page_size
+    end = start + page_size
+    paged_items = filtered[start:end]
+
+    return {
+        "items": paged_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
+
+
+@router.get("/receipts/{receipt_id}/render", dependencies=[Depends(require_payments_enabled)])
+async def admin_render_receipt(
+    receipt_id: str,
+    format: str | None = None,
+    admin_claims: dict = Depends(get_admin_user),
+):
+    """Dynamically generates and returns the HTML receipt for the specified receipt ID or transaction ID."""
+    all_receipts = _build_all_receipts()
+    target = None
+    target_id_clean = receipt_id.strip().lower()
+    for r in all_receipts:
+        if (
+            r.get("receipt_id", "").lower() == target_id_clean
+            or r.get("id", "").lower() == target_id_clean
+            or r.get("order_id", "").lower() == target_id_clean
+            or r.get("payment_id", "").lower() == target_id_clean
+        ):
+            target = r
+            break
+
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Receipt '{receipt_id}' not found.")
+
+    rec_type = target.get("type", "PAYMENT").upper()
+    amt_inr = target.get("amount_inr", 0.0)
+    direction = target.get("direction", "CREDIT").upper()
+    status = target.get("status", "SUCCESS").upper()
+
+    date_raw = target.get("created_at", "")
+    date_display = date_raw
+    if date_raw:
+        try:
+            clean_iso = date_raw.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(clean_iso)
+            date_display = dt.strftime("%d %b %Y, %I:%M %p UTC")
+        except Exception:
+            date_display = date_raw
+
+    items = [
+        {
+            "desc": f"<strong>{html.escape(target.get('description') or 'TicketRadar Service')}</strong><br><span style='color: #64748b; font-size: 11px;'>Reference: {html.escape(target.get('order_id') or target.get('payment_id') or 'N/A')}</span>",
+            "qty": "1",
+            "rate": f"₹{amt_inr:.2f}",
+            "amount": f"₹{amt_inr:.2f}",
+        }
+    ]
+
+    wallet_ledger = None
+    if target.get("balance_inr") is not None:
+        prev_b = target.get("prev_balance_inr", 0.0)
+        new_b = target.get("balance_inr", 0.0)
+        is_credit = direction == "CREDIT"
+        sign = "+" if is_credit else "-"
+        color = "#059669" if is_credit else "#f87171"
+        wallet_ledger = {
+            "prev_bal": f"₹{prev_b:.2f}",
+            "action_label": "Amount Credited:" if is_credit else "Amount Debited:",
+            "impact_amt": f"{sign}₹{amt_inr:.2f}",
+            "impact_color": color,
+            "new_bal": f"₹{new_b:.2f}",
+        }
+
+    alert_banner = None
+    terms_notes = None
+
+    if status == "FAILED":
+        doc_title = "PAYMENT FAILED NOTICE"
+        status_label = "● PAYMENT FAILED"
+        st_color, st_bg, st_border = "#dc2626", "#fef2f2", "#fecaca"
+        accent_grad = "linear-gradient(90deg, #ef4444, #f97316)"
+        total_label = "Attempted Amount"
+        grand_total_color = "#dc2626"
+        alert_banner = f"""
+        <div style="margin: 0 0 24px 0; padding: 16px 18px; background-color: #fff7ed; border: 1px solid #fdba74; border-left: 5px solid #ea580c; border-radius: 8px;">
+          <div style="font-size: 13px; font-weight: 700; color: #9a3412; margin-bottom: 6px;">
+            ⚠️ Was money deducted from the customer's bank account?
+          </div>
+          <p style="margin: 0; font-size: 12px; color: #7c2d12; line-height: 1.6;">
+            If any amount was debited from the customer's bank account, card, or UPI wallet during this attempt, <strong>please do not worry</strong>. The transaction was not completed on TicketRadar, and <strong>the debited money will be automatically refunded by their bank to their original payment method within 3 to 5 business days</strong>.
+          </p>
+          <p style="margin: 6px 0 0 0; font-size: 11px; color: #9a3412;">
+            Order ID: <strong>#{html.escape(target.get('order_id') or 'N/A')}</strong> • Support: <a href="mailto:darkglance.developer@gmail.com" style="color: #ea580c; font-weight: 600; text-decoration: underline;">darkglance.developer@gmail.com</a>
+          </p>
+        </div>
+        """
+        terms_notes = [
+            "This document confirms an unsuccessful transaction attempt on TicketRadar.",
+            "TicketRadar has not captured or claimed these funds.",
+            "Any debited money is held in the banking system and will reverse automatically within 3-5 business days.",
+            "The customer may safely re-attempt this transaction from their TicketRadar dashboard."
+        ]
+    elif rec_type == "REFUND":
+        doc_title = "REFUND RECEIPT"
+        status_label = "● REFUNDED"
+        st_color, st_bg, st_border = "#2563eb", "#eff6ff", "#bfdbfe"
+        accent_grad = "linear-gradient(90deg, #f59e0b, #ef4444)"
+        total_label = "Net Refunded"
+        grand_total_color = "#d97706"
+    else:
+        doc_title = "PAYMENT RECEIPT"
+        status_label = "● PAID"
+        st_color, st_bg, st_border = "#059669", "#ecfdf5", "#a7f3d0"
+        accent_grad = "linear-gradient(90deg, #10b981, #06b6d4)"
+        total_label = "Total Paid"
+        grand_total_color = "#0f172a"
+
+    html_content = EmailTemplates._render_invoice_html(
+        doc_title=doc_title,
+        status_label=status_label,
+        status_color=st_color,
+        status_bg=st_bg,
+        status_border=st_border,
+        accent_gradient=accent_grad,
+        invoice_id=target.get("receipt_id", ""),
+        order_id=target.get("order_id", "N/A"),
+        payment_id=target.get("payment_id", "N/A"),
+        payment_method=target.get("payment_method", "Online Payment"),
+        customer_name=target.get("user_name", "Valued Customer"),
+        customer_email=target.get("email", ""),
+        customer_phone=target.get("phone", ""),
+        customer_id=target.get("uid", ""),
+        issue_date=date_display,
+        items=items,
+        subtotal_str=f"₹{amt_inr:.2f}",
+        tax_str=None,
+        tax_label="",
+        total_label=total_label,
+        grand_total_str=f"₹{amt_inr:.2f}",
+        grand_total_color=grand_total_color,
+        wallet_ledger=wallet_ledger,
+        terms_notes=terms_notes,
+        alert_banner_html=alert_banner,
+    )
+
+    if format == "html":
+        return HTMLResponse(content=html_content)
+
+    return {
+        "html": html_content,
+        "receipt": target,
+    }
 

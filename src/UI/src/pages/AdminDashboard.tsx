@@ -4,7 +4,7 @@ import {
   Shield, AlertTriangle, RefreshCw, Film, Calendar, Clock, Radio, Bell, Info, 
   LayoutGrid, Table as TableIcon, User as UserIcon, CheckCircle, XCircle, Lock, 
   ExternalLink, Search, X, DollarSign, Wallet, RotateCcw, FileText, CheckCircle2,
-  ChevronLeft, ChevronRight, Filter, Play
+  ChevronLeft, ChevronRight, Filter, Play, Receipt, Eye, Printer
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -25,7 +25,7 @@ interface AdminDashboardProps {
  * Provides an administrative interface for managing access requests, user accounts, and ticket-monitoring jobs.
  */
 export function AdminDashboard({ config }: AdminDashboardProps = {}) {
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs' | 'pricing' | 'wallets' | 'transactions' | 'refunds' | 'audit_logs'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'jobs' | 'pricing' | 'wallets' | 'transactions' | 'receipts' | 'refunds' | 'audit_logs'>('requests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [requests, setRequests] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -61,6 +61,24 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
   const [adminTxnFilterDirection, setAdminTxnFilterDirection] = useState('');
   const [adminTxnSearch, setAdminTxnSearch] = useState('');
   const [adminTxnLoading, setAdminTxnLoading] = useState(false);
+
+  // Receipts state
+  const [receipts, setReceipts] = useState<any[]>([]);
+  const [receiptsLoading, setReceiptsLoading] = useState(false);
+  const [receiptPage, setReceiptPage] = useState(1);
+  const [receiptTotal, setReceiptTotal] = useState(0);
+  const [receiptTotalPages, setReceiptTotalPages] = useState(1);
+  const [receiptSearch, setReceiptSearch] = useState('');
+  const [receiptFilterType, setReceiptFilterType] = useState('');
+  const [receiptFilterMethod, setReceiptFilterMethod] = useState('');
+  const [receiptFilterUid, setReceiptFilterUid] = useState('');
+  const [receiptFilterStartDate, setReceiptFilterStartDate] = useState('');
+  const [receiptFilterEndDate, setReceiptFilterEndDate] = useState('');
+
+  // Receipt Modal state
+  const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
+  const [renderedReceiptHtml, setRenderedReceiptHtml] = useState<string | null>(null);
+  const [receiptModalLoading, setReceiptModalLoading] = useState(false);
 
   // Wallet states
   const [walletSearchUid, setWalletSearchUid] = useState('');
@@ -158,9 +176,59 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
     }
   }, [adminTxnFilterUid, adminTxnFilterType, adminTxnFilterDirection, adminTxnSearch]);
 
+  const fetchReceipts = useCallback(async (page = 1) => {
+    setReceiptsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: '20',
+      });
+      if (receiptSearch.trim()) params.append('search', receiptSearch.trim());
+      if (receiptFilterType) params.append('receipt_type', receiptFilterType);
+      if (receiptFilterMethod) params.append('payment_method', receiptFilterMethod);
+      if (receiptFilterUid.trim()) params.append('uid', receiptFilterUid.trim());
+      if (receiptFilterStartDate) params.append('start_date', receiptFilterStartDate);
+      if (receiptFilterEndDate) params.append('end_date', receiptFilterEndDate);
+
+      const res = await authenticatedFetch(`/admin/receipts?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setReceipts(data.items || []);
+        setReceiptTotal(data.total || 0);
+        setReceiptPage(data.page || 1);
+        setReceiptTotalPages(data.total_pages || 1);
+      } else {
+        setError("Failed to fetch admin receipts.");
+      }
+    } catch (e: any) {
+      setError(e.message || "Error fetching receipts.");
+    } finally {
+      setReceiptsLoading(false);
+    }
+  }, [receiptSearch, receiptFilterType, receiptFilterMethod, receiptFilterUid, receiptFilterStartDate, receiptFilterEndDate]);
+
+  const handleOpenReceiptModal = async (receipt: any) => {
+    setSelectedReceipt(receipt);
+    setReceiptModalLoading(true);
+    setRenderedReceiptHtml(null);
+    try {
+      const res = await authenticatedFetch(`/admin/receipts/${encodeURIComponent(receipt.receipt_id || receipt.id)}/render`);
+      if (res.ok) {
+        const data = await res.json();
+        setRenderedReceiptHtml(data.html);
+      } else {
+        alert("Failed to render receipt HTML.");
+      }
+    } catch (e: any) {
+      alert("Error rendering receipt: " + e.message);
+    } finally {
+      setReceiptModalLoading(false);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     if (securityDisabled) return;
-    if (paymentsDisabled && (activeTab === 'pricing' || activeTab === 'wallets' || activeTab === 'transactions' || activeTab === 'refunds')) {
+    if (paymentsDisabled && (activeTab === 'pricing' || activeTab === 'wallets' || activeTab === 'transactions' || activeTab === 'receipts' || activeTab === 'refunds')) {
       return;
     }
     setLoading(true);
@@ -201,6 +269,8 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
         }
       } else if (activeTab === 'transactions') {
         await fetchAdminTransactions(1);
+      } else if (activeTab === 'receipts') {
+        await fetchReceipts(1);
       } else if (activeTab === 'audit_logs') {
         const res = await authenticatedFetch('/admin/audit-logs');
         if (res.ok) setAuditLogs(await res.json());
@@ -211,7 +281,7 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, fetchAdminTransactions, paymentsDisabled, securityDisabled]);
+  }, [activeTab, fetchAdminTransactions, fetchReceipts, paymentsDisabled, securityDisabled]);
 
   useEffect(() => {
     if (securityDisabled) return;
@@ -616,6 +686,18 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
               >
                 <TableIcon className="h-3.5 w-3.5 text-rose-400" />
                 Transactions
+              </Button>
+              <Button
+                onClick={() => {
+                  setActiveTab('receipts');
+                  fetchReceipts(1);
+                }}
+                variant={activeTab === 'receipts' ? 'default' : 'ghost'}
+                size="sm"
+                className="text-xs font-semibold gap-1.5"
+              >
+                <Receipt className="h-3.5 w-3.5 text-rose-400" />
+                Receipts
               </Button>
               <Button
                 onClick={() => setActiveTab('refunds')}
@@ -1826,6 +1908,326 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
         </div>
       )}
 
+      {/* Tab: Receipts */}
+      {!paymentsDisabled && activeTab === 'receipts' && (
+        <div className="space-y-6">
+          <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
+            <CardHeader className="p-0 pb-3 border-b border-border/40">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <Receipt className="h-4 w-4 text-rose-400" />
+                    Customer Receipts & Invoices
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Search and inspect dynamically rendered HTML tax invoices and payment receipts across all user accounts.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchReceipts(receiptPage)}
+                    disabled={receiptsLoading}
+                    className="h-8 px-2.5 text-xs gap-1.5"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${receiptsLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+
+            {/* Filter Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-1">
+              <div className="lg:col-span-2">
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                  Universal Search
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search receipt ID, email, phone, name, order, payment ref..."
+                    value={receiptSearch}
+                    onChange={(e) => setReceiptSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') fetchReceipts(1);
+                    }}
+                    className="h-8 text-xs pl-8 bg-muted/20"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Account UID</label>
+                <Input
+                  placeholder="Filter by User UID"
+                  value={receiptFilterUid}
+                  onChange={(e) => setReceiptFilterUid(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') fetchReceipts(1);
+                  }}
+                  className="h-8 text-xs bg-muted/20"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Receipt Type</label>
+                <select
+                  value={receiptFilterType}
+                  onChange={(e) => setReceiptFilterType(e.target.value)}
+                  className="w-full h-8 px-2.5 text-xs rounded-md border border-input bg-background/50 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                >
+                  <option value="">All Types</option>
+                  <option value="TOPUP">Wallet Topup</option>
+                  <option value="DEBIT">Job Creation / Debit</option>
+                  <option value="REFUND">Refund</option>
+                  <option value="PAYMENT">Direct Gateway Payment</option>
+                  <option value="FAILED">Payment Failed Attempts</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Payment Method</label>
+                <select
+                  value={receiptFilterMethod}
+                  onChange={(e) => setReceiptFilterMethod(e.target.value)}
+                  className="w-full h-8 px-2.5 text-xs rounded-md border border-input bg-background/50 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                >
+                  <option value="">All Payment Methods</option>
+                  <option value="UPI / Gateway">UPI / Gateway</option>
+                  <option value="TicketRadar Wallet">TicketRadar Wallet</option>
+                  <option value="Cashfree PG">Cashfree PG</option>
+                  <option value="Wallet Balance Credit">Wallet Balance Credit</option>
+                  <option value="Online Payment">Online Payment</option>
+                </select>
+              </div>
+
+              <div className="flex items-end gap-2">
+                <Button
+                  onClick={() => fetchReceipts(1)}
+                  disabled={receiptsLoading}
+                  size="sm"
+                  className="h-8 text-xs font-semibold bg-rose-500 hover:bg-rose-600 flex-1"
+                >
+                  <Filter className="h-3 w-3 mr-1" />
+                  Filter
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setReceiptSearch('');
+                    setReceiptFilterType('');
+                    setReceiptFilterMethod('');
+                    setReceiptFilterUid('');
+                    setReceiptFilterStartDate('');
+                    setReceiptFilterEndDate('');
+                    setReceiptsLoading(true);
+                    authenticatedFetch('/admin/receipts?page=1&page_size=20')
+                      .then((res) => res.json())
+                      .then((data) => {
+                        setReceipts(data.items || []);
+                        setReceiptTotal(data.total || 0);
+                        setReceiptPage(data.page || 1);
+                        setReceiptTotalPages(data.total_pages || 1);
+                      })
+                      .catch((e: any) => setError(e.message))
+                      .finally(() => setReceiptsLoading(false));
+                  }}
+                  disabled={receiptsLoading}
+                  size="sm"
+                  className="h-8 text-xs"
+                >
+                  Reset
+                </Button>
+              </div>
+            </div>
+
+            {/* Date Filters Row */}
+            <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground text-[11px] font-medium">From Date:</span>
+                <Input
+                  type="date"
+                  value={receiptFilterStartDate}
+                  onChange={(e) => setReceiptFilterStartDate(e.target.value)}
+                  className="h-7 text-xs w-36 bg-muted/20"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground text-[11px] font-medium">To Date:</span>
+                <Input
+                  type="date"
+                  value={receiptFilterEndDate}
+                  onChange={(e) => setReceiptFilterEndDate(e.target.value)}
+                  className="h-7 text-xs w-36 bg-muted/20"
+                />
+              </div>
+              {(receiptSearch || receiptFilterUid || receiptFilterType || receiptFilterMethod || receiptFilterStartDate || receiptFilterEndDate) && (
+                <Badge variant="secondary" className="text-[10px] font-normal text-muted-foreground">
+                  Filtered view active
+                </Badge>
+              )}
+            </div>
+
+            {/* Receipts Table */}
+            {receiptsLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center text-muted-foreground text-xs">
+                <RefreshCw className="h-6 w-6 animate-spin mb-2 text-rose-400" />
+                Loading receipts...
+              </div>
+            ) : receipts.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground">
+                No receipts found matching the specified filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border/50 text-muted-foreground">
+                      <th className="pb-2 font-medium">Receipt ID & Date</th>
+                      <th className="pb-2 font-medium">Customer / Account</th>
+                      <th className="pb-2 font-medium">Type & Method</th>
+                      <th className="pb-2 font-medium">References</th>
+                      <th className="pb-2 font-medium text-right">Amount</th>
+                      <th className="pb-2 font-medium text-center">Status</th>
+                      <th className="pb-2 font-medium text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {receipts.map((r: any) => {
+                      const isCredit = r.direction === 'CREDIT' || r.type === 'TOPUP' || r.type === 'WALLET_TOPUP' || r.type === 'REFUND';
+                      return (
+                        <tr key={r.receipt_id || r.id || Math.random().toString()} className="hover:bg-muted/10">
+                          <td className="py-2.5 whitespace-nowrap">
+                            <div className="font-mono text-xs font-semibold text-foreground">
+                              {r.receipt_id}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {r.created_at ? formatTimestamp(r.created_at) : '—'}
+                            </div>
+                          </td>
+                          <td className="py-2.5 max-w-[200px]">
+                            <div className="font-medium text-foreground truncate" title={r.user_name}>
+                              {r.user_name || 'Customer'}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate" title={r.email}>
+                              {r.email || '—'}
+                            </div>
+                            {r.phone && (
+                              <div className="text-[10px] text-muted-foreground">
+                                📞 {r.phone}
+                              </div>
+                            )}
+                            <div className="font-mono text-[10px] text-muted-foreground/70 truncate" title={r.uid}>
+                              UID: {r.uid}
+                            </div>
+                          </td>
+                          <td className="py-2.5 whitespace-nowrap">
+                            <div>
+                              {r.type === 'TOPUP' || r.type === 'WALLET_TOPUP' ? (
+                                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px]">
+                                  TOPUP
+                                </Badge>
+                              ) : r.type === 'REFUND' ? (
+                                <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px]">
+                                  REFUND
+                                </Badge>
+                              ) : r.type === 'DEBIT' || r.type === 'SUBSCRIPTION' ? (
+                                <Badge className="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[9px]">
+                                  JOB DEBIT
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-muted/40 text-foreground text-[9px]">
+                                  {r.type}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground mt-0.5">
+                              {r.payment_method || 'Online'}
+                            </div>
+                          </td>
+                          <td className="py-2.5 text-[11px] font-mono max-w-[150px] truncate">
+                            <div className="truncate text-muted-foreground" title={r.order_id || r.job_id || '—'}>
+                              <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 block">Order/Job:</span>
+                              {r.order_id || r.job_id || '—'}
+                            </div>
+                            {r.payment_id && (
+                              <div className="truncate text-muted-foreground/80 mt-0.5" title={r.payment_id}>
+                                <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 block">Pay Ref:</span>
+                                {r.payment_id}
+                              </div>
+                            )}
+                          </td>
+                          <td className={`py-2.5 text-right font-bold whitespace-nowrap ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {isCredit ? '+' : '-'}₹{(Number(r.amount_inr ?? (r.amount_paise ? r.amount_paise / 100 : 0))).toFixed(2)}
+                          </td>
+                          <td className="py-2.5 text-center whitespace-nowrap">
+                            {r.status === 'FAILED' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                FAILED
+                              </span>
+                            ) : r.type === 'REFUND' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                REFUNDED
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                PAID
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 text-right whitespace-nowrap">
+                            <Button
+                              onClick={() => handleOpenReceiptModal(r)}
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2.5 text-xs gap-1.5 border-rose-500/30 hover:border-rose-500 hover:bg-rose-500/10 text-rose-300 font-semibold"
+                            >
+                              <Eye className="h-3.5 w-3.5 text-rose-400" />
+                              Show Receipt
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/40 text-xs text-muted-foreground">
+              <span>
+                Page <span className="font-semibold text-foreground">{receiptPage}</span> of <span className="font-semibold text-foreground">{receiptTotalPages}</span> ({receiptTotal} total receipts)
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchReceipts(receiptPage - 1)}
+                  disabled={receiptPage <= 1 || receiptsLoading}
+                  className="h-8 px-2.5 text-xs gap-1"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchReceipts(receiptPage + 1)}
+                  disabled={receiptPage >= receiptTotalPages || receiptsLoading}
+                  className="h-8 px-2.5 text-xs gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Tab: Gateway Refunds */}
       {!paymentsDisabled && activeTab === 'refunds' && (
         <Card className="border border-border/80 glassmorphism p-6 rounded-2xl space-y-4">
@@ -2017,6 +2419,118 @@ export function AdminDashboard({ config }: AdminDashboardProps = {}) {
         icon="delete"
         isLoading={actionLoading === jobToDelete?.id}
       />
+
+      {/* Receipt Viewer Modal */}
+      {selectedReceipt && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedReceipt(null);
+              setRenderedReceiptHtml(null);
+            }
+          }}
+        >
+          <div className="relative w-full max-w-4xl max-h-[94vh] bg-card border border-border/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/20">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                  <Receipt className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
+                    Receipt: <span className="font-mono text-rose-400">{selectedReceipt.receipt_id || selectedReceipt.id}</span>
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {selectedReceipt.user_name || 'Customer'} ({selectedReceipt.email || selectedReceipt.uid}) • ₹{(Number(selectedReceipt.amount_inr ?? (selectedReceipt.amount_paise ? selectedReceipt.amount_paise / 100 : 0))).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 font-semibold"
+                  disabled={receiptModalLoading || !renderedReceiptHtml}
+                  onClick={() => {
+                    const iframe = document.getElementById('receipt-render-frame') as HTMLIFrameElement;
+                    if (iframe && iframe.contentWindow) {
+                      iframe.contentWindow.focus();
+                      iframe.contentWindow.print();
+                    }
+                  }}
+                >
+                  <Printer className="h-3.5 w-3.5 text-rose-400" />
+                  Print / Save PDF
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 rounded-full hover:bg-muted/40 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setSelectedReceipt(null);
+                    setRenderedReceiptHtml(null);
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 min-h-[500px] max-h-[76vh] bg-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
+              {receiptModalLoading ? (
+                <div className="flex flex-col items-center justify-center gap-3 p-8 text-slate-600">
+                  <RefreshCw className="h-8 w-8 animate-spin text-rose-500" />
+                  <p className="text-sm font-medium">Generating dynamic receipt HTML...</p>
+                  <p className="text-xs text-slate-500 font-mono">Receipt: {selectedReceipt.receipt_id || selectedReceipt.id}</p>
+                </div>
+              ) : renderedReceiptHtml ? (
+                <iframe
+                  id="receipt-render-frame"
+                  srcDoc={renderedReceiptHtml}
+                  title={`Receipt ${selectedReceipt.receipt_id}`}
+                  className="w-full h-full min-h-[550px] max-h-[76vh] border-0 bg-white"
+                  sandbox="allow-same-origin allow-scripts allow-modals allow-popups"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 p-8 text-slate-600">
+                  <AlertTriangle className="h-8 w-8 text-amber-500" />
+                  <p className="text-sm font-medium">Failed to render receipt HTML</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenReceiptModal(selectedReceipt)}
+                    className="mt-2 text-xs"
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-2.5 border-t border-border/40 bg-muted/10 flex items-center justify-between text-xs text-muted-foreground">
+              <span className="truncate">
+                Method: <strong className="text-foreground">{selectedReceipt.payment_method || 'Online'}</strong>
+                {selectedReceipt.order_id && <> • Ref: <span className="font-mono">{selectedReceipt.order_id}</span></>}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedReceipt(null);
+                  setRenderedReceiptHtml(null);
+                }}
+                className="h-7 px-3 text-xs"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   );

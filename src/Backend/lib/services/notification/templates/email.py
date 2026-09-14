@@ -121,6 +121,7 @@ class EmailTemplates:
         grand_total_color: str = "#0f172a",
         wallet_ledger: Optional[Dict[str, Any]] = None,
         terms_notes: Optional[List[str]] = None,
+        alert_banner_html: Optional[str] = None,
     ) -> str:
         # Build line items
         items_rows_html = ""
@@ -238,6 +239,8 @@ class EmailTemplates:
 
                 <!-- DIVIDER -->
                 <div style="height: 1px; background-color: #f1f5f9; margin-bottom: 24px;"></div>
+
+                {alert_banner_html or ""}
 
                 <!-- BILLED TO / DETAILS GRID -->
                 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 28px; font-size: 13px;">
@@ -597,33 +600,85 @@ class EmailTemplates:
         order_id: str = "",
         amount_inr: Any = 0.0,
         failure_reason: str = "Transaction declined or cancelled.",
+        payment_id: str = "",
         **kwargs: Any
     ) -> Dict[str, str]:
         amt = _safe_float(amount_inr)
         reason_text = kwargs.get("error_reason") or failure_reason
-        subject = f"Payment Failed for Order #{order_id}"
-        body_html = f"""
-        <p style="margin-top: 0; font-size: 15px;">Hi <strong>{html.escape(user_name)}</strong>,</p>
-        <p>Unfortunately, your payment attempt for <strong>₹{amt:.2f}</strong> was not successful.</p>
-        <div style="margin: 20px 0; padding: 14px 16px; background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 6px; font-size: 13px; color: #f87171;">
-          <strong>Failure Reason:</strong> {html.escape(reason_text)}
+        now_str = kwargs.get("timestamp") or datetime.now(timezone.utc).strftime("%d %b %Y, %I:%M %p UTC")
+        inv_id = kwargs.get("invoice_id") or f"FAIL-TR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{abs(hash(order_id or payment_id or str(amt))) % 100000:05d}"
+        cust_email = kwargs.get("recipient_email") or kwargs.get("user_email") or kwargs.get("email") or ""
+        cust_phone = kwargs.get("phone_number") or kwargs.get("phone") or ""
+        cust_uid = kwargs.get("user_id") or kwargs.get("uid") or ""
+        method = kwargs.get("payment_method") or kwargs.get("payment_gateway") or "Online Payment"
+        payment_type = kwargs.get("payment_type") or "TicketRadar Service"
+
+        alert_banner = f"""
+        <div style="margin: 0 0 24px 0; padding: 16px 18px; background-color: #fff7ed; border: 1px solid #fdba74; border-left: 5px solid #ea580c; border-radius: 8px;">
+          <div style="font-size: 13px; font-weight: 700; color: #9a3412; margin-bottom: 6px;">
+            ⚠️ Was money deducted from your bank account?
+          </div>
+          <p style="margin: 0; font-size: 12px; color: #7c2d12; line-height: 1.6;">
+            If any amount was debited from your bank account, card, or UPI wallet during this attempt, <strong>please do not worry</strong>. Your payment was not received by TicketRadar, and <strong>your money will be automatically refunded by your bank or payment provider to your original payment source within 3 to 5 business days</strong>.
+          </p>
+          <p style="margin: 6px 0 0 0; font-size: 11px; color: #9a3412;">
+            Failure reason: <span style="font-weight: 600;">{html.escape(reason_text)}</span>. No manual claim is needed. If your refund is not credited after 5 business days, please email <a href="mailto:darkglance.developer@gmail.com" style="color: #ea580c; font-weight: 600; text-decoration: underline;">darkglance.developer@gmail.com</a> with Order ID <strong>#{html.escape(order_id)}</strong>.
+          </p>
         </div>
-        <p style="font-size: 13px; color: #d1d5db;">No funds have been deducted from your bank account or payment method. You can retry the top-up or job creation from your dashboard at any time.</p>
         """
 
-        full_html = cls._base_html(
-            title="❌ Payment Failed",
-            subtitle=f"Order #{order_id}",
-            body_html=body_html,
-            header_gradient="linear-gradient(135deg, #ef4444, #b91c1c)"
+        items = [
+            {
+                "desc": f"<strong>Payment Attempt Unsuccessful - {html.escape(payment_type)}</strong><br><span style='color: #ef4444; font-size: 11px;'>Status: {html.escape(reason_text)}</span>",
+                "qty": "1",
+                "rate": f"₹{amt:.2f}",
+                "amount": f"₹{amt:.2f}",
+            }
+        ]
+
+        terms_notes = [
+            "This document confirms an unsuccessful payment attempt on TicketRadar.",
+            "TicketRadar has not claimed or captured any funds from this attempt.",
+            "If funds were deducted by your bank, they will reverse automatically to your source account within 3-5 business days.",
+            "You may safely retry the payment from your TicketRadar dashboard at any time."
+        ]
+
+        full_html = cls._render_invoice_html(
+            doc_title="PAYMENT FAILED NOTICE",
+            status_label="● PAYMENT FAILED",
+            status_color="#dc2626",
+            status_bg="#fef2f2",
+            status_border="#fecaca",
+            accent_gradient="linear-gradient(90deg, #ef4444, #f97316)",
+            invoice_id=inv_id,
+            order_id=order_id or "N/A",
+            payment_id=payment_id or "N/A",
+            payment_method=method,
+            customer_name=user_name,
+            customer_email=cust_email,
+            customer_phone=cust_phone,
+            customer_id=cust_uid,
+            issue_date=now_str,
+            items=items,
+            subtotal_str=f"₹{amt:.2f}",
+            tax_str=None,
+            tax_label="",
+            total_label="Attempted Amount",
+            grand_total_str=f"₹{amt:.2f}",
+            grand_total_color="#dc2626",
+            terms_notes=terms_notes,
+            alert_banner_html=alert_banner,
         )
 
+        subject = f"Payment Unsuccessful: Order #{order_id} (Auto-refund notice)"
         text_body = (
-            f"Payment Failed!\n\n"
+            f"Payment Unsuccessful!\n\n"
             f"Hi {user_name},\n"
-            f"Your payment of ₹{amount_inr:.2f} (Order #{order_id}) could not be completed.\n"
-            f"Reason: {failure_reason}\n\n"
-            f"Please try again from your TicketRadar dashboard."
+            f"Your payment attempt of ₹{amt:.2f} (Order #{order_id}) was not successful.\n"
+            f"Reason: {reason_text}\n\n"
+            f"IMPORTANT: If money was deducted from your bank account, card, or UPI, please do not worry. It will be refunded automatically to your original payment source within 3 to 5 business days by your bank.\n\n"
+            f"No manual action is required. If your refund is not credited after 5 working days, please contact darkglance.developer@gmail.com with Order ID #{order_id}.\n"
+            f"Website: https://ticketradar.darkglance.in"
         )
 
         return {"subject": subject, "text_body": text_body, "html_body": full_html}
@@ -851,7 +906,12 @@ class EmailTemplates:
         <div style="margin: 18px 0; padding: 14px 16px; background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 6px; font-size: 13px; color: #f87171;">
           <strong>Error Details:</strong> {html.escape(reason)}
         </div>
+        <div style="margin: 18px 0; padding: 14px 16px; background-color: #fff7ed; border-left: 4px solid #ea580c; border-radius: 6px; font-size: 13px; color: #7c2d12; line-height: 1.6;">
+          <strong style="color: #9a3412;">⚠️ Was your bank account debited?</strong><br>
+          If any money was deducted from your bank account, card, or UPI wallet during this attempt, <strong>please do not worry</strong>. Your payment was not received by TicketRadar, and <strong>the debited amount will be automatically refunded by your bank to your original payment method within 3 to 5 business days</strong>.
+        </div>
         <p style="font-size: 13px; color: #9ca3af;">Order ID: <code style="color: #f3f4f6;">{html.escape(order_id)}</code></p>
+        <p style="font-size: 12px; color: #9ca3af;">If your refund does not reflect after 5 business days, please contact <a href="mailto:darkglance.developer@gmail.com" style="color: #38bdf8;">darkglance.developer@gmail.com</a>.</p>
         """
 
         full_html = cls._base_html(
@@ -864,8 +924,11 @@ class EmailTemplates:
         text_body = (
             f"Wallet Top-up Failed!\n\n"
             f"Hi {user_name},\n"
-            f"Top-up of ₹{amt:.2f} (Order #{order_id}) failed.\n"
-            f"Reason: {reason}\n"
+            f"Top-up of ₹{amt:.2f} (Order #{order_id}) could not be completed.\n"
+            f"Reason: {reason}\n\n"
+            f"IMPORTANT: If money was debited from your bank account or UPI, it will be refunded automatically to your original payment source within 3 to 5 business days by your bank.\n\n"
+            f"Support: darkglance.developer@gmail.com\n"
+            f"Website: https://ticketradar.darkglance.in"
         )
 
         return {"subject": subject, "text_body": text_body, "html_body": full_html}
