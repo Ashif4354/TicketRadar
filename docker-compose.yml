@@ -1,0 +1,31 @@
+# ==============================================================================
+# TicketRadar API - Docker Compose Configuration
+# Exposes FastAPI on 127.0.0.1:8000 for host-level Nginx reverse proxy
+# ==============================================================================
+
+services:
+  ticketradar-api:
+    build:
+      context: ./src/Backend
+      dockerfile: Dockerfile
+    image: ticketradar-api:latest
+    container_name: ticketradar-api
+    restart: unless-stopped
+    ports:
+      # Bound to localhost on the host so only Nginx (or local host) can reach it
+      - "127.0.0.1:8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - ./src/Backend/.env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"

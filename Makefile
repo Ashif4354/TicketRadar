@@ -1,6 +1,6 @@
 # Makefile for TicketRadar
 
-.PHONY: install build build-pyinstaller build-nuitka build-ui run ui clean deploy
+.PHONY: install build build-pyinstaller build-nuitka build-ui run ui clean deploy nginx-setup nginx-reload nginx-cert-renew
 
 # Default target
 all: run
@@ -36,6 +36,21 @@ build: build-nuitka
 # Deploy to FastAPI Cloud
 deploy:
 	cd src/Backend && uv run fastapi deploy
+
+# ── Nginx & SSL (Host Machine) ─────────────────────────────────────────────────
+
+# Install Nginx, configure reverse proxy for api.ticketradar.darkglance.in, and obtain Let's Encrypt SSL
+nginx-setup:
+	@chmod +x nginx/setup.sh
+	@bash nginx/setup.sh
+
+# Test and reload Nginx configuration
+nginx-reload:
+	@sudo nginx -t && sudo systemctl reload nginx
+
+# Test Let's Encrypt automated certificate renewal
+nginx-cert-renew:
+	@sudo certbot renew --dry-run
 
 # ── Dev ────────────────────────────────────────────────────────────────────────
 
