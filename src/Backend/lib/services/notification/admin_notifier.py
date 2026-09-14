@@ -20,6 +20,12 @@ async def send_admin_discord_embed(
     """
     Sends a formatted embed notification to ADMIN_DISCORD_WEBHOOK_URL.
     """
+    import os
+    env = (os.getenv("ENVIRONMENT") or (getattr(settings, "environment", "") if settings else "")).strip().lower()
+    if env == "test":
+        logger.debug("Test environment detected. Skipping admin Discord notification.")
+        return True, "Skipped in test environment."
+
     webhook_url = getattr(settings, "admin_discord_webhook_url", "") if settings else ""
     if not webhook_url or not webhook_url.strip():
         logger.debug("ADMIN_DISCORD_WEBHOOK_URL is not configured. Skipping admin notification.")

@@ -197,3 +197,80 @@ async def test_disable_approval_bypass(monkeypatch):
         assert res.status_code == 200
         assert res.json()["disable_approval"] is True
 
+
+@pytest.mark.asyncio
+async def test_disable_security_overrides_environment_to_development(monkeypatch):
+    """When DISABLE_SECURITY=true and ENVIRONMENT=production, ENVIRONMENT is forced to development."""
+    from lib.utils.config import settings
+    from lib.core.auth import get_environment
+
+    monkeypatch.setenv("DISABLE_SECURITY", "true")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    if settings:
+        monkeypatch.setattr(settings, "disable_security", True)
+        monkeypatch.setattr(settings, "environment", "production")
+
+    # get_environment should force 'development'
+    assert get_environment() == "development"
+
+
+@pytest.mark.asyncio
+async def test_production_enforces_app_check(monkeypatch):
+    """When ENVIRONMENT=production and DISABLE_SECURITY=false, verify_app_check raises 401 on missing header."""
+    from lib.utils.config import settings
+    from lib.core.auth import verify_app_check
+
+    monkeypatch.setenv("DISABLE_SECURITY", "false")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("DISABLE_APP_CHECK", "false")
+    if settings:
+        monkeypatch.setattr(settings, "disable_security", False)
+        monkeypatch.setattr(settings, "environment", "production")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await verify_app_check(x_firebase_appcheck=None)
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "App Check token is required."
+
+
+@pytest.mark.asyncio
+async def test_test_environment_skips_admin_notifications(monkeypatch):
+    """When ENVIRONMENT=test, admin Discord notifications are suppressed."""
+    from lib.services.notification.admin_notifier import send_admin_discord_embed
+
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    success, msg = await send_admin_discord_embed("Test Title", "Test Desc", 0x00FF00)
+    assert success is True
+    assert "Skipped in test environment" in msg
+
+
+@pytest.mark.asyncio
+async def test_api_config_reports_environment(monkeypatch):
+    """Verify /api/config returns active environment."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/config")
+        assert res.status_code == 200
+        data = res.json()
+        assert "environment" in data
+        assert data["environment"] == "test"
+
+
+@pytest.mark.asyncio
+async def test_test_environment_skips_admin_emails(monkeypatch):
+    """When ENVIRONMENT=test, admin and system email dispatch is suppressed."""
+    from lib.services.notification.user_mailer import send_admin_pricing_changed_email
+
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    success, msg = await send_admin_pricing_changed_email(
+        admin_email="admin@example.com",
+        admin_name="Admin",
+        old_prices=None,
+        new_prices=None,
+        note="Test pricing note"
+    )
+    assert success is True
+    assert "Skipped in test environment" in msg
+
+
+

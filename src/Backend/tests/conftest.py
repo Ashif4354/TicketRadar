@@ -9,7 +9,7 @@ if backend_dir not in sys.path:
 
 os.environ["DISABLE_SECURITY"] = "true"
 os.environ["DISABLE_PAYMENTS"] = "false"
-os.environ["ENVIRONMENT"] = "development"
+os.environ["ENVIRONMENT"] = "test"
 os.environ["NOTIFICATION_PROVIDER"] = "twilio"
 os.environ["PAYMENT_GATEWAY"] = "cashfree"
 os.environ["TWILIO_ACCOUNT_SID"] = "ACmockaccountsid0000000000000000"

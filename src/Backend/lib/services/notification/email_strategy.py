@@ -60,6 +60,11 @@ class EmailNotificationStrategy(NotificationStrategy, EmailTemplates):
         msg.attach(part_text)
         msg.attach(part_html)
 
+        import os
+        env = (os.getenv("ENVIRONMENT") or (getattr(settings, "environment", "") if settings else "")).strip().lower()
+        if env == "test":
+            return True, "Skipped in test environment."
+
         try:
             await aiosmtplib.send(
                 msg,

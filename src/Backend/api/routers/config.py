@@ -18,12 +18,13 @@ router = APIRouter(prefix="/api", tags=["Config"])
 async def get_config():
     """Retrieve application configuration and validation error status."""
     import os
-    from lib.core.auth import is_approval_disabled
+    from lib.core.auth import is_approval_disabled, get_environment
     disable_sec = is_security_disabled()
     disable_pay = os.getenv("DISABLE_PAYMENTS", "").lower() in ("true", "1") or (settings and getattr(settings, "disable_payments", False))
     disable_appr = is_approval_disabled()
     return {
         "config_error": config_error,
+        "environment": get_environment(),
         "smtp_server": settings.smtp_server if settings else None,
         "smtp_email": settings.smtp_email if settings else None,
         "default_check_interval": settings.default_check_interval if settings else 60,

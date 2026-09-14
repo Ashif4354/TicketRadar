@@ -30,3 +30,18 @@ export const isApprovalDisabled = (config?: AppConfig | null): boolean => {
   }
   return false;
 };
+
+export const getEnvironment = (config?: AppConfig | null): string => {
+  if (isSecurityDisabled(config)) {
+    return 'development';
+  }
+  const effectiveConfig = config !== undefined ? config : globalConfig;
+  if (effectiveConfig && effectiveConfig.environment) {
+    return effectiveConfig.environment.toLowerCase();
+  }
+  const viteEnv = import.meta.env.VITE_ENVIRONMENT || import.meta.env.ENVIRONMENT;
+  if (viteEnv) {
+    return viteEnv.toLowerCase();
+  }
+  return import.meta.env.DEV ? 'development' : 'production';
+};

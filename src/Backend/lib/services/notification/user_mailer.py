@@ -18,6 +18,12 @@ async def _send_rendered_email(to_email: str, template_name: str, **context: Any
     if not to_email or not to_email.strip():
         return False, "Recipient email is missing."
 
+    import os
+    env = (os.getenv("ENVIRONMENT") or (getattr(settings, "environment", "") if settings else "")).strip().lower()
+    if env == "test":
+        logger.debug(f"Test environment detected. Skipping email '{template_name}' to {to_email}.")
+        return True, "Skipped in test environment."
+
     if not settings or not getattr(settings, "smtp_email", None) or not getattr(settings, "smtp_password", None):
         logger.warning(f"SMTP is not configured. Skipping email '{template_name}' to {to_email}.")
         return False, "SMTP is not configured."

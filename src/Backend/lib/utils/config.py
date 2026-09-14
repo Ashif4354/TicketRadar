@@ -36,7 +36,18 @@ for loc in locations:
 if not ENV_FILE_PATH:
     ENV_FILE_PATH = os.path.join(BASE_DIR, ".env")
 
+# Populate os.environ from .env if present without overriding existing process environment
+if os.path.exists(ENV_FILE_PATH):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(ENV_FILE_PATH, override=False)
+    except ImportError:
+        pass
+
 class Settings(BaseSettings):
+    # Application Environment ('development', 'production', 'test')
+    environment: str = Field(default="development")
+
     # SMTP Configuration
     smtp_server: str = Field(default="smtp.gmail.com")
     smtp_port: int = Field(default=587)
@@ -122,6 +133,17 @@ class Settings(BaseSettings):
 try:
     settings = Settings()
     config_error = None
+
+    # Sync environment variable with settings if not already present
+    if "ENVIRONMENT" not in os.environ and settings.environment:
+        os.environ["ENVIRONMENT"] = settings.environment
+
+    # If DISABLE_SECURITY is True, override ENVIRONMENT to 'development' in code (unless running in 'test' mode)
+    if settings.disable_security or os.getenv("DISABLE_SECURITY", "").lower() in ("true", "1"):
+        current_env = (os.getenv("ENVIRONMENT") or settings.environment or "development").strip().lower()
+        if current_env != "test":
+            settings.environment = "development"
+            os.environ["ENVIRONMENT"] = "development"
 except Exception as e:
     settings = None
     config_error = str(e)

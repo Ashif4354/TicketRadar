@@ -79,13 +79,32 @@ def is_approval_disabled() -> bool:
     )
 
 
+def get_environment() -> str:
+    """
+    Returns the active environment ('development', 'production', 'test').
+    If security is globally disabled (DISABLE_SECURITY=true), automatically forces 'development'
+    unless running in 'test' mode.
+    """
+    if is_security_disabled():
+        current = (os.getenv("ENVIRONMENT") or (getattr(settings, "environment", None) if settings else "")).strip().lower()
+        if current == "test":
+            return "test"
+        return "development"
+
+    env = os.getenv("ENVIRONMENT")
+    if not env and settings:
+        env = getattr(settings, "environment", None)
+    return (env or "development").strip().lower()
+
+
 async def verify_app_check(x_firebase_appcheck: str = Header(None, alias="X-Firebase-AppCheck")):
     """Verifies the Firebase App Check token to ensure calls originate from the client app."""
     disable_security = (
         is_security_disabled() or
         os.getenv("DISABLE_APP_CHECK", "false").lower() in ("true", "1")
     )
-    is_dev = os.getenv("ENVIRONMENT", "development").lower() == "development"
+    env = get_environment()
+    is_dev = env in ("development", "test")
 
     if disable_security:
         logger.debug("Bypassing Firebase App Check as security is disabled.")
