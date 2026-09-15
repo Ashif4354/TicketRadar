@@ -74,7 +74,13 @@ ENVIRONMENT = settings.environment if settings else "development"
 # Initialize Atatus APM Agent if license key is provided in settings.
 # Note: Initialization should be done before "app = FastAPI()", and not in lifespan.
 atatus_client = None
-if settings and settings.atatus_license_key:
+has_atatus_license = bool(
+    settings
+    and getattr(settings, "atatus_license_key", None)
+    and str(settings.atatus_license_key).strip()
+)
+
+if has_atatus_license:
     try:
         import atatus
         from atatus.contrib.starlette import create_client
@@ -85,7 +91,7 @@ if settings and settings.atatus_license_key:
 
             atatus_client = create_client({
                 "APP_NAME": app_name,
-                "LICENSE_KEY": settings.atatus_license_key,
+                "LICENSE_KEY": str(settings.atatus_license_key).strip(),
                 "APP_VERSION": APP_VERSION,
                 "ENVIRONMENT": ENVIRONMENT,
                 "TRACING": True,
@@ -97,7 +103,7 @@ if settings and settings.atatus_license_key:
             configure_logging(enable_atatus_file_correlation=True)
             logger.info("Atatus APM agent initialized successfully with file log correlation.")
     except Exception as e:
-        logger.error(f"Failed to initialize Atatus APM client: {e}")
+        logger.warning(f"Failed to initialize Atatus APM client; proceeding without Atatus: {e}")
         atatus_client = None
 else:
     logger.info("Atatus license key not provided in settings; Atatus instrumentation is disabled.")
@@ -156,8 +162,11 @@ app.add_middleware(
 # Add Atatus middleware
 # Note: Make sure to add Atatus middleware as the last middleware in your app
 if atatus_client is not None:
-    from atatus.contrib.starlette import Atatus
-    app.add_middleware(Atatus, client=atatus_client)
+    try:
+        from atatus.contrib.starlette import Atatus
+        app.add_middleware(Atatus, client=atatus_client)
+    except Exception as e:
+        logger.warning(f"Failed to add Atatus middleware; proceeding without Atatus: {e}")
 
 # Register API Routers
 app.include_router(config.router)

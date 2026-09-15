@@ -105,32 +105,24 @@ def configure_logging(enable_atatus_file_correlation: bool = False) -> None:
         root_logger.addHandler(console_handler)
 
     # Ensure console handler never has LoggingFilter attached
-    try:
-        from atatus.handlers.logging import LoggingFilter
-        for f in list(console_handler.filters):
-            if isinstance(f, LoggingFilter):
-                console_handler.removeFilter(f)
-    except Exception:
-        pass
+    for f in list(console_handler.filters):
+        if getattr(f, "__class__", None) and f.__class__.__name__ == "LoggingFilter":
+            console_handler.removeFilter(f)
 
     # 2. Configure File Handler in src/Backend/logs/ directory
     if enable_atatus_file_correlation:
         try:
             from atatus.handlers.logging import Formatter as AtatusFormatter, LoggingFilter
             fh = get_file_handler(AtatusFormatter(LOG_FORMAT))
-            if not any(isinstance(f, LoggingFilter) for f in fh.filters):
+            if not any(getattr(f, "__class__", None) and f.__class__.__name__ == "LoggingFilter" for f in fh.filters):
                 fh.addFilter(LoggingFilter())
         except Exception:
             fh = get_file_handler(logging.Formatter(LOG_FORMAT))
     else:
         fh = get_file_handler(logging.Formatter(LOG_FORMAT))
-        try:
-            from atatus.handlers.logging import LoggingFilter
-            for f in list(fh.filters):
-                if isinstance(f, LoggingFilter):
-                    fh.removeFilter(f)
-        except Exception:
-            pass
+        for f in list(fh.filters):
+            if getattr(f, "__class__", None) and f.__class__.__name__ == "LoggingFilter":
+                fh.removeFilter(f)
 
     if fh not in root_logger.handlers:
         root_logger.addHandler(fh)

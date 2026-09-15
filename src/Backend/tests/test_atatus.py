@@ -236,4 +236,44 @@ def test_gcp_filter_captures_atatus_trace_context():
     assert record.json_fields["transaction_id"] == "test-atatus-tx-789"
 
 
+def test_atatus_disabled_with_whitespace_or_empty_key(monkeypatch):
+    """When ATATUS_LICENSE_KEY is whitespace or empty, no Atatus feature is activated."""
+    monkeypatch.setenv("ATATUS_LICENSE_KEY", "   ")
+    from lib.utils import config
+    if config.settings:
+        monkeypatch.setattr(config.settings, "atatus_license_key", "   ")
+
+    if "main" in sys.modules:
+        del sys.modules["main"]
+    import main
+
+    assert main.atatus_client is None
+    middleware_types = [m.cls.__name__ for m in main.app.user_middleware]
+    assert "Atatus" not in middleware_types
+    client = TestClient(main.app)
+    assert client.get("/health").status_code == 200
+
+
+def test_atatus_initialization_failure_does_not_break_app(monkeypatch):
+    """If Atatus raises an exception during initialization, the app starts cleanly without breaking."""
+    monkeypatch.setenv("ATATUS_LICENSE_KEY", "dummy_key")
+    from lib.utils import config
+    if config.settings:
+        monkeypatch.setattr(config.settings, "atatus_license_key", "dummy_key")
+
+    import sys
+    monkeypatch.setitem(sys.modules, "atatus", None)
+
+    if "main" in sys.modules:
+        del sys.modules["main"]
+    import main
+
+    assert main.atatus_client is None
+    middleware_types = [m.cls.__name__ for m in main.app.user_middleware]
+    assert "Atatus" not in middleware_types
+    client = TestClient(main.app)
+    assert client.get("/health").status_code == 200
+
+
+
     
