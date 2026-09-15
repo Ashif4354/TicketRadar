@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from lib.utils.config import settings, config_error
 from lib.core.auth import get_authorized_user, is_security_disabled
 from lib.services.notification.factory import NotificationStrategyFactory
+from lib.services.pricing import PricingService
 from lib.services.gcp_logger import gcp_logger
 from api.schemas import TestAlertRequest
 from api.dependencies import verify_recaptcha
@@ -45,40 +46,65 @@ async def test_notification(payload: TestAlertRequest, claims: dict = Depends(ge
     if not target:
         raise HTTPException(status_code=400, detail="Target recipient/URL/phone is required.")
 
+    if "email" in medium:
+        notif_type = "email"
+    elif "discord" in medium:
+        notif_type = "discord"
+    elif "sms" in medium:
+        notif_type = "sms"
+    elif "whatsapp" in medium:
+        notif_type = "whatsapp"
+    elif "call" in medium or "phone" in medium:
+        notif_type = "phone_call"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported notification medium: {payload.medium}")
+
+    # Validate that test notifications are only allowed for mediums defined as free (0 Rs) by the admin
+    price_paise, _ = PricingService.get_price_for_medium(notif_type)
+    if price_paise > 0:
+        gcp_logger.log_event(
+            "Test Notification Blocked",
+            user_id=claims.get("uid"),
+            details={
+                "medium": payload.medium,
+                "notif_type": notif_type,
+                "price_paise": price_paise,
+                "reason": "Medium is not defined free (0 Rs) by admin",
+            },
+            level="WARNING",
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Test notifications are only allowed for free mediums (₹0) defined by the administrator. '{payload.medium}' is currently configured as a paid medium (₹{price_paise / 100:.2f}).",
+        )
+
     # Verify reCAPTCHA token
     await verify_recaptcha(payload.recaptcha_token)
 
     from lib.utils.phone import normalize_indian_phone
 
-    if "email" in medium:
+    if notif_type == "email":
         config = {"recipient_email": target}
-        notif_type = "email"
-    elif "discord" in medium:
+    elif notif_type == "discord":
         config = {"webhook_url": target}
-        notif_type = "discord"
-    elif "sms" in medium:
+    elif notif_type == "sms":
         try:
             norm_phone = normalize_indian_phone(target)
         except ValueError as ve:
             raise HTTPException(status_code=400, detail=str(ve))
         config = {"phone_number": norm_phone}
-        notif_type = "sms"
-    elif "whatsapp" in medium:
+    elif notif_type == "whatsapp":
         try:
             norm_phone = normalize_indian_phone(target)
         except ValueError as ve:
             raise HTTPException(status_code=400, detail=str(ve))
         config = {"phone_number": norm_phone}
-        notif_type = "whatsapp"
-    elif "call" in medium or "phone" in medium:
+    elif notif_type == "phone_call":
         try:
             norm_phone = normalize_indian_phone(target)
         except ValueError as ve:
             raise HTTPException(status_code=400, detail=str(ve))
         config = {"phone_number": norm_phone}
-        notif_type = "phone_call"
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported notification medium: {payload.medium}")
 
     try:
         notifier = NotificationStrategyFactory.create_strategy(notif_type, config)

@@ -420,4 +420,116 @@ async def test_admin_notifier_uses_discord_embed(monkeypatch):
         mock_send.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_test_notification_rejects_paid_mediums_by_default(async_client):
+    # SMS (default ₹0.50)
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "sms",
+        "target": "9876543210"
+    })
+    assert res.status_code == 400
+    assert "only allowed for free mediums" in res.json()["detail"]
+    assert "paid medium" in res.json()["detail"]
+
+    # WhatsApp (default ₹1.00)
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "whatsapp",
+        "target": "9876543210"
+    })
+    assert res.status_code == 400
+    assert "only allowed for free mediums" in res.json()["detail"]
+
+    # Phone Call (default ₹1.50)
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "phone_call",
+        "target": "9876543210"
+    })
+    assert res.status_code == 400
+    assert "only allowed for free mediums" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_test_notification_allows_free_mediums(async_client, monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock
+    from lib.services.notification.factory import NotificationStrategyFactory
+
+    mock_notifier = MagicMock()
+    mock_notifier.send_notification = AsyncMock(return_value=(True, "Dispatched test email"))
+    monkeypatch.setattr(NotificationStrategyFactory, "create_strategy", lambda notif_type, config: mock_notifier)
+
+    # Email (free ₹0)
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "email",
+        "target": "user@example.com"
+    })
+    assert res.status_code == 200
+    assert res.json()["success"] is True
+
+    # Discord (free ₹0)
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "discord",
+        "target": "https://discord.com/api/webhooks/123/xyz"
+    })
+    assert res.status_code == 200
+    assert res.json()["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_test_notification_dynamic_admin_pricing_changes(async_client, monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock
+    from lib.services.pricing import PricingService
+    from lib.services.notification.factory import NotificationStrategyFactory
+
+    mock_notifier = MagicMock()
+    mock_notifier.send_notification = AsyncMock(return_value=(True, "Dispatched test alert"))
+    monkeypatch.setattr(NotificationStrategyFactory, "create_strategy", lambda notif_type, config: mock_notifier)
+
+    # Admin makes SMS free (0 paise) and Email paid (50 paise)
+    PricingService.update_prices(
+        admin_uid="test-admin-uid-999",
+        admin_email="admin@example.com",
+        sms_paise=0,
+        whatsapp_paise=100,
+        phone_call_paise=150,
+        email_paise=50,
+        discord_paise=0,
+        note="Admin testing free SMS and paid Email policy"
+    )
+
+    # SMS is now free: should succeed
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "sms",
+        "target": "9876543210"
+    })
+    assert res.status_code == 200
+    assert res.json()["success"] is True
+
+    # Email is now paid: must be rejected
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "email",
+        "target": "user@example.com"
+    })
+    assert res.status_code == 400
+    assert "only allowed for free mediums" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_test_notification_validation_errors(async_client):
+    # Empty target
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "email",
+        "target": "   "
+    })
+    assert res.status_code == 400
+    assert "Target recipient/URL/phone is required" in res.json()["detail"]
+
+    # Unsupported medium
+    res = await async_client.post("/api/test-notification", json={
+        "medium": "telepathy",
+        "target": "user@example.com"
+    })
+    assert res.status_code == 400
+    assert "Unsupported notification medium" in res.json()["detail"]
+
+
 

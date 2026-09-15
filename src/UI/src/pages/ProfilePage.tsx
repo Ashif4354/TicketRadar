@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { authenticatedFetch } from '../utils/api';
 import { isPaymentsDisabled } from '../utils/payments';
 import { isSecurityDisabled } from '../utils/security';
-import type { UserProfileData, WalletBalance, WalletTransaction, AppConfig } from '../types';
+import type { UserProfileData, WalletBalance, WalletTransaction, AppConfig, PricingConfig } from '../types';
 
 interface ProfilePageProps {
   config?: AppConfig | null;
@@ -47,6 +47,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
 
   // Test Alert State
   const [testingMedium, setTestingMedium] = useState<string | null>(null);
+  const [prices, setPrices] = useState<PricingConfig | null>(null);
 
   const effectiveConfig = config || appConfig;
   const securityDisabled = isSecurityDisabled(effectiveConfig);
@@ -103,6 +104,19 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
       } else {
         setWallet(null);
         setTransactions([]);
+      }
+
+      // 4. Fetch notification pricing configuration
+      try {
+        const pRes = await authenticatedFetch('/api/payments/prices');
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          if (pData && !pData.detail) {
+            setPrices(pData);
+          }
+        }
+      } catch (pErr) {
+        console.error('Failed to load prices in profile:', pErr);
       }
     } catch (err: any) {
       setError(err?.message || 'Error loading profile data');
@@ -193,6 +207,28 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
     }
   };
 
+  const getMediumPricePaise = (mediumName: string): number => {
+    const m = mediumName.trim().toLowerCase();
+    if (!prices) {
+      if (m.includes('email')) return 0;
+      if (m.includes('discord')) return 0;
+      if (m.includes('sms')) return 50;
+      if (m.includes('whatsapp')) return 100;
+      if (m.includes('call') || m.includes('phone')) return 150;
+      return 0;
+    }
+    if (m.includes('sms')) return prices.sms_paise ?? 50;
+    if (m.includes('whatsapp')) return prices.whatsapp_paise ?? 100;
+    if (m.includes('call') || m.includes('phone')) return prices.phone_call_paise ?? 150;
+    if (m.includes('email')) return prices.email_paise ?? 0;
+    if (m.includes('discord')) return prices.discord_paise ?? 0;
+    return 0;
+  };
+
+  const isMediumFree = (mediumName: string): boolean => {
+    return getMediumPricePaise(mediumName) === 0;
+  };
+
   const getTestAlertTarget = (medium: string) => {
     if (medium === 'Email') return emailInput.trim() || profile?.email || '';
     if (medium === 'Discord') return discordInput.trim() || profile?.discord_webhook_url || '';
@@ -202,6 +238,10 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
   const handleOpenTestAlert = (medium: string) => {
     setError(null);
     setSuccessMsg(null);
+    if (!isMediumFree(medium)) {
+      setError(`Test notifications are only supported for free mediums (₹0) defined by the administrator.`);
+      return;
+    }
     setTestAlertDialog({ open: true, medium });
   };
 
@@ -209,6 +249,11 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
     const medium = testAlertDialog.medium;
     setError(null);
     setSuccessMsg(null);
+
+    if (!isMediumFree(medium)) {
+      setError(`Test notifications are only supported for free mediums (₹0) defined by the administrator.`);
+      return;
+    }
 
     let token = "";
     if (!securityDisabled) {
@@ -513,16 +558,22 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                   </Button>
                 </div>
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={testingMedium === 'Email'}
-                  onClick={() => handleOpenTestAlert('Email')}
-                  className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
-                >
-                  <Send className="h-3 w-3" />
-                  {testingMedium === 'Email' ? 'Sending...' : 'Test Alert'}
-                </Button>
+                {isMediumFree('Email') ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={testingMedium === 'Email'}
+                    onClick={() => handleOpenTestAlert('Email')}
+                    className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Send className="h-3 w-3" />
+                    {testingMedium === 'Email' ? 'Sending...' : 'Test Alert'}
+                  </Button>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground italic">
+                    Paid medium (₹{(getMediumPricePaise('Email') / 100).toFixed(2)}) — test alerts unavailable
+                  </span>
+                )}
               </div>
             </div>
           </Card>
@@ -594,16 +645,22 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                   </Button>
                 </div>
                 {discordInput.trim() && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={testingMedium === 'Discord'}
-                    onClick={() => handleOpenTestAlert('Discord')}
-                    className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
-                  >
-                    <Send className="h-3 w-3" />
-                    {testingMedium === 'Discord' ? 'Sending...' : 'Test Alert'}
-                  </Button>
+                  isMediumFree('Discord') ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={testingMedium === 'Discord'}
+                      onClick={() => handleOpenTestAlert('Discord')}
+                      className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Send className="h-3 w-3" />
+                      {testingMedium === 'Discord' ? 'Sending...' : 'Test Alert'}
+                    </Button>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic">
+                      Paid medium (₹{(getMediumPricePaise('Discord') / 100).toFixed(2)}) — test alerts unavailable
+                    </span>
+                  )
                 )}
               </div>
             </div>
@@ -646,16 +703,22 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                   {profile?.consents.sms_consented ? 'Revoke Consent' : 'Opt-In to SMS'}
                 </Button>
                 {profile?.phone_number && profile?.consents.sms_consented && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={testingMedium === 'SMS'}
-                    onClick={() => handleOpenTestAlert('SMS')}
-                    className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
-                  >
-                    <Send className="h-3 w-3" />
-                    {testingMedium === 'SMS' ? 'Sending...' : 'Test'}
-                  </Button>
+                  isMediumFree('SMS') ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={testingMedium === 'SMS'}
+                      onClick={() => handleOpenTestAlert('SMS')}
+                      className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Send className="h-3 w-3" />
+                      {testingMedium === 'SMS' ? 'Sending...' : 'Test'}
+                    </Button>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic">
+                      Paid medium (₹{(getMediumPricePaise('SMS') / 100).toFixed(2)}) — test alerts unavailable
+                    </span>
+                  )
                 )}
               </div>
             </div>
@@ -698,16 +761,22 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                   {profile?.consents.whatsapp_consented ? 'Revoke Consent' : 'Opt-In to WhatsApp'}
                 </Button>
                 {profile?.phone_number && profile?.consents.whatsapp_consented && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={testingMedium === 'WhatsApp'}
-                    onClick={() => handleOpenTestAlert('WhatsApp')}
-                    className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
-                  >
-                    <Send className="h-3 w-3" />
-                    {testingMedium === 'WhatsApp' ? 'Sending...' : 'Test'}
-                  </Button>
+                  isMediumFree('WhatsApp') ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={testingMedium === 'WhatsApp'}
+                      onClick={() => handleOpenTestAlert('WhatsApp')}
+                      className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Send className="h-3 w-3" />
+                      {testingMedium === 'WhatsApp' ? 'Sending...' : 'Test'}
+                    </Button>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic">
+                      Paid medium (₹{(getMediumPricePaise('WhatsApp') / 100).toFixed(2)}) — test alerts unavailable
+                    </span>
+                  )
                 )}
               </div>
             </div>
@@ -750,16 +819,22 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
                   {profile?.consents.call_consented ? 'Revoke Consent' : 'Opt-In to Calls'}
                 </Button>
                 {profile?.phone_number && profile?.consents.call_consented && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={testingMedium === 'Phone Call'}
-                    onClick={() => handleOpenTestAlert('Phone Call')}
-                    className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
-                  >
-                    <Send className="h-3 w-3" />
-                    {testingMedium === 'Phone Call' ? 'Calling...' : 'Test Call'}
-                  </Button>
+                  isMediumFree('Phone Call') ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={testingMedium === 'Phone Call'}
+                      onClick={() => handleOpenTestAlert('Phone Call')}
+                      className="h-7 text-[11px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Send className="h-3 w-3" />
+                      {testingMedium === 'Phone Call' ? 'Calling...' : 'Test Call'}
+                    </Button>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic">
+                      Paid medium (₹{(getMediumPricePaise('Phone Call') / 100).toFixed(2)}) — test alerts unavailable
+                    </span>
+                  )
                 )}
               </div>
             </div>
@@ -1012,6 +1087,13 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
               </div>
             )}
 
+            {!isMediumFree(testAlertDialog.medium) && (
+              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>Test notifications are only supported for free mediums (₹0) defined by the administrator.</span>
+              </div>
+            )}
+
             {!securityDisabled && (
               <div className="flex justify-center py-2">
                 <div className="g-recaptcha-premium-container">
@@ -1038,7 +1120,7 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
               </Button>
               <Button
                 onClick={executeSendTestAlert}
-                disabled={!getTestAlertTarget(testAlertDialog.medium) || !!testingMedium}
+                disabled={!getTestAlertTarget(testAlertDialog.medium) || !isMediumFree(testAlertDialog.medium) || !!testingMedium}
                 className="h-9 px-5 text-xs font-semibold bg-rose-500 hover:bg-rose-600 text-white cursor-pointer flex items-center gap-1.5"
               >
                 {testingMedium ? (
