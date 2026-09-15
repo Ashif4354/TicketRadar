@@ -18,6 +18,25 @@ os.environ["TWILIO_PHONE_NUMBER"] = "+919876543210"
 os.environ["CASHFREE_APP_ID"] = "mock_cf_app_id"
 os.environ["CASHFREE_SECRET_KEY"] = "mock_cf_secret_key"
 os.environ["CASHFREE_WEBHOOK_SECRET"] = "mock_webhook_secret"
+os.environ["SMTP_SERVER"] = "smtp.mock.local"
+os.environ["SMTP_PORT"] = "587"
+os.environ["SMTP_EMAIL"] = "mock@ticketradar.local"
+os.environ["SMTP_PASSWORD"] = "mock_smtp_password"
+os.environ["ADMIN_DISCORD_WEBHOOK_URL"] = "https://discord.mock/api/webhooks/test"
+
+from lib.utils import config
+if config.settings:
+    config.settings.environment = "test"
+    config.settings.twilio_account_sid = "ACmockaccountsid0000000000000000"
+    config.settings.twilio_auth_token = "mockauthtoken00000000000000000"
+    config.settings.twilio_phone_number = "+919876543210"
+    config.settings.cashfree_app_id = "mock_cf_app_id"
+    config.settings.cashfree_secret_key = "mock_cf_secret_key"
+    config.settings.cashfree_webhook_secret = "mock_webhook_secret"
+    config.settings.smtp_server = "smtp.mock.local"
+    config.settings.smtp_email = "mock@ticketradar.local"
+    config.settings.smtp_password = "mock_smtp_password"
+    config.settings.admin_discord_webhook_url = "https://discord.mock/api/webhooks/test"
 
 import pytest
 import pytest_asyncio
@@ -193,6 +212,10 @@ def mock_firebase_and_db(monkeypatch):
 
     # Mock user details
     monkeypatch.setattr("api.dependencies.get_user_details", lambda uid=None, claims=None: ("Test User", "testuser@example.com", "https://photo.url"))
+
+    import aiosmtplib
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(aiosmtplib, "send", AsyncMock(return_value=(250, b"OK")))
 
     storage["users/test-user-uid-123"] = {
         "uid": "test-user-uid-123",

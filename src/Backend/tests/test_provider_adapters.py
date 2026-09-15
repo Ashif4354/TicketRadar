@@ -103,3 +103,57 @@ def test_twilio_adapter_validate_signature_invalid():
     headers = {"X-Twilio-Signature": "invalid_signature"}
     assert adapter.validate_incoming_webhook(body, headers, url) is False
 
+
+@pytest.mark.asyncio
+async def test_twilio_adapter_test_environment_no_network_calls():
+    adapter = TwilioProviderAdapter(
+        account_sid="ACmockaccountsid0000000000000000",
+        auth_token="mockauthtoken00000000000000000",
+        from_number="+919876543210"
+    )
+
+    sms_res = await adapter.send_sms("+919876543210", "Hello", idempotency_key="sms_test_1")
+    assert sms_res.success is True
+    assert "SM_mock_sms_test_1" in sms_res.provider_id
+
+    wa_res = await adapter.send_whatsapp_template("+919876543210", "HX123", {"1": "Movie"}, idempotency_key="wa_test_1")
+    assert wa_res.success is True
+    assert "WA_mock_wa_test_1" in wa_res.provider_id
+
+    call_res = await adapter.initiate_call("+919876543210", "http://twiml", "http://status", idempotency_key="call_test_1")
+    assert call_res.success is True
+    assert "CA_mock_call_test_1" in call_res.call_id
+
+
+@pytest.mark.asyncio
+async def test_cashfree_gateway_test_environment_no_network_calls():
+    gateway = CashfreePaymentGateway(
+        app_id="mock_app_id",
+        secret_key="mock_secret",
+        webhook_secret="mock_webhook_secret",
+        environment="sandbox"
+    )
+
+    order_res = await gateway.create_order(
+        amount_paise=1000,
+        idempotency_key="order_test_1",
+        customer_uid="user1",
+        customer_email="user@test.com",
+        metadata={}
+    )
+    assert order_res.order_id == "order_test_1"
+    assert "mock_session_order_test_1" in order_res.session_token
+
+    from lib.providers.payment.base import OrderStatus
+    status = await gateway.get_order_status("order_test_1")
+    assert status == OrderStatus.SUCCESS
+
+    refund_res = await gateway.create_refund(
+        order_id="order_test_1",
+        amount_paise=1000,
+        refund_id="refund_test_1",
+        reason="Test refund"
+    )
+    assert refund_res.success is True
+    assert "cf_ref_mock_refund_test_1" in refund_res.provider_refund_id
+
