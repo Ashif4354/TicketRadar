@@ -194,4 +194,11 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     is_frozen = getattr(sys, "frozen", False) or "__compiled__" in globals()
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=not is_frozen, log_config=None)
+    uvicorn.run(
+        "main:app",
+        host="127.0.0.1",
+        port=8000,
+        reload=not is_frozen,
+        reload_excludes=["*.log", "logs/*", ".venv/*", ".pytest_cache/*"],
+        log_config=None,
+    )

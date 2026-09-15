@@ -156,6 +156,9 @@ def configure_logging(enable_atatus_file_correlation: bool = False) -> None:
     uvicorn_access.handlers.clear()
     uvicorn_access.propagate = False
 
+    # 6. Silence watchfiles change detection logs to prevent feedback loops with file logging
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
+
 
 def setup_logger(name: str = "ticketradar") -> logging.Logger:
     """Sets up an application logger that propagates to the root logger without duplicate handlers."""
