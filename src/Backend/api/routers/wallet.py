@@ -8,6 +8,7 @@ from google.cloud import firestore
 from lib.core.auth import get_authorized_user, db
 from lib.utils.config import settings
 from lib.services.wallet import WalletService
+from lib.services.gcp_logger import gcp_logger
 from lib.providers.payment.factory import PaymentGatewayFactory
 from api.dependencies import require_payments_enabled, get_user_details, require_terms_accepted
 from api.schemas import WalletTopupRequest
@@ -102,6 +103,18 @@ async def initiate_topup(
                 "gateway_session_id": order_res.session_token,
                 "checkout_url": order_res.checkout_url,
             })
+
+        gcp_logger.log_event(
+            "Wallet Topup Initiated",
+            user_id=uid,
+            details={
+                "payment_id": payment_id,
+                "order_id": order_res.order_id,
+                "amount_paise": amount_paise,
+                "amount_inr": round(amount_paise / 100.0, 2),
+                "gateway": active_gw,
+            }
+        )
 
         return {
             "payment_id": payment_id,

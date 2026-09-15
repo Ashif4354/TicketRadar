@@ -199,7 +199,7 @@ class GCPLoggingService:
                 logger.error(f"Failed to write struct log to GCP Cloud Logging: {e}")
 
         # Local fallback log string for stdout console
-        log_msg = f"[GCP LOG EVENT] [{action}] user_id={payload['user_id']} details={event_details}"
+        log_msg = f"[{action}] user_id={payload['user_id']} details={event_details}"
         if level.upper() == "ERROR" or level.upper() == "CRITICAL":
             logger.error(log_msg)
         elif level.upper() == "WARNING":

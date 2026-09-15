@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from google.cloud import firestore
 
 from lib.core.auth import get_authorized_user, db
+from lib.services.gcp_logger import gcp_logger
 from lib.utils.phone import normalize_indian_phone
 from api.schemas import OptInRequest
 from api.dependencies import verify_recaptcha
@@ -87,6 +88,11 @@ async def opt_in_medium(
         db.collection("notification_preferences").document(uid).set(pref_update, merge=True)
 
     logger.info(f"User {uid} opted in to {pref_key}.")
+    gcp_logger.log_event(
+        "Consent Opted In",
+        user_id=uid,
+        details={"medium": pref_key}
+    )
     return {"success": True, "message": f"Successfully opted in to {pref_key} alerts."}
 
 
@@ -127,4 +133,9 @@ async def opt_out_medium(
         }, merge=True)
 
     logger.info(f"User {uid} opted out of {pref_key}.")
+    gcp_logger.log_event(
+        "Consent Opted Out",
+        user_id=uid,
+        details={"medium": pref_key}
+    )
     return {"success": True, "message": f"Successfully opted out of {pref_key} alerts."}

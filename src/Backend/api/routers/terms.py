@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 
 from lib.core.auth import get_authorized_user
 from lib.services.terms import TermsService
+from lib.services.gcp_logger import gcp_logger
 from api.schemas import AcceptTermsRequest
 
 logger = logging.getLogger("ticketradar.api.terms")
@@ -39,6 +40,12 @@ async def accept_terms(
     success = TermsService.accept_terms(uid, payload.version)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to record terms acceptance.")
+
+    gcp_logger.log_event(
+        "Terms Accepted",
+        user_id=uid,
+        details={"version": payload.version}
+    )
 
     return {
         "success": True,

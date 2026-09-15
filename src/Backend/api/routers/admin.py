@@ -517,6 +517,19 @@ async def admin_update_pricing(
                 new_config,
                 payload.note
             )
+        gcp_logger.log_event(
+            "Pricing Updated",
+            user_id=admin_claims.get("uid"),
+            details={
+                "admin_email": admin_email,
+                "sms_paise": payload.sms_paise,
+                "whatsapp_paise": payload.whatsapp_paise,
+                "phone_call_paise": payload.phone_call_paise,
+                "email_paise": payload.email_paise,
+                "discord_paise": payload.discord_paise,
+                "note": payload.note
+            }
+        )
         return {"success": True, "config": new_config}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -613,6 +626,20 @@ async def admin_adjust_wallet(
                 "created_at": google_firestore.SERVER_TIMESTAMP,
             })
 
+        gcp_logger.log_event(
+            "Admin Wallet Adjusted",
+            user_id=admin_uid,
+            details={
+                "admin_email": admin_email,
+                "target_uid": uid,
+                "direction": direction,
+                "amount_paise": amount_paise,
+                "amount_inr": round(amount_paise / 100.0, 2),
+                "reason": reason,
+                "txn_id": txn.get("id") if isinstance(txn, dict) else None,
+            }
+        )
+
         return {"success": True, "transaction": txn}
     except Exception as e:
         logger.error(f"Admin wallet adjustment failed for {uid}: {e}")
@@ -680,6 +707,21 @@ async def admin_gateway_refund(
                 },
                 "created_at": google_firestore.SERVER_TIMESTAMP,
             })
+
+        gcp_logger.log_event(
+            "Admin Gateway Refund Initiated",
+            user_id=admin_uid,
+            details={
+                "admin_email": admin_email,
+                "order_id": payload.order_id,
+                "refund_id": refund_id,
+                "gateway_refund_id": result.provider_refund_id,
+                "amount_paise": payload.amount_paise,
+                "amount_inr": round(payload.amount_paise / 100.0, 2),
+                "reason": payload.reason,
+                "job_id": payload.job_id,
+            }
+        )
 
         return {
             "success": True,

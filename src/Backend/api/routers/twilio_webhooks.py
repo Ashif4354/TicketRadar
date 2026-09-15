@@ -52,6 +52,7 @@ async def get_voice_twiml(job_id: str):
         '    <Pause length="1"/>\n'
         '</Response>'
     )
+    logger.info(f"Generated TwiML voice response for job {job_id} ({movie_name})")
     return Response(content=twiml, media_type="application/xml")
 
 @router.post("/call-status")

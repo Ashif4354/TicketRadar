@@ -8,6 +8,7 @@ from google.cloud import firestore
 from lib.core.auth import get_authorized_user, db
 from lib.utils.config import settings
 from lib.services.pricing import PricingService
+from lib.services.gcp_logger import gcp_logger
 from lib.providers.payment.factory import PaymentGatewayFactory
 from api.dependencies import require_payments_enabled, get_user_details, require_terms_accepted
 from api.schemas import CreateJobRequest
@@ -99,6 +100,19 @@ async def initiate_job_payment(
                 "gateway_session_id": order_res.session_token,
                 "checkout_url": order_res.checkout_url,
             })
+
+        gcp_logger.log_event(
+            "Job Payment Initiated",
+            user_id=uid,
+            details={
+                "payment_id": payment_id,
+                "order_id": order_res.order_id,
+                "amount_paise": price_paise,
+                "amount_inr": round(price_paise / 100.0, 2),
+                "notification_medium": payload.notification_medium,
+                "gateway": active_gw,
+            }
+        )
 
         return {
             "payment_id": payment_id,

@@ -7,6 +7,7 @@ from google.cloud import firestore
 from lib.core.auth import get_authorized_user, db
 from lib.services.wallet import WalletService
 from lib.services.terms import TermsService
+from lib.services.gcp_logger import gcp_logger
 from lib.utils.phone import normalize_indian_phone
 from lib.utils.config import settings
 from api.dependencies import get_user_details, verify_recaptcha
@@ -195,4 +196,14 @@ async def update_preferences(
     from datetime import datetime, timezone
     return_dict = {k: (None if v == firestore.DELETE_FIELD else v) for k, v in update_dict.items()}
     return_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    gcp_logger.log_event(
+        "Notification Preferences Updated",
+        user_id=uid,
+        details={
+            "updated_fields": [k for k in raw_data.keys() if k != "recaptcha_token"],
+            "preferred_medium": update_dict.get("preferred_medium"),
+        }
+    )
+
     return {"success": True, "preferences": return_dict}
