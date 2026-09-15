@@ -62,29 +62,38 @@ class TwilioProviderAdapter(NotificationProviderAdapter):
                 body=body,
             )
 
-        try:
-            msg = await asyncio.to_thread(_call_twilio)
-            logger.info(f"Twilio SMS dispatched. SID: {msg.sid}, to: {redact_phone(to)}")
-            return ProviderMessageResult(
-                success=True,
-                provider_id=msg.sid,
-            )
-        except TwilioRestException as tre:
-            logger.error(f"Twilio SMS Rest error: code={tre.code}, msg={tre.msg}, to={redact_phone(to)}")
-            return ProviderMessageResult(
-                success=False,
-                provider_id="",
-                error_code=str(tre.code),
-                error_message=str(tre.msg),
-            )
-        except Exception as e:
-            logger.error(f"Twilio SMS general error: {e}, to={redact_phone(to)}")
-            return ProviderMessageResult(
-                success=False,
-                provider_id="",
-                error_code="TWILIO_SEND_ERROR",
-                error_message=str(e),
-            )
+        from ...utils.apm import async_capture_span
+
+        async with async_capture_span("twilio.send_sms", span_type="notification.sms") as span:
+            try:
+                msg = await asyncio.to_thread(_call_twilio)
+                logger.info(f"Twilio SMS dispatched. SID: {msg.sid}, to: {redact_phone(to)}")
+                if span:
+                    span.set_success()
+                return ProviderMessageResult(
+                    success=True,
+                    provider_id=msg.sid,
+                )
+            except TwilioRestException as tre:
+                logger.error(f"Twilio SMS Rest error: code={tre.code}, msg={tre.msg}, to={redact_phone(to)}")
+                if span:
+                    span.set_failure()
+                return ProviderMessageResult(
+                    success=False,
+                    provider_id="",
+                    error_code=str(tre.code),
+                    error_message=str(tre.msg),
+                )
+            except Exception as e:
+                logger.error(f"Twilio SMS general error: {e}, to={redact_phone(to)}")
+                if span:
+                    span.set_failure()
+                return ProviderMessageResult(
+                    success=False,
+                    provider_id="",
+                    error_code="TWILIO_SEND_ERROR",
+                    error_message=str(e),
+                )
 
     async def send_whatsapp_template(
         self,
@@ -124,29 +133,38 @@ class TwilioProviderAdapter(NotificationProviderAdapter):
                     body=body,
                 )
 
-        try:
-            msg = await asyncio.to_thread(_call_twilio)
-            logger.info(f"Twilio WhatsApp dispatched. SID: {msg.sid}, to: {redact_phone(to)}")
-            return ProviderMessageResult(
-                success=True,
-                provider_id=msg.sid,
-            )
-        except TwilioRestException as tre:
-            logger.error(f"Twilio WhatsApp Rest error: code={tre.code}, msg={tre.msg}, to={redact_phone(to)}")
-            return ProviderMessageResult(
-                success=False,
-                provider_id="",
-                error_code=str(tre.code),
-                error_message=str(tre.msg),
-            )
-        except Exception as e:
-            logger.error(f"Twilio WhatsApp general error: {e}, to={redact_phone(to)}")
-            return ProviderMessageResult(
-                success=False,
-                provider_id="",
-                error_code="TWILIO_WHATSAPP_ERROR",
-                error_message=str(e),
-            )
+        from ...utils.apm import async_capture_span
+
+        async with async_capture_span("twilio.send_whatsapp", span_type="notification.whatsapp") as span:
+            try:
+                msg = await asyncio.to_thread(_call_twilio)
+                logger.info(f"Twilio WhatsApp dispatched. SID: {msg.sid}, to: {redact_phone(to)}")
+                if span:
+                    span.set_success()
+                return ProviderMessageResult(
+                    success=True,
+                    provider_id=msg.sid,
+                )
+            except TwilioRestException as tre:
+                logger.error(f"Twilio WhatsApp Rest error: code={tre.code}, msg={tre.msg}, to={redact_phone(to)}")
+                if span:
+                    span.set_failure()
+                return ProviderMessageResult(
+                    success=False,
+                    provider_id="",
+                    error_code=str(tre.code),
+                    error_message=str(tre.msg),
+                )
+            except Exception as e:
+                logger.error(f"Twilio WhatsApp general error: {e}, to={redact_phone(to)}")
+                if span:
+                    span.set_failure()
+                return ProviderMessageResult(
+                    success=False,
+                    provider_id="",
+                    error_code="TWILIO_WHATSAPP_ERROR",
+                    error_message=str(e),
+                )
 
     async def initiate_call(
         self,
@@ -167,29 +185,38 @@ class TwilioProviderAdapter(NotificationProviderAdapter):
                 status_callback_method="POST",
             )
 
-        try:
-            call = await asyncio.to_thread(_call_twilio)
-            logger.info(f"Twilio Call initiated. SID: {call.sid}, to: {redact_phone(to)}")
-            return ProviderCallResult(
-                success=True,
-                call_id=call.sid,
-            )
-        except TwilioRestException as tre:
-            logger.error(f"Twilio Voice Rest error: code={tre.code}, msg={tre.msg}, to={redact_phone(to)}")
-            return ProviderCallResult(
-                success=False,
-                call_id="",
-                error_code=str(tre.code),
-                error_message=str(tre.msg),
-            )
-        except Exception as e:
-            logger.error(f"Twilio Voice general error: {e}, to={redact_phone(to)}")
-            return ProviderCallResult(
-                success=False,
-                call_id="",
-                error_code="TWILIO_CALL_ERROR",
-                error_message=str(e),
-            )
+        from ...utils.apm import async_capture_span
+
+        async with async_capture_span("twilio.initiate_call", span_type="notification.voice") as span:
+            try:
+                call = await asyncio.to_thread(_call_twilio)
+                logger.info(f"Twilio Call initiated. SID: {call.sid}, to: {redact_phone(to)}")
+                if span:
+                    span.set_success()
+                return ProviderCallResult(
+                    success=True,
+                    call_id=call.sid,
+                )
+            except TwilioRestException as tre:
+                logger.error(f"Twilio Voice Rest error: code={tre.code}, msg={tre.msg}, to={redact_phone(to)}")
+                if span:
+                    span.set_failure()
+                return ProviderCallResult(
+                    success=False,
+                    call_id="",
+                    error_code=str(tre.code),
+                    error_message=str(tre.msg),
+                )
+            except Exception as e:
+                logger.error(f"Twilio Voice general error: {e}, to={redact_phone(to)}")
+                if span:
+                    span.set_failure()
+                return ProviderCallResult(
+                    success=False,
+                    call_id="",
+                    error_code="TWILIO_CALL_ERROR",
+                    error_message=str(e),
+                )
 
     def validate_incoming_webhook(
         self,

@@ -44,21 +44,32 @@ async def _send_rendered_email(to_email: str, template_name: str, **context: Any
     msg.attach(MIMEText(rendered["text_body"], "plain"))
     msg.attach(MIMEText(rendered["html_body"], "html"))
 
-    try:
-        await aiosmtplib.send(
-            msg,
-            hostname=settings.smtp_server,
-            port=settings.smtp_port,
-            username=settings.smtp_email,
-            password=settings.smtp_password,
-            start_tls=True,
-            timeout=15.0
-        )
-        logger.info(f"Dispatched email '{template_name}' to {to_email}")
-        return True, "Email sent successfully."
-    except Exception as e:
-        logger.error(f"Failed to send email '{template_name}' to {to_email}: {e}")
-        return False, f"Failed to send email: {str(e)}"
+    from ...utils.apm import async_capture_span
+
+    async with async_capture_span(
+        f"email.transactional.{template_name}",
+        span_type="notification.email",
+        labels={"template": template_name, "to": to_email.strip()}
+    ) as span:
+        try:
+            await aiosmtplib.send(
+                msg,
+                hostname=settings.smtp_server,
+                port=settings.smtp_port,
+                username=settings.smtp_email,
+                password=settings.smtp_password,
+                start_tls=True,
+                timeout=15.0
+            )
+            if span:
+                span.set_success()
+            logger.info(f"Dispatched email '{template_name}' to {to_email}")
+            return True, "Email sent successfully."
+        except Exception as e:
+            if span:
+                span.set_failure()
+            logger.error(f"Failed to send email '{template_name}' to {to_email}: {e}")
+            return False, f"Failed to send email: {str(e)}"
 
 
 # 1. Access Granted Email

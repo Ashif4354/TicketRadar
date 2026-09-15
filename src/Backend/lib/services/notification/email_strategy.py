@@ -65,16 +65,27 @@ class EmailNotificationStrategy(NotificationStrategy, EmailTemplates):
         if env == "test":
             return True, "Skipped in test environment."
 
-        try:
-            await aiosmtplib.send(
-                msg,
-                hostname=settings.smtp_server,
-                port=settings.smtp_port,
-                username=settings.smtp_email,
-                password=settings.smtp_password,
-                start_tls=True,
-                timeout=15.0
-            )
-            return True, "Email sent successfully."
-        except Exception as e:
-            return False, f"Failed to send email: {str(e)}"
+        from ...utils.apm import async_capture_span
+
+        async with async_capture_span(
+            "email.smtp.send",
+            span_type="notification.email",
+            labels={"recipient": self.recipient_email, "movie": movie_name}
+        ) as span:
+            try:
+                await aiosmtplib.send(
+                    msg,
+                    hostname=settings.smtp_server,
+                    port=settings.smtp_port,
+                    username=settings.smtp_email,
+                    password=settings.smtp_password,
+                    start_tls=True,
+                    timeout=15.0
+                )
+                if span:
+                    span.set_success()
+                return True, "Email sent successfully."
+            except Exception as e:
+                if span:
+                    span.set_failure()
+                return False, f"Failed to send email: {str(e)}"

@@ -360,8 +360,45 @@ class JobManager:
         tok_id = current_job_id.set(job.id)
         tok_creator = current_job_creator.set(creator_email)
 
+        from ..utils.apm import (
+            is_atatus_enabled,
+            get_client as get_apm_client,
+            set_transaction_name,
+            set_transaction_outcome,
+            set_user,
+            capture_exception,
+            async_capture_span,
+        )
+        atatus_client = get_apm_client() if is_atatus_enabled() else None
+
         try:
             while not stop_event.is_set():
+                tx = None
+                tx_outcome = "success"
+
+                def _finish_atatus_tx(outcome: str = "success"):
+                    nonlocal tx
+                    if atatus_client is not None and tx is not None:
+                        try:
+                            set_transaction_outcome(outcome)
+                            tx_name = f"MonitorJob: {job.movie_name or job.id}"
+                            atatus_client.end_transaction(tx_name, outcome)
+                        except Exception as end_err:
+                            logger.debug(f"Failed to end Atatus transaction for job {job.id}: {end_err}")
+                        finally:
+                            tx = None
+
+                if atatus_client is not None:
+                    try:
+                        tx = atatus_client.begin_transaction("job")
+                        tx_name = f"MonitorJob: {job.movie_name or job.id}"
+                        set_transaction_name(tx_name)
+                        creator_uid = job.created_by or "system"
+                        set_user(user_id=creator_uid, email=creator_email or "")
+                    except Exception as ex:
+                        logger.debug(f"Failed to start Atatus transaction for job {job.id}: {ex}")
+                        tx = None
+
                 job_logger.info("🔄  Checking availability on BookMyShow...")
 
                 # Perform scraping check asynchronously
@@ -380,8 +417,15 @@ class JobManager:
                     details = "An unexpected error occurred during the check."
                     available, unavailable = [], job.theatres
                     job_logger.error(f"⚠️  Something went wrong during the check. Will retry. ({e})")
+                    tx_outcome = "failure"
+                    if tx is not None:
+                        try:
+                            capture_exception(e)
+                        except Exception:
+                            pass
 
                 if stop_event.is_set():
+                    _finish_atatus_tx(tx_outcome)
                     break
 
                 if success:
@@ -410,6 +454,7 @@ class JobManager:
                             job_logger.warning(f"Error checking user consent: {ce}")
 
                     if not consent_ok:
+                        tx_outcome = "failure"
                         job_logger.warning("Consent revoked by user before notification dispatch. Aborting delivery.")
                         job.update_state("Error", "Notification aborted: user consent revoked.")
                         job.notification_status = "failed"
@@ -427,6 +472,7 @@ class JobManager:
                             except Exception as re:
                                 job_logger.error(f"Failed to issue consent revoke refund: {re}")
                         self._save_job_to_firestore(job)
+                        _finish_atatus_tx("failure")
                         break
 
                     # 3. Retries: up to 3 attempts without delay on failures
@@ -455,20 +501,43 @@ class JobManager:
                         subject = f"TicketRadar: Booking Open for {job.date_str}!"
                         for attempt in range(1, max_attempts + 1):
                             job.notification_attempt_count = attempt
-                            try:
-                                notif_success, notif_msg = await notifier.send_notification(
-                                    subject=subject,
-                                    movie_name=job.movie_name,
-                                    date_str=job.date_str,
-                                    available_theatres=available,
-                                    unavailable_theatres=unavailable,
-                                    url=job.url,
-                                    language=job.language,
-                                    format_name=job.format_name
-                                )
-                            except Exception as notif_err:
-                                notif_success = False
-                                notif_msg = str(notif_err)
+                            span_name = f"notification.send.{medium_norm}"
+                            async with async_capture_span(
+                                span_name,
+                                span_type="notification",
+                                labels={
+                                    "medium": job.notification_medium,
+                                    "job_id": job.id,
+                                    "attempt": str(attempt),
+                                }
+                            ) as notif_span:
+                                try:
+                                    notif_success, notif_msg = await notifier.send_notification(
+                                        subject=subject,
+                                        movie_name=job.movie_name,
+                                        date_str=job.date_str,
+                                        available_theatres=available,
+                                        unavailable_theatres=unavailable,
+                                        url=job.url,
+                                        language=job.language,
+                                        format_name=job.format_name
+                                    )
+                                except Exception as notif_err:
+                                    notif_success = False
+                                    notif_msg = str(notif_err)
+                                    try:
+                                        capture_exception(notif_err)
+                                    except Exception:
+                                        pass
+
+                                if notif_span:
+                                    try:
+                                        if notif_success:
+                                            notif_span.set_success()
+                                        else:
+                                            notif_span.set_failure()
+                                    except Exception:
+                                        pass
 
                             # Extract provider SID if available
                             provider_sid = None
@@ -557,7 +626,6 @@ class JobManager:
                         # Dispatch notification_sent email if channel is not email
                         if creator_email and medium_norm not in ("email",):
                             try:
-                                import asyncio
                                 from ..services.notification.user_mailer import send_notification_sent_email
                                 user_disp = "User"
                                 if job.created_by:
@@ -579,6 +647,7 @@ class JobManager:
                             except Exception:
                                 pass
                     else:
+                        tx_outcome = "failure"
                         job_logger.error(
                             f"⚠️ Tickets found but alert failed after {job.notification_attempt_count} attempts. Reason: {notif_msg}"
                         )
@@ -607,7 +676,6 @@ class JobManager:
                         # Dispatch notification_failed email
                         if creator_email:
                             try:
-                                import asyncio
                                 from ..services.notification.user_mailer import send_notification_failed_email
                                 user_disp = "User"
                                 if job.created_by:
@@ -643,6 +711,7 @@ class JobManager:
                             level="ERROR"
                         )
 
+                    _finish_atatus_tx(tx_outcome)
                     # Stop monitoring once booking is successfully processed
                     break
 
@@ -650,6 +719,7 @@ class JobManager:
                     job_logger.info(f"⏳  Next check in {job.check_interval} seconds...")
                     # Update state in RAM (for API responses) without writing to Firestore every loop
                     job.update_state("Running", details)
+                    _finish_atatus_tx(tx_outcome)
 
                 # Responsive sleep: wake up immediately if stop is requested
                 for _ in range(job.check_interval):
@@ -657,6 +727,7 @@ class JobManager:
                         break
                     await asyncio.sleep(1)
         finally:
+            _finish_atatus_tx("unknown")
             current_job_id.reset(tok_id)
             current_job_creator.reset(tok_creator)
             try:

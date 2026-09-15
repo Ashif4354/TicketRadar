@@ -36,7 +36,7 @@ def get_user_details(uid: str = None, claims: dict = None) -> tuple[str, str, st
         name = name or (email.split("@")[0] if email else "Dev User")
         return name, email, photo_url or ""
 
-    if uid and (not name or not email or not photo_url):
+    if uid and (not name or not email):
         try:
             u = firebase_auth.get_user(uid)
             email = email or u.email or ""
@@ -49,6 +49,9 @@ def get_user_details(uid: str = None, claims: dict = None) -> tuple[str, str, st
         name = email.split("@")[0]
     elif not name:
         name = "User"
+
+    from lib.utils.apm import set_user as set_apm_user
+    set_apm_user(user_id=uid or "", username=name, email=email)
 
     return name, email, photo_url
 

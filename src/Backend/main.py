@@ -150,6 +150,57 @@ async def log_endpoint_requests(request: Request, call_next):
         logger.error(f"{method} {full_path} - error: {exc} ({duration_ms:.2f}ms)", exc_info=True)
         raise
 
+
+# User identification middleware: extracts user details from Bearer token (or dev mock)
+# Sets request.state.user and attaches user identity to the active Atatus APM transaction.
+@app.middleware("http")
+async def atatus_user_middleware(request: Request, call_next):
+    from lib.utils.apm import is_atatus_enabled, set_user
+
+    if not is_atatus_enabled():
+        request.state.user = None
+        return await call_next(request)
+
+    user_id = None
+    user_name = None
+    user_email = None
+
+    try:
+        from lib.core.auth import is_security_disabled, DEV_MOCK_CLAIMS
+
+        auth_header = request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split("Bearer ")[1].strip()
+            if token:
+                import jwt
+
+                payload = jwt.decode(token, options={"verify_signature": False})
+                if isinstance(payload, dict):
+                    user_id = payload.get("uid") or payload.get("user_id") or payload.get("sub")
+                    user_email = payload.get("email")
+                    user_name = payload.get("name") or payload.get("displayName") or (user_email.split("@")[0] if user_email else None)
+        elif is_security_disabled():
+            user_id = DEV_MOCK_CLAIMS.get("uid")
+            user_email = DEV_MOCK_CLAIMS.get("email")
+            user_name = DEV_MOCK_CLAIMS.get("name")
+
+        if user_id or user_email:
+            name_val = user_name or (user_email.split("@")[0] if user_email else "User")
+            user_data = {
+                "uid": str(user_id or ""),
+                "name": name_val,
+                "email": str(user_email or ""),
+            }
+            request.state.user = user_data
+            set_user(user_id=user_data["uid"], username=user_data["name"], email=user_data["email"])
+        else:
+            request.state.user = None
+    except Exception:
+        # Non-blocking / permissive: never break requests if token decoding fails
+        request.state.user = None
+
+    return await call_next(request)
+
 # Enable CORS for development
 app.add_middleware(
     CORSMiddleware,

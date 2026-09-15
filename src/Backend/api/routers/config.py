@@ -107,15 +107,30 @@ async def test_notification(payload: TestAlertRequest, claims: dict = Depends(ge
         config = {"phone_number": norm_phone}
 
     try:
+        from lib.utils.apm import async_capture_span
+
         notifier = NotificationStrategyFactory.create_strategy(notif_type, config)
-        success, msg = await notifier.send_notification(
-            subject="Test Alert",
-            movie_name="Test Movie",
-            date_str="20260719",
-            available_theatres=["Sample Theatre A", "Sample Theatre B"],
-            unavailable_theatres=["Sample Theatre C"],
-            url="https://in.bookmyshow.com"
-        )
+        async with async_capture_span(
+            f"notification.test.{notif_type}",
+            span_type="notification",
+            labels={"medium": notif_type}
+        ) as notif_span:
+            success, msg = await notifier.send_notification(
+                subject="Test Alert",
+                movie_name="Test Movie",
+                date_str="20260719",
+                available_theatres=["Sample Theatre A", "Sample Theatre B"],
+                unavailable_theatres=["Sample Theatre C"],
+                url="https://in.bookmyshow.com"
+            )
+            if notif_span:
+                try:
+                    if success:
+                        notif_span.set_success()
+                    else:
+                        notif_span.set_failure()
+                except Exception:
+                    pass
         if success:
             gcp_logger.log_event(
                 "Test Notification Sent",

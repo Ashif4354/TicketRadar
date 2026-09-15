@@ -173,6 +173,21 @@ async def get_current_user_claims(
             claims["authorized"] = True
             claims["role"] = "admin"
             claims["blocked"] = False
+
+        claims = dict(claims)
+        uid = claims.get("uid", "dev-user-001")
+        name = claims.get("name") or claims.get("displayName") or "Dev Admin"
+        email = claims.get("email") or "dev@ticketradar.local"
+        claims["uid"] = uid
+        claims["name"] = name
+        claims["displayName"] = name
+        claims["email"] = email
+        claims["photo_url"] = claims.get("picture", "") or claims.get("photoUrl", "")
+        claims["user_name"] = name
+
+        from ..utils.apm import set_user as set_apm_user
+        set_apm_user(user_id=uid, username=name, email=email)
+
         return claims
 
     # 1. Enforce App Check
@@ -204,6 +219,26 @@ async def get_current_user_claims(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is blocked and cannot access the app content."
         )
+
+    # Enrich claims with resolved user name, email, and photo URL
+    claims = dict(claims)
+    uid = claims.get("uid") or claims.get("user_id") or claims.get("sub") or ""
+    email = claims.get("email") or ""
+    name = claims.get("name") or claims.get("displayName") or ""
+    photo_url = claims.get("picture") or claims.get("photoUrl") or ""
+    if not name and email:
+        name = email.split("@")[0]
+    elif not name:
+        name = "User"
+    claims["uid"] = uid
+    claims["name"] = name
+    claims["displayName"] = name
+    claims["email"] = email
+    claims["photo_url"] = photo_url
+    claims["user_name"] = name
+
+    from ..utils.apm import set_user as set_apm_user
+    set_apm_user(user_id=uid, username=name, email=email)
 
     return claims
 
