@@ -9,6 +9,7 @@ import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { TermsPage } from './pages/TermsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
+import { RefundPage } from './pages/RefundPage';
 import { InstructionsPage } from './pages/InstructionsPage';
 import { BlockedPage } from './pages/BlockedPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
@@ -121,6 +122,9 @@ export default function App() {
           <Route path="/pricing" element={<PricingPage config={config} />} />
           <Route path="/tc" element={<TermsPage />} />
           <Route path="/pp" element={<PrivacyPage />} />
+          <Route path="/refund" element={<RefundPage />} />
+          <Route path="/refund-policy" element={<RefundPage />} />
+          <Route path="/rp" element={<RefundPage />} />
           <Route path="/instructions" element={<InstructionsPage />} />
           <Route path="/instruction" element={<InstructionsPage />} />
           <Route path="/login" element={

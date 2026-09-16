@@ -937,7 +937,10 @@ export function ProfilePage({ config }: ProfilePageProps = {}) {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Add funds to your wallet via online payment (UPI, Netbanking, Cards). Funds are non-withdrawable and used exclusively for ticket notification alerts.
+              Add funds to your wallet via online payment (UPI, Netbanking, Cards). Funds are non-withdrawable and used exclusively for ticket notification alerts. See our{' '}
+              <Link to="/refund" target="_blank" className="text-rose-400 hover:underline font-medium">
+                Refund Policy
+              </Link>.
             </p>
 
             <div className="grid grid-cols-4 gap-2 pt-1">

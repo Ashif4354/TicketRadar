@@ -115,7 +115,7 @@ export function PricingPage({ config }: PricingPageProps = {}) {
         'Instant telecom delivery to Indian carriers',
         'Top 3 available cinemas summarized',
         'Works offline without internet connection',
-        'Auto-refund if message cannot be delivered',
+        '100% refund to original method (wallet included) if we fail to send notification',
       ],
       popular: false,
     },
@@ -129,7 +129,7 @@ export function PricingPage({ config }: PricingPageProps = {}) {
         'Official WhatsApp Business template',
         'Direct clickable BookMyShow URL button',
         'Highest open-rate notification channel',
-        'Full refund if unsent or undelivered',
+        '100% refund to original method (wallet included) if we fail to send notification',
       ],
       popular: true,
     },
@@ -271,7 +271,10 @@ export function PricingPage({ config }: PricingPageProps = {}) {
               Instant Automated Refunds
             </h4>
             <p className="leading-relaxed">
-              If you cancel a tracker before tickets open, or if an alert medium encounters a technical delivery failure, 100% of your fee is automatically refunded back to your wallet.
+              If you cancel, 100% is refunded only to your wallet. Only if we fail to send you notification (you didn&apos;t cancel, and the tracker was running), 100% of your fee is refunded to your original payment method, wallet included.{' '}
+              <Link to="/refund" className="text-primary hover:underline font-semibold inline-flex items-center gap-0.5">
+                View Policy &rarr;
+              </Link>
             </p>
           </div>
 

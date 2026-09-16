@@ -21,7 +21,7 @@ export function Footer() {
         <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-3 text-center sm:text-left">
           <p>© 2026 TicketRadar. Continuous movie showtime monitoring.</p>
           <span className="hidden sm:inline text-border">|</span>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
             <Link to="/pricing" className="hover:text-foreground transition-colors underline-offset-4 hover:underline font-medium">
               Pricing
             </Link>
@@ -36,6 +36,10 @@ export function Footer() {
             <span className="text-border">•</span>
             <Link to="/pp" className="hover:text-foreground transition-colors underline-offset-4 hover:underline font-medium">
               Privacy Policy
+            </Link>
+            <span className="text-border">•</span>
+            <Link to="/refund" className="hover:text-foreground transition-colors underline-offset-4 hover:underline font-medium">
+              Refund Policy
             </Link>
           </div>
         </div>

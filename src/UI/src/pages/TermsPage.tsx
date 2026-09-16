@@ -97,11 +97,17 @@ export function TermsPage() {
               7. Cancellation & Refund Policy
             </h3>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-              <li><strong>Pre-Notification Cancellation:</strong> If you delete or cancel a monitoring job before tickets open and notifications are dispatched, 100% of the price is immediately refunded to your TicketRadar Wallet.</li>
-              <li><strong>Delivery Failure:</strong> If notification delivery fails after 3 immediate retry attempts, 100% of the price is automatically refunded to your TicketRadar Wallet.</li>
+              <li><strong>Pre-Notification Cancellation (Wallet Only):</strong> If you cancel or delete a monitoring job before tickets open and notifications are dispatched, 100% of the price is refunded only to your TicketRadar Wallet.</li>
+              <li><strong>Notification Delivery Failure (Original Method):</strong> Only if we fail to send you notification (you didn&apos;t cancel, and the tracker was running), we will give you a 100% refund to your original payment method, wallet included (refunded immediately to your wallet if paid with wallet balance; reversed directly to your original source payment method if paid via online gateway).</li>
               <li><strong>Unanswered/Busy Calls (Policy-Exempt):</strong> If an automated voice call is placed and goes unanswered, busy, or rejected across 3 immediate attempts, the system logs the alert as a policy-exempt completed delivery, sends an emergency fallback email notification, and NO refund is issued due to telecom termination charges incurred.</li>
               <li><strong>Gateway Refunds:</strong> In the event of duplicate billing or administrative review, refunds for online gateway payments can only be processed back to the original payment method via authorized third-party payment gateways (Cashfree, as well as future integration options like Razorpay and Stripe) by system administrators.</li>
             </ul>
+            <p className="text-xs text-muted-foreground pt-1">
+              For complete details, conditions, and gateway timelines, please consult our dedicated{' '}
+              <Link to="/refund" className="text-primary font-semibold hover:underline">
+                Cancellation & Refund Policy
+              </Link>.
+            </p>
           </section>
 
           <section className="space-y-2">

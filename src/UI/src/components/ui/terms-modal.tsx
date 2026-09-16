@@ -85,19 +85,19 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
             <div className="flex gap-2">
               <CheckCircle2 className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-foreground">Refund & Delivery Policy:</span> Pre-notification cancellations and confirmed delivery failures receive an immediate 100% wallet refund. Phone calls that remain unanswered or busy after 3 immediate attempts are deemed policy-exempt deliveries accompanied by a fallback email, and are not refunded.
+                <span className="font-semibold text-foreground">Refund & Delivery Policy:</span> If you cancel, then only refund to wallet. Only if we fail to send you notification (you didn&apos;t cancel, and the tracker was running), we will give you a 100% refund to your original payment method, wallet included.
               </div>
             </div>
           </div>
 
-          <div className="pt-2 flex items-center justify-between text-xs">
+          <div className="pt-2 flex items-center justify-between text-xs flex-wrap gap-2">
             <a
               href="/tc"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-rose-400 hover:text-rose-300 underline font-medium"
             >
-              Read full Terms of Service <ExternalLink className="h-3 w-3" />
+              Terms of Service <ExternalLink className="h-3 w-3" />
             </a>
             <a
               href="/pp"
@@ -105,7 +105,15 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-rose-400 hover:text-rose-300 underline font-medium"
             >
-              Read Privacy Policy <ExternalLink className="h-3 w-3" />
+              Privacy Policy <ExternalLink className="h-3 w-3" />
+            </a>
+            <a
+              href="/refund"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-rose-400 hover:text-rose-300 underline font-medium"
+            >
+              Refund Policy <ExternalLink className="h-3 w-3" />
             </a>
           </div>
         </div>
@@ -124,7 +132,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onAccept }) => {
               onChange={(e) => setAgreed(e.target.checked)}
               className="h-4 w-4 rounded border-border text-rose-500 focus:ring-rose-500/40 bg-muted/30"
             />
-            <span>I have read and agree to the Terms of Service v2.0 & Privacy Policy</span>
+            <span>I have read and agree to the Terms of Service v2.0, Privacy Policy & Refund Policy</span>
           </label>
 
           <Button
