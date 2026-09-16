@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Radar, AlertTriangle, CheckCircle2, RefreshCw, Shield, ShieldCheck } from 'lucide-react';
+import { Radar, AlertTriangle, CheckCircle2, RefreshCw, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { loginWithGoogle } from '../lib/firebase';
@@ -105,16 +105,6 @@ export function LoginPage({ config }: LoginPageProps = {}) {
                   </Link>
                   .
                 </label>
-              </div>
-
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-left space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-                  <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
-                  <span>Fair Notification Guarantee</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  If you cancel, then only refund to wallet. Only if we fail to send you notification (you didn&apos;t cancel, and the tracker was running), we will give you a 100% refund to your original payment method, wallet included.
-                </p>
               </div>
 
               <Button

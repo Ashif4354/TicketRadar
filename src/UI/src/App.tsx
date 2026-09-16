@@ -26,6 +26,19 @@ import { onAuthStateChanged } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import type { AppConfig } from './types';
 
+function LoadingWidget() {
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+      <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-500 text-white shadow-xl shadow-rose-500/20">
+        <Radar className="h-8 w-8 animate-spin" />
+      </div>
+      <p className="mt-4 text-xs font-semibold text-muted-foreground uppercase tracking-widest animate-pulse">
+        Initializing TicketRadar...
+      </p>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [claims, setClaims] = useState<any>(null);
@@ -95,19 +108,7 @@ export default function App() {
   const securityDisabled = isSecurityDisabled(config);
   const approvalDisabled = securityDisabled || isApprovalDisabled(config);
 
-  if (!securityDisabled && (authLoading || configLoading)) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-        <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-500 text-white shadow-xl shadow-rose-500/20">
-          <Radar className="h-8 w-8 animate-spin" />
-        </div>
-        <p className="mt-4 text-xs font-semibold text-muted-foreground uppercase tracking-widest animate-pulse">
-          Initializing TicketRadar...
-        </p>
-      </div>
-    );
-  }
-
+  const isAuthOrConfigLoading = !securityDisabled && (authLoading || configLoading);
   const isAuthorized = approvalDisabled || claims?.authorized === true;
   const isAdmin = securityDisabled || claims?.role === 'admin';
   const isBlocked = !approvalDisabled && claims?.blocked === true;
@@ -131,18 +132,21 @@ export default function App() {
             user ? <Navigate to="/app" replace /> : <LoginPage config={config} />
           } />
           <Route path="/profile" element={
+            isAuthOrConfigLoading ? <LoadingWidget /> :
             (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
             isBlocked ? <BlockedPage /> :
             !isAuthorized ? <UnauthorizedPage /> :
             <ProfilePage config={config} />
           } />
           <Route path="/app" element={
+            isAuthOrConfigLoading ? <LoadingWidget /> :
             (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
             isBlocked ? <BlockedPage /> :
             !isAuthorized ? <UnauthorizedPage /> :
             <AppDashboard />
           } />
           <Route path="/admin" element={
+            isAuthOrConfigLoading ? <LoadingWidget /> :
             (!user && !securityDisabled) ? <Navigate to="/login" replace /> :
             !isAdmin ? <Navigate to="/app" replace /> :
             <AdminDashboard config={config} />
